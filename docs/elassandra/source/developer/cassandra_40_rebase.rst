@@ -54,6 +54,13 @@ the index builder stack changed. An equivalent port is maintained on branch ``ca
 clone (commit message *Elassandra: port CASSANDRA-12837…*). Reuse or cherry-pick that commit before applying patches
 **0002** onward, or continue manual porting.
 
+**Progress note (ongoing):** On a ``cassandra-4.0.20``-based branch, patches **0002–0003**, **0005–0006**, **0008–0009** have been
+applied with manual conflict resolution (4.0 APIs and ``build.xml`` layout). Patch **0004** was **skipped** (instance-factory
+interning already matches the intent in upstream 4.0). Patch **0007** was **skipped** (bundled ``lib/*.jar`` upgrades are
+obsolete for 4.0’s resolver layout). The **javassist** ``transform`` target from **0006** is wired to ``_main-jar`` via
+``depends="transform"``; Guava/Javassist jars on the task classpath use ``${build.dir.lib}`` globs rather than fixed
+filenames. Remaining patches **0010–0036** still need ``git am --3way`` and porting.
+
 Almost every remaining patch may **conflict** or **fail to compile** on 4.0. Resolve in order:
 
 #. Secondary index / ``Index`` SPI / ``SecondaryIndexManager`` (highest risk).
