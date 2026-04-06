@@ -64,10 +64,12 @@ clone (commit message *Elassandra: port CASSANDRA-12837…*). Reuse or cherry-pi
   branding / coordinates), 0014, 0020, 0021 (upstream cqlsh doc URL preferred), 0026, 0031, 0032 (``git am`` could not
   build a 3-way ancestor for ``build.xml`` / ``CassandraDaemon``), 0034 (SSL context cache: heavy merge with 4.0
   ``EncryptionOptions``).
-* **Skipped pending full manual port:** 0016, 0017, 0018, 0019, 0022, 0024 (old ``config/`` + ``service/MigrationManager``
-  / statement classes removed in 4.0), 0027 (async index build; depends on 0018 SIM changes), 0028 (README).
-* **Follow-up commit on the fork:** ``Index.delayInitializationTask()`` default hook (partial stand-in for skipped
-  **0018**); **0006** ``transform`` uses ``${build.dir.lib}`` globs and ``_main-jar`` ``depends="transform"``.
+* **Skipped pending full manual port:** 0016, 0017, 0018 (full diff not applied; see below), 0019, 0022, 0024 (old ``config/`` + ``service/MigrationManager``
+  / statement classes removed in 4.0), 0027 (async index build; overlaps **0018**), 0028 (README).
+* **Follow-up commits on the fork:** ``Index.delayInitializationTask()``; **SecondaryIndexManager** skips
+  ``startIndexInitialization`` when that method returns true and exposes ``initIndex(Index)`` so Elassandra can run
+  ``getInitializationTask()`` after shards/cluster are ready (core behavior from **0018**, without the full SIM refactor).
+  **0006** ``transform`` uses ``${build.dir.lib}`` globs and ``_main-jar`` ``depends="transform"``.
 
 Almost every patch may **conflict** or **fail to compile** on 4.0. Resolve in order:
 
