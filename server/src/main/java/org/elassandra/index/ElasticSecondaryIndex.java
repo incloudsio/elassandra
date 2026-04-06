@@ -2544,8 +2544,9 @@ public class ElasticSecondaryIndex implements Index {
     }
 
     /**
-     * Rebuild 2i index if needed. On Cassandra 4.0 with {@code Index.delayInitializationTask()},
-     * call {@code baseCfs.indexManager.initIndex(this)} instead of {@code buildIndexAsync(this)}.
+     * Rebuild 2i index if needed. Uses {@link org.apache.cassandra.index.SecondaryIndexManager#initIndex(Index)}
+     * so deferred {@link Index#delayInitializationTask()} indexes run {@link #getInitializationTask()} on the same
+     * path as normal index creation (and match the Cassandra 4.0 fork API).
      */
     private void startRebuildIfNeeded() {
         ImmutableMappingInfo mappingInfo = mappingInfoRef.get();
@@ -2556,7 +2557,7 @@ public class ElasticSecondaryIndex implements Index {
             needBuild.compareAndSet(true, false))
         {
             logger.info("start building secondary {}.{}.{}", baseCfs.keyspace.getName(), baseCfs.metadata.cfName, indexMetadata.name);
-            baseCfs.indexManager.buildIndexAsync(this);
+            baseCfs.indexManager.initIndex(this);
         }
     }
 
