@@ -54,14 +54,22 @@ the index builder stack changed. An equivalent port is maintained on branch ``ca
 clone (commit message *Elassandra: port CASSANDRA-12837…*). Reuse or cherry-pick that commit before applying patches
 **0002** onward, or continue manual porting.
 
-**Progress note (ongoing):** On a ``cassandra-4.0.20``-based branch, patches **0002–0003**, **0005–0006**, **0008–0009** have been
-applied with manual conflict resolution (4.0 APIs and ``build.xml`` layout). Patch **0004** was **skipped** (instance-factory
-interning already matches the intent in upstream 4.0). Patch **0007** was **skipped** (bundled ``lib/*.jar`` upgrades are
-obsolete for 4.0’s resolver layout). The **javassist** ``transform`` target from **0006** is wired to ``_main-jar`` via
-``depends="transform"``; Guava/Javassist jars on the task classpath use ``${build.dir.lib}`` globs rather than fixed
-filenames. Remaining patches **0010–0036** still need ``git am --3way`` and porting.
+**Patch series status (``cassandra-4.0.20`` branch, local clone):**
 
-Almost every remaining patch may **conflict** or **fail to compile** on 4.0. Resolve in order:
+* **Applied (with porting / conflict resolution):** 0002, 0003, 0005, 0006, 0008, 0009, 0010, 0011, 0015, 0023 (schema
+  ``TableAttributes`` + ``EXTENSIONS`` only; legacy ``ColumnFamilyStoreCQLHelper`` paths dropped), 0025, 0029 (kept 4.0
+  logback ``ReconfigureOnChangeTask`` handling), 0030, 0033 (``NAME_LENGTH`` via ``cassandra.max_name_length`` on
+  ``org.apache.cassandra.schema.SchemaConstants``), 0035, 0036.
+* **Skipped as redundant / obsolete:** 0004 (concurrent type interning already in 4.0), 0007, 0012, 0013 (Strapdata
+  branding / coordinates), 0014, 0020, 0021 (upstream cqlsh doc URL preferred), 0026, 0031, 0032 (``git am`` could not
+  build a 3-way ancestor for ``build.xml`` / ``CassandraDaemon``), 0034 (SSL context cache: heavy merge with 4.0
+  ``EncryptionOptions``).
+* **Skipped pending full manual port:** 0016, 0017, 0018, 0019, 0022, 0024 (old ``config/`` + ``service/MigrationManager``
+  / statement classes removed in 4.0), 0027 (async index build; depends on 0018 SIM changes), 0028 (README).
+* **Follow-up commit on the fork:** ``Index.delayInitializationTask()`` default hook (partial stand-in for skipped
+  **0018**); **0006** ``transform`` uses ``${build.dir.lib}`` globs and ``_main-jar`` ``depends="transform"``.
+
+Almost every patch may **conflict** or **fail to compile** on 4.0. Resolve in order:
 
 #. Secondary index / ``Index`` SPI / ``SecondaryIndexManager`` (highest risk).
 #. CQL schema extensions and metadata transactions.
