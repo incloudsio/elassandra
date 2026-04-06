@@ -6,7 +6,8 @@
 Elassandra documentation
 ========================
 
-*Elassandra* closely integrates `Elasticsearch`_ in `Cassandra`_.
+*Elassandra* closely integrates `OpenSearch`_ (search engine lineage from Elasticsearch) with
+`Cassandra`_.
 
    
 Contents:
@@ -25,6 +26,10 @@ Contents:
    integration
    testing
    limitations
+   migration
+   developer/cassandra_fork_inventory
+   developer/cassandra_40_rebase
+   developer/opensearch_porting_guide
 
 Indices and tables
 ==================
@@ -33,6 +38,6 @@ Indices and tables
 * :ref:`modindex`
 * :ref:`search`
 
-.. _Cassandra: http://cassandra.apache.org/
-.. _Elasticsearch: https://www.elastic.co/products/elasticsearch
+.. _Cassandra: https://cassandra.apache.org/
+.. _OpenSearch: https://opensearch.org/
 

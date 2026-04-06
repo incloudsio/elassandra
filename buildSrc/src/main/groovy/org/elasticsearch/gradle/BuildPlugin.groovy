@@ -573,7 +573,7 @@ class BuildPlugin implements Plugin<Project> {
         // force all dependencies added directly to compile/testCompile to be non-transitive, except for ES itself
         Closure disableTransitiveDeps = { Dependency dep ->
             if (dep instanceof ModuleDependency && !(dep instanceof ProjectDependency)
-                    && dep.group.startsWith('com.strapdata.elasticsearch') == false) {
+                    && dep.group.startsWith('org.elasticsearch') == false) {
                 dep.transitive = false
 
                 // also create a configuration just for this dependency version, so that later
@@ -1260,11 +1260,11 @@ class BuildPlugin implements Plugin<Project> {
         project.test.mustRunAfter(precommit)
         // only require dependency licenses for non-elasticsearch deps
         project.dependencyLicenses.dependencies = project.configurations.runtime.fileCollection {
-            it.group.startsWith('com.strapdata.elasticsearch') == false
+            it.group.startsWith('org.elasticsearch') == false
         } - project.configurations.compileOnly
         project.plugins.withType(ShadowPlugin).whenPluginAdded {
             project.dependencyLicenses.dependencies += project.configurations.bundle.fileCollection {
-                it.group.startsWith('com.strapdata.elasticsearch') == false
+                it.group.startsWith('org.elasticsearch') == false
             }
         }
     }

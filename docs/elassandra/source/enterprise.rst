@@ -2,6 +2,14 @@
 Enterprise
 ==========
 
+.. note::
+
+   This chapter describes **legacy Strapdata Elassandra Enterprise** (Elasticsearch-era
+   commercial plugin). The community edition maintained at `Elassandra.org <https://elassandra.org/>`_
+   is focused on **Apache Cassandra 4.0.x** and **OpenSearch 1.3.x**; enterprise packaging
+   from the original vendor may no longer be available. Treat the content below as historical
+   reference unless you run a supported legacy build.
+
 Elassandra Enterprise is an Elasticsearch plugin installed on top of Elassandra community edition. Elassandra Enterprise plugin provides advanced features:
 
 * Elasticsearch JMX management and monitoring.

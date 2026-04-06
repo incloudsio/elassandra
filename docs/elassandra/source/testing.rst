@@ -1,19 +1,19 @@
 Testing
 =======
 
-Elasticsearch comes with a testing framework based on `JUNIT <http://junit.org/junit4/>`_ and `RandomizedRunner <http://labs.carrotsearch.com/randomizedtesting.html>`_ provided by the randomized-testing project.
-Most of these tests work with Elassandra to ensure compatibility between Elasticsearch and Elassandra.
+Elasticsearch (and, on the modernization branch, OpenSearch) ships a testing framework based on `JUnit <https://junit.org/junit4/>`_ and `RandomizedRunner <https://labs.carrotsearch.com/randomizedtesting.html>`_.
+Most of these tests run with Elassandra to keep the embedded search engine aligned with upstream behavior.
 
 Testing environnement
 ---------------------
 
 By default, JUnit creates one instance for each test class and executes each *@Test* method in parallel with many threads. Because Cassandra uses many static variables,
 concurrent testing is not possible, so each test is executed sequentially (using a semaphore to serialize tests) on a single node Elassandra cluster listening on localhost, 
-see `ESSingleNodeTestCase] <https://github.com/strapdata/elassandra/blob/v5.5.0-strapdata/test/framework/src/main/java/org/elasticsearch/test/ESSingleNodeTestCase.java>`_).
-Test configuration is located in **core/src/test/resources/conf**, data and logs are generated in **core/build/testrun/test/J0**.
+see `ESSingleNodeTestCase <https://github.com/maxts/elassandra/blob/master/test/framework/src/main/java/org/elasticsearch/test/ESSingleNodeTestCase.java>`_).
+Test configuration is located in **server/src/test/resources/conf**; data and logs are generated under **server/build** when running Gradle tests.
 
 Between each test, all indices (and underlying keyspaces and tables) are removed to have idempotent testings and avoid conflicts with index names.
-System settings ``es.synchronous_refresh``  and ``es.drop_on_delete_index`` are set to *true* in the parent *pom.xml*.
+System settings ``es.synchronous_refresh`` and ``es.drop_on_delete_index`` are often set to *true* for tests (see Gradle test configuration for this branch).
 
 Finally, the testing framework randomizes the local settings representing a specific geographical, political, or cultural region, but Apache Cassandra does not
 support such setting because string manipulation are implemented with the default locale settings (see CASSANDRA-12334).
@@ -58,13 +58,13 @@ To run this specific test :
 
 .. code::
 
-   $gradle :server:test -Dtests.seed=96A0B026F3E89763 -Dtests.class=org.elassandra.BasicTests  -Dtests.security.manager=false -Dtests.locale=it-IT -Dtests.timezone=Asia/Tomsk
+   ./gradlew :server:test -Dtests.seed=96A0B026F3E89763 -Dtests.class=org.elassandra.BasicTests -Dtests.security.manager=false -Dtests.locale=it-IT -Dtests.timezone=Asia/Tomsk
 
-To run all core unit tests :
+To run all server unit tests :
 
 .. code::
 
-   $gradle server:test
+   ./gradlew :server:test
 
 
 Application tests with Elassandra-Unit
@@ -78,6 +78,6 @@ Application tests with Elassandra-Unit
 * Create structure (keyspace and Column Families) and load data from an XML, JSON or YAML DataSet.
 * Execute a CQL script.
 * Query Cassandra through the `Cassandra driver <https://github.com/datastax/java-driver>`_.
-* Query Elasticsearch through the `Elasticsearch REST API <https://www.elastic.co/guide/en/elasticsearch/client/java-rest/6.5/java-rest-high.html>`_.
+* Query the embedded search engine through the `Elasticsearch Java REST client <https://www.elastic.co/guide/en/elasticsearch/client/java-rest/6.8/java-rest-high.html>`_ (6.8 line) or, after the OpenSearch port, the `OpenSearch Java client <https://opensearch.org/docs/latest/clients/java/>`_.
 
 See the `Elassandra-Unit <https://github.com/strapdata/elassandra-unit>`_ README for more information.

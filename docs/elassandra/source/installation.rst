@@ -1,6 +1,8 @@
 Installation
 ============
 
+The canonical project site is `Elassandra.org <https://elassandra.org/>`_.
+
 There are a number of ways to install Elassandra:
 
 - tarball_
@@ -10,7 +12,7 @@ There are a number of ways to install Elassandra:
 - `helm chart`_ (kubernetes)
 - `Google Kubernetes marketplace`_
 
-Elassandra is based on Cassandra and ElasticSearch, thus it will be easier if you're already familiar with one on these technologies.
+Elassandra is based on Cassandra and Elasticsearch (with **OpenSearch 1.3.x** planned as the next search baseline); familiarity with either stack helps.
 
 .. important:: Be aware that Elassandra need more memory than Cassandra when Elasticsearch is used and should be installed on machine with at least 4Gb of RAM.
 

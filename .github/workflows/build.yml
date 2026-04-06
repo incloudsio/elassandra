@@ -3,6 +3,8 @@ on:
   push:
     branches:
       - v6.8.4-strapdata
+      - main
+      - master
   pull_request:
     types: [opened, synchronize, reopened]
 jobs:
@@ -10,34 +12,41 @@ jobs:
     name: Build
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v4
         with:
-          fetch-depth: 0  # Shallow clones should be disabled for a better relevancy of analysis
-          submodules: 'true' # Fetch cassandra submodule 
-      - uses: AdoptOpenJDK/install-jdk@v1
+          fetch-depth: 0
+          submodules: true
+      - name: Set up JDK 8
+        id: jdk8
+        uses: actions/setup-java@v4
         with:
-          version: '8'
-          architecture: x64
-          targets: 'JAVA8_HOME;CASSANDRA_JAVA_HOME' 
-      - uses: AdoptOpenJDK/install-jdk@v1
+          distribution: temurin
+          java-version: "8"
+      - name: Set up JDK 12
+        id: jdk12
+        uses: actions/setup-java@v4
         with:
-          version: '12'
-          architecture: x64
-          targets: 'JAVA12_HOME;JAVA_HOME'
-      - name: Cache SonarCloud packages
-        uses: actions/cache@v1
-        with:
-          path: ~/.sonar/cache
-          key: ${{ runner.os }}-sonar
-          restore-keys: ${{ runner.os }}-sonar
-      - name: Cache Gradle packages
-        uses: actions/cache@v1
-        with:
-          path: ~/.gradle/caches
-          key: ${{ runner.os }}-gradle-${{ hashFiles('**/*.gradle') }}
-          restore-keys: ${{ runner.os }}-gradle
-      - name: Build and analyze
+          distribution: temurin
+          java-version: "12"
+          cache: gradle
+      - name: Export Java homes
+        run: |
+          echo "JAVA8_HOME=${{ steps.jdk8.outputs.path }}" >> $GITHUB_ENV
+          echo "CASSANDRA_JAVA_HOME=${{ steps.jdk8.outputs.path }}" >> $GITHUB_ENV
+          echo "JAVA12_HOME=${{ steps.jdk12.outputs.path }}" >> $GITHUB_ENV
+          echo "JAVA_HOME=${{ steps.jdk12.outputs.path }}" >> $GITHUB_ENV
+      - name: Check Cassandra version vs submodule
+        run: ./scripts/check-cassandra-submodule.sh
+      - name: Assemble
+        run: ./gradlew assemble --info -x docs:build
+      - name: SonarCloud (optional)
+        continue-on-error: true
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}  # Needed to get PR information, if any
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
-        run: ./gradlew assemble sonarqube --info -x docs:build
+        run: |
+          if [ -n "${SONAR_TOKEN:-}" ]; then
+            ./gradlew sonarqube --info -x docs:build
+          else
+            echo "SONAR_TOKEN not set; skipping SonarCloud."
+          fi

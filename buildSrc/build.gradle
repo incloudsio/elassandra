@@ -26,7 +26,7 @@ plugins {
   id 'groovy'
 }
 
-group = 'com.strapdata.elasticsearch.gradle'
+group = 'org.elasticsearch.gradle'
 
 String minimumGradleVersion = file('src/main/resources/minimumGradleVersion').text.trim()
 if (GradleVersion.current() < GradleVersion.version(minimumGradleVersion)) {

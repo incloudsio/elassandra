@@ -32,7 +32,7 @@ publishing {
 }
 
 dependencies {
-    compile "com.strapdata.elasticsearch:elasticsearch-core:${version}"
+    compile "org.elasticsearch:elasticsearch-core:${version}"
 
     compile "org.yaml:snakeyaml:${versions.snakeyaml}"
     compile "com.fasterxml.jackson.core:jackson-core:${versions.jackson}"
@@ -40,7 +40,7 @@ dependencies {
     compile "com.fasterxml.jackson.dataformat:jackson-dataformat-yaml:${versions.jackson}"
     compile "com.fasterxml.jackson.dataformat:jackson-dataformat-cbor:${versions.jackson}"
 
-    compile("com.strapdata.cassandra:cassandra-all:${versions.cassandra}") {
+    compile("org.elasticsearch.cassandra:cassandra-all:${versions.cassandra}") {
         exclude group:'net.java.dev.jna', module:'jna'
         exclude group:'org.ow2.asm', module:'asm'
         exclude group:'org.apache.commons', module:'commons-lang3'
@@ -56,10 +56,10 @@ dependencies {
     testCompile "org.hamcrest:hamcrest-all:${versions.hamcrest}"
 
     testCompile(project(":test:framework")) {
-        exclude group: 'com.strapdata.elasticsearch', module: 'elasticsearch-x-content'
+        exclude group: 'org.elasticsearch', module: 'elasticsearch-x-content'
     }
     
-    compile("com.strapdata.cassandra:cassandra-all:${versions.cassandra}") {
+    compile("org.elasticsearch.cassandra:cassandra-all:${versions.cassandra}") {
         exclude group:'net.java.dev.jna', module:'jna'
         exclude group:'org.ow2.asm', module:'asm'
         exclude group:'org.apache.commons', module:'commons-lang3'

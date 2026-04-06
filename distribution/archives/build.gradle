@@ -286,7 +286,7 @@ configure(subprojects.findAll { ['zip', 'tar', 'integ-test-zip'].contains(it.nam
   // note: the group must be correct before applying the nexus plugin, or
   // it will capture the wrong value...
   String subgroup = project.name
-  project.group = "com.strapdata.elasticsearch.distribution.${subgroup}"
+  project.group = "org.elasticsearch.distribution.${subgroup}"
 
   // make the pom file name use elasticsearch instead of the project name
   archivesBaseName = "elassandra"

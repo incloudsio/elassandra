@@ -1,3 +1,4 @@
+# Legacy CI — prefer GitHub Actions (.github/workflows/build.yml). Updated for Elassandra.org maintenance.
 sudo: required
 env:
   global:

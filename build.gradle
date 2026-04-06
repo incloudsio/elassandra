@@ -39,8 +39,8 @@ plugins {
 
 sonarqube {
   properties {
-    property "sonar.projectKey", "riptano_elassandra"
-    property "sonar.organization", "riptano"
+    property "sonar.projectKey", "elassandra_elassandra"
+    property "sonar.organization", "elassandra"
     property "sonar.host.url", "https://sonarcloud.io"
   }
 }
@@ -53,14 +53,14 @@ licenseReport {
   renderers = [new CsvReportRenderer(separator:';'), new TextReportRenderer(), new InventoryHtmlReportRenderer('index.html', 'Elassandra License Report')]
   filters = [new LicenseBundleNormalizer(bundlePath: rootProject.file('buildSrc/src/main/resources/license-normalizer-bundle.json'))]
   projects = [project] + project.subprojects
-  excludes = [ 'com.strapdata.elasticsearch:elasticsearch-core' ]
+  excludes = [ 'org.elasticsearch:elasticsearch-core' ]
 }
 
 
 
 // common maven publishing configuration
 allprojects {
-  group = 'com.strapdata.elasticsearch'
+  group = 'org.elasticsearch'
   version = VersionProperties.elasticsearch
   description = "Elasticsearch subproject ${project.path}"
 }
@@ -275,41 +275,41 @@ allprojects {
     them as external dependencies so the build plugin that we use can be used
     to build elasticsearch plugins outside of the elasticsearch source tree. */
   ext.projectSubstitutions = [
-    "com.strapdata.elasticsearch.gradle:build-tools:${version}": ':build-tools',
+    "org.elasticsearch.gradle:build-tools:${version}": ':build-tools',
     "org.elasticsearch:rest-api-spec:${version}": ':rest-api-spec',
-    "com.strapdata.elasticsearch:elasticsearch:${version}": ':server',
-    "com.strapdata.elasticsearch:elasticsearch-cli:${version}": ':libs:cli',
-    "com.strapdata.elasticsearch:elasticsearch-core:${version}": ':libs:core',
-    "com.strapdata.elasticsearch:elasticsearch-x-content:${version}": ':libs:x-content',
-    "com.strapdata.elasticsearch:elasticsearch-secure-sm:${version}": ':libs:secure-sm',
-    "com.strapdata.elasticsearch:elasticsearch-ssl-config:${version}": ':libs:elasticsearch-ssl-config',
-    "com.strapdata.elasticsearch.client:elasticsearch-rest-client:${version}": ':client:rest',
-    "com.strapdata.elasticsearch.client:elasticsearch-rest-client-sniffer:${version}": ':client:sniffer',
-    "com.strapdata.elasticsearch.client:elasticsearch-rest-high-level-client:${version}": ':client:rest-high-level',
-    "com.strapdata.elasticsearch.client:test:${version}": ':client:test',
-    "com.strapdata.elasticsearch.client:transport:${version}": ':client:transport',
-    "com.strapdata.elasticsearch.plugin:elasticsearch-scripting-painless-spi:${version}": ':modules:lang-painless:spi',
-    "com.strapdata.elasticsearch.test:framework:${version}": ':test:framework',
-    "com.strapdata.elasticsearch.distribution.zip:elasticsearch:${version}": ':distribution:archives:zip',
-    "com.strapdata.elasticsearch.distribution.tar:elasticsearch:${version}": ':distribution:archives:tar',
-    "com.strapdata.elasticsearch.distribution.rpm:elasticsearch:${version}": ':distribution:packages:rpm',
-    "com.strapdata.elasticsearch.distribution.deb:elasticsearch:${version}": ':distribution:packages:deb',
+    "org.elasticsearch:elasticsearch:${version}": ':server',
+    "org.elasticsearch:elasticsearch-cli:${version}": ':libs:cli',
+    "org.elasticsearch:elasticsearch-core:${version}": ':libs:core',
+    "org.elasticsearch:elasticsearch-x-content:${version}": ':libs:x-content',
+    "org.elasticsearch:elasticsearch-secure-sm:${version}": ':libs:secure-sm',
+    "org.elasticsearch:elasticsearch-ssl-config:${version}": ':libs:elasticsearch-ssl-config',
+    "org.elasticsearch.client:elasticsearch-rest-client:${version}": ':client:rest',
+    "org.elasticsearch.client:elasticsearch-rest-client-sniffer:${version}": ':client:sniffer',
+    "org.elasticsearch.client:elasticsearch-rest-high-level-client:${version}": ':client:rest-high-level',
+    "org.elasticsearch.client:test:${version}": ':client:test',
+    "org.elasticsearch.client:transport:${version}": ':client:transport',
+    "org.elasticsearch.plugin:elasticsearch-scripting-painless-spi:${version}": ':modules:lang-painless:spi',
+    "org.elasticsearch.test:framework:${version}": ':test:framework',
+    "org.elasticsearch.distribution.zip:elasticsearch:${version}": ':distribution:archives:zip',
+    "org.elasticsearch.distribution.tar:elasticsearch:${version}": ':distribution:archives:tar',
+    "org.elasticsearch.distribution.rpm:elasticsearch:${version}": ':distribution:packages:rpm',
+    "org.elasticsearch.distribution.deb:elasticsearch:${version}": ':distribution:packages:deb',
           /*
-    "com.strapdata.elasticsearch.distribution.integ-test-zip:elasticsearch:${version}": ':distribution:archives:integ-test-zip',
-    "com.strapdata.elasticsearch.distribution.zip:elasticsearch-oss:${version}": ':distribution:archives:oss-zip',
-    "com.strapdata.elasticsearch.distribution.tar:elasticsearch-oss:${version}": ':distribution:archives:oss-tar',
-    "com.strapdata.elasticsearch.distribution.rpm:elasticsearch-oss:${version}": ':distribution:packages:oss-rpm',
-    "com.strapdata.elasticsearch.distribution.deb:elasticsearch-oss:${version}": ':distribution:packages:oss-deb',
+    "org.elasticsearch.distribution.integ-test-zip:elasticsearch:${version}": ':distribution:archives:integ-test-zip',
+    "org.elasticsearch.distribution.zip:elasticsearch-oss:${version}": ':distribution:archives:oss-zip',
+    "org.elasticsearch.distribution.tar:elasticsearch-oss:${version}": ':distribution:archives:oss-tar',
+    "org.elasticsearch.distribution.rpm:elasticsearch-oss:${version}": ':distribution:packages:oss-rpm',
+    "org.elasticsearch.distribution.deb:elasticsearch-oss:${version}": ':distribution:packages:oss-deb',
            */
-    "com.strapdata.elasticsearch.test:logger-usage:${version}": ':test:logger-usage',
+    "org.elasticsearch.test:logger-usage:${version}": ':test:logger-usage',
     // for transport client
-    "com.strapdata.elasticsearch.plugin:transport-netty4-client:${version}": ':modules:transport-netty4',
-    "com.strapdata.elasticsearch.plugin:reindex-client:${version}": ':modules:reindex',
-    "com.strapdata.elasticsearch.plugin:lang-mustache-client:${version}": ':modules:lang-mustache',
-    "com.strapdata.elasticsearch.plugin:parent-join-client:${version}": ':modules:parent-join',
-    "com.strapdata.elasticsearch.plugin:aggs-matrix-stats-client:${version}": ':modules:aggs-matrix-stats',
-    "com.strapdata.elasticsearch.plugin:percolator-client:${version}": ':modules:percolator',
-    "com.strapdata.elasticsearch.plugin:rank-eval-client:${version}": ':modules:rank-eval',
+    "org.elasticsearch.plugin:transport-netty4-client:${version}": ':modules:transport-netty4',
+    "org.elasticsearch.plugin:reindex-client:${version}": ':modules:reindex',
+    "org.elasticsearch.plugin:lang-mustache-client:${version}": ':modules:lang-mustache',
+    "org.elasticsearch.plugin:parent-join-client:${version}": ':modules:parent-join',
+    "org.elasticsearch.plugin:aggs-matrix-stats-client:${version}": ':modules:aggs-matrix-stats',
+    "org.elasticsearch.plugin:percolator-client:${version}": ':modules:percolator',
+    "org.elasticsearch.plugin:rank-eval-client:${version}": ':modules:rank-eval',
   ]
   // substitute unreleased versions with projects that check out and build locally
   /*
@@ -361,7 +361,7 @@ allprojects {
       String artifactsHost = VersionProperties.elasticsearch.endsWith("-SNAPSHOT") ? "https://snapshots.elastic.co" : "https://artifacts.elastic.co"
       Closure sortClosure = { a, b -> b.group <=> a.group }
       Closure depJavadocClosure = { shadowed, dep ->
-        if (dep.group == null || false == dep.group.startsWith('com.strapdata.elasticsearch')) {
+        if (dep.group == null || false == dep.group.startsWith('org.elasticsearch')) {
           return
         }
         Project upstreamProject = project.ext.dependencyToProject(dep)

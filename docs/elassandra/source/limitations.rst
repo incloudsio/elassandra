@@ -1,6 +1,12 @@
 Breaking changes and limitations
 ================================
 
+.. note::
+
+   The **current** release line in this repository embeds **Elasticsearch 6.8** with **Cassandra 3.11**
+   (Strapdata-derived fork). The **Elassandra.org** roadmap targets **Apache Cassandra 4.0.x** and
+   **OpenSearch 1.3.x**; see :ref:`migration_modern_stack` for operator expectations and breaking API changes.
+
 Deleting an index does not delete cassandra data
 ------------------------------------------------
 

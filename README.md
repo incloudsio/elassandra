@@ -1,20 +1,27 @@
-# Elassandra [![Build Status](https://travis-ci.org/strapdata/elassandra.svg)](https://travis-ci.org/strapdata/elassandra) [![Documentation Status](https://readthedocs.org/projects/elassandra/badge/?version=latest)](https://elassandra.readthedocs.io/en/latest/?badge=latest) [![GitHub release](https://img.shields.io/github/v/release/strapdata/elassandra.svg)](https://github.com/strapdata/elassandra/releases/latest)
-[![Twitter](https://img.shields.io/twitter/follow/strapdataio?style=social)](https://twitter.com/strapdataio)
+# Elassandra [![Build](https://github.com/maxts/elassandra/actions/workflows/build.yml/badge.svg)](https://github.com/maxts/elassandra/actions/workflows/build.yml) [![Documentation Status](https://readthedocs.org/projects/elassandra/badge/?version=latest)](https://elassandra.readthedocs.io/en/latest/?badge=latest) [![GitHub release](https://img.shields.io/github/v/release/maxts/elassandra.svg)](https://github.com/maxts/elassandra/releases/latest)
 
 ![Elassandra Logo](elassandra-logo.png)
 
-## [http://www.elassandra.io/](http://www.elassandra.io/)
+**Site:** [https://elassandra.org/](https://elassandra.org/)
 
-Elassandra is an [Apache Cassandra](http://cassandra.apache.org) distribution including an [Elasticsearch](https://github.com/elastic/elasticsearch) search engine.
-Elassandra is a multi-master multi-cloud database and search engine with support for replicating across multiple datacenters in active/active mode.
+This repository is a **fork** of [Strapdata Elassandra](https://github.com/strapdata/elassandra). It is maintained for the community under **Elassandra.org**, with **inClouds** and **Maxim Tsarenko (maxts)** among the active maintainers. Original Strapdata history and copyright remain with Strapdata and other contributors; see [License](#license) and [NOTICE.txt](NOTICE.txt).
 
-Elasticsearch code is embedded in Cassanda nodes providing advanced search features on Cassandra tables and Cassandra serves as an Elasticsearch data and configuration store.
+## Roadmap: Cassandra 4.0.x + OpenSearch 1.3.x
+
+This branch currently ships **Elasticsearch 6.8.4** embedded with **Cassandra 3.11.9** (Strapdata fork in `server/cassandra`). The active modernization program targets **Apache Cassandra 4.0.x** and **OpenSearch 1.3.x** (Elasticsearch 7.10 lineage). See [CONTRIBUTING.md](CONTRIBUTING.md), [RELEASING.md](RELEASING.md), and the docs under `docs/elassandra/source/` (`migration.rst`, `developer/cassandra_fork_inventory.rst`, `developer/cassandra_40_rebase.rst`, `developer/opensearch_porting_guide.rst`). **Scripts:** `scripts/export-cassandra-elassandra-patches.sh`, `scripts/bootstrap-cassandra-40-worktree.sh`, `scripts/clone-opensearch-upstream.sh`.
+
+## What Elassandra is (today)
+
+Elassandra is an [Apache Cassandra](https://cassandra.apache.org/) distribution that embeds an [Elasticsearch](https://github.com/elastic/elasticsearch) 6.8 search engine in each node.
+Elassandra is a multi-master database and search layer with support for replicating across multiple datacenters in active/active mode.
+
+Elasticsearch code runs inside Cassandra JVMs to index and query Cassandra data; Cassandra stores indexed documents and cluster metadata.
 
 ![Elassandra architecture](/docs/elassandra/source/images/elassandra1.jpg)
 
 Elassandra supports Cassandra vnodes and scales horizontally by adding more nodes without the need to reshard indices.
 
-Project documentation is available at [doc.elassandra.io](http://doc.elassandra.io).
+Documentation: build from [docs/elassandra](docs/elassandra) or read [Read the Docs](https://elassandra.readthedocs.io/en/latest/). The canonical entry point is [elassandra.org](https://elassandra.org/).
 
 ## Benefits of Elassandra
 
@@ -25,7 +32,7 @@ For Cassandra users, elassandra provides Elasticsearch features :
 * Provide search on multiple keyspaces and tables in one query.
 * Provide automatic schema creation and support nested documents using [User Defined Types](https://docs.datastax.com/en/cql/3.1/cql/cql_using/cqlUseUDT.html).
 * Provide read/write JSON REST access to Cassandra data.
-* Numerous Elasticsearch plugins and products like [Kibana](https://www.elastic.co/guide/en/kibana/current/introduction.html).
+* Elasticsearch plugins and dashboards; for the future OpenSearch line use [OpenSearch Dashboards](https://opensearch.org/docs/latest/dashboards/index/).
 * Manage concurrent elasticsearch mappings changes and applies batched atomic CQL schema changes.
 * Support [Elasticsearch ingest processors](https://www.elastic.co/guide/en/elasticsearch/reference/master/ingest.html) allowing to transform input data.
 
@@ -42,7 +49,7 @@ For Elasticsearch users, elassandra provides useful features :
 
 ## Quick start
 
-* [Quick Start](http://doc.elassandra.io/en/latest/quickstart.html) guide to run a single node Elassandra cluster in docker.
+* [Quick Start](https://elassandra.readthedocs.io/en/latest/quickstart.html) for a single-node Docker example (image tags may still reference legacy registries until new releases are published).
 * [Deploy Elassandra by launching a Google Kubernetes Engine](./docs/google-kubernetes-tutorial.md):
 
   [![Open in Cloud Shell](https://gstatic.com/cloudssh/images/open-btn.png)](https://console.cloud.google.com/cloudshell/open?git_repo=https://github.com/strapdata/elassandra-google-k8s-marketplace&tutorial=docs/google-kubernetes-tutorial.md)
@@ -52,7 +59,6 @@ For Elasticsearch users, elassandra provides useful features :
 
 #### Elassandra 6.8.4.2+
 
-<<<<<<< HEAD
 Since version 6.8.4.2, the gossip X1 application state can be compressed using a system property. Enabling this settings allows the creation of a lot of virtual indices.
 Before enabling this setting, upgrade all the 6.8.4.x nodes to the 6.8.4.2 (or higher). Once all the nodes are in 6.8.4.2, they are able to decompress the application state even if the settings isn't yet configured locally.
 
@@ -105,9 +111,9 @@ docker run -it --rm strapdata/cqlsh:0.1 node.example.com
 
 ## Installation
 
-Ensure Java 8 is installed and `JAVA_HOME` points to the correct location.
+For **releases from this branch**, use **Java 8** for Cassandra and **Java 12** for the Elasticsearch/Gradle build (see [CONTRIBUTING.md](CONTRIBUTING.md)). The **Cassandra 4 + OpenSearch 1.3** line will standardize on **Java 11+**.
 
-* [Download](https://github.com/strapdata/elassandra/releases) and extract the distribution tarball
+* [Download](https://github.com/maxts/elassandra/releases) and extract the distribution tarball
 * Define the CASSANDRA_HOME environment variable : `export CASSANDRA_HOME=<extracted_directory>`
 * Run `bin/cassandra -e`
 * Run `bin/nodetool status`
@@ -216,16 +222,18 @@ And here is a sample response :
 
 ## Support
 
- * Commercial support is available through [Strapdata](http://www.strapdata.com/).
- * Community support available via [elassandra google groups](https://groups.google.com/forum/#!forum/elassandra).
- * Post feature requests and bugs on https://github.com/strapdata/elassandra/issues
+* Issues and PRs: [github.com/maxts/elassandra](https://github.com/maxts/elassandra) (adjust if the canonical org moves under Elassandra.org).
+* **Elassandra.org** — project site and coordination.
+* **inClouds** — active maintenance and engineering for this fork.
+* Historical upstream: [Strapdata](http://www.strapdata.com/), [elassandra Google group](https://groups.google.com/forum/#!forum/elassandra), [github.com/strapdata/elassandra](https://github.com/strapdata/elassandra).
 
 ## License
 
 ```
 This software is licensed under the Apache License, version 2 ("ALv2"), quoted below.
 
-Copyright 2015-2018, Strapdata (contact@strapdata.com).
+Copyright 2015-2019, Strapdata (contact@strapdata.com).
+Copyright 2024-2026 inClouds and contributors.
 
 Licensed under the Apache License, Version 2.0 (the "License"); you may not
 use this file except in compliance with the License. You may obtain a copy of
@@ -244,4 +252,4 @@ the License.
 
 * Elasticsearch, Logstash, Beats and Kibana are trademarks of Elasticsearch BV, registered in the U.S. and in other countries.
 * Apache Cassandra, Apache Lucene, Apache, Lucene and Cassandra are trademarks of the Apache Software Foundation.
-* Elassandra is a trademark of Strapdata SAS.
+* Elassandra is a trademark of Strapdata SAS. Elassandra.org refers to the community maintenance effort and site for this line.

@@ -28,7 +28,7 @@ esplugin {
 }
 
 dependencies {
-  compileOnly "com.strapdata.elasticsearch.plugin:elasticsearch-scripting-painless-spi:${versions.elasticsearch}"
+  compileOnly "org.elasticsearch.plugin:elasticsearch-scripting-painless-spi:${versions.elasticsearch}"
 }
 
 integTestCluster {

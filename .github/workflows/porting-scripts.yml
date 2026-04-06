@@ -1,0 +1,18 @@
+name: Porting scripts
+on:
+  push:
+    branches: [main, master, v6.8.4-strapdata]
+  pull_request:
+
+jobs:
+  cassandra-patch-export:
+    name: Export Cassandra Elassandra patch series
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: true
+      - name: Export patches (validates script + submodule + fetch)
+        run: ./scripts/export-cassandra-elassandra-patches.sh
+      - name: List patch count
+        run: ls -1 build/cassandra-elassandra-patches/*.patch 2>/dev/null | wc -l

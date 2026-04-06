@@ -17,7 +17,7 @@
  * under the License.
  */
 
-group = 'com.strapdata.elasticsearch.plugin'
+group = 'org.elasticsearch.plugin'
 
 apply plugin: 'elasticsearch.esplugin'
 
