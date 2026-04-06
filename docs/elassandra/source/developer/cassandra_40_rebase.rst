@@ -69,6 +69,8 @@ clone (commit message *Elassandra: port CASSANDRA-12837…*). Reuse or cherry-pi
 * **Follow-up commits on the fork:** ``Index.delayInitializationTask()``; **SecondaryIndexManager** skips
   ``startIndexInitialization`` when that method returns true and exposes ``initIndex(Index)`` so Elassandra can run
   ``getInitializationTask()`` after shards/cluster are ready (core behavior from **0018**, without the full SIM refactor).
+  The same ``initIndex`` / ``startIndexInitialization`` split is also carried on the **3.11** ``server/cassandra``
+  submodule so ``ElasticSecondaryIndex`` can call one API before and after the 4.0 submodule bump.
   **0006** ``transform`` uses ``${build.dir.lib}`` globs and ``_main-jar`` ``depends="transform"``.
 
 Almost every patch may **conflict** or **fail to compile** on 4.0. Resolve in order:
@@ -90,6 +92,8 @@ When the 4.0 tree builds and tests pass:
 #. Point Elassandra’s ``.gitmodules`` ``server/cassandra`` URL at that fork and update the submodule SHA.
 #. Update ``buildSrc/version.properties`` ``cassandra=`` to match ``build.xml`` ``base.version`` in the new submodule.
 #. Run ``./scripts/check-cassandra-submodule.sh`` before release.
+#. Ensure Ant/Maven artifacts use ``groupId`` ``org.elasticsearch.cassandra`` (see ``server/cassandra/build.xml``),
+   matching Gradle dependencies such as ``libs/x-content`` — required for a coherent publish/install story.
 
 Step 5 — Elassandra JVM integration
 -----------------------------------
