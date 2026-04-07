@@ -21,17 +21,17 @@ From the Elassandra repo root you can clone a pinned OpenSearch tree next to thi
 
 .. code-block:: bash
 
+   ./scripts/opensearch-port-bootstrap.sh
+   # equivalent to:
    ./scripts/clone-opensearch-upstream.sh
-   # or explicitly:
-   OPENSEARCH_TAG=1.3.20 OPENSEARCH_CLONE_DIR=../opensearch-1.3.20 \
-     ./scripts/clone-opensearch-upstream.sh
+   # then (in the clone): git checkout -B elassandra-os-1.3 1.3.20
 
 Then:
 
 .. code-block:: bash
 
-   cd ../opensearch-1.3.20   # or your OPENSEARCH_CLONE_DIR
-   git checkout -b elassandra-os-1.3
+   cd ../opensearch-upstream   # or your OPENSEARCH_CLONE_DIR
+   git branch --show-current   # expect elassandra-os-1.3
 
 Use **Java 11+** and the Gradle wrapper shipped in that tree. Do not expect the Elassandra **6.8** Gradle wrapper to drive the OpenSearch build.
 

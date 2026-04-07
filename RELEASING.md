@@ -6,7 +6,7 @@
 
 - **Read the Docs:** [.readthedocs.yaml](.readthedocs.yaml) at the repo root points Sphinx at [docs/elassandra/source/conf.py](docs/elassandra/source/conf.py) and [docs/elassandra/requirements.txt](docs/elassandra/requirements.txt). Point the RTD project at this file after you change the GitHub remote.
 - **CI:** [.github/workflows/docs.yml](.github/workflows/docs.yml) runs `sphinx-build` on every push/PR.
-- **Porting:** [.github/workflows/porting-scripts.yml](.github/workflows/porting-scripts.yml) runs [scripts/export-cassandra-elassandra-patches.sh](scripts/export-cassandra-elassandra-patches.sh) so the Cassandra delta export stays working.
+- **Porting:** [.github/workflows/porting-scripts.yml](.github/workflows/porting-scripts.yml) runs [scripts/export-cassandra-elassandra-patches.sh](scripts/export-cassandra-elassandra-patches.sh) so the Cassandra delta export stays working. For the Cassandra **4.0** submodule switch use [scripts/use-cassandra-40-submodule.sh](scripts/use-cassandra-40-submodule.sh); for an OpenSearch **1.3.20** side-car tree use [scripts/opensearch-port-bootstrap.sh](scripts/opensearch-port-bootstrap.sh) (see [server/OPENSEARCH_PORT.md](server/OPENSEARCH_PORT.md)).
 
 ## Branching policy
 

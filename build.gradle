@@ -190,6 +190,10 @@ allprojects {
 
 task verifyVersions {
   doLast {
+    if (project.hasProperty('elassandra.skipLegacyVersionVerify')) {
+      println 'Skipping legacy Strapdata maven-metadata verify (elassandra.skipLegacyVersionVerify)'
+      return
+    }
     if (gradle.startParameter.isOffline()) {
       throw new GradleException("Must run in online mode to verify versions")
     }

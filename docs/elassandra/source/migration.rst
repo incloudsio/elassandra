@@ -43,10 +43,47 @@ Cassandra
 * Review **secondary index** and **schema extension** behavior after upgrade; validate rebuild and repair
   procedures in a staging cluster.
 
+Implementation status (repository)
+------------------------------------
+
+.. list-table::
+   :widths: 30 70
+   :header-rows: 1
+
+   * - Component
+     - Pin / branch (check ``buildSrc/version.properties`` and submodules)
+   * - Elassandra application repo
+     - `incloudsio/elassandra <https://github.com/incloudsio/elassandra>`_ (integration branches may track modernization work).
+   * - Cassandra fork
+     - `incloudsio/cassandra <https://github.com/incloudsio/cassandra>`_ — **3.11** line ``cassandra-3.11.9-elassandra`` (default submodule); **4.0** line ``cassandra-4.0.x-elassandra`` (Maven ``groupId`` ``io.inclouds.cassandra``). Switch with ``scripts/use-cassandra-40-submodule.sh`` when porting the JVM.
+   * - OpenSearch port
+     - Bootstrap side-car tree with ``scripts/opensearch-port-bootstrap.sh`` (branch ``elassandra-os-1.3`` from tag **1.3.20**); port ``org.elassandra.*`` per :ref:`opensearch_porting_guide`.
+   * - Legacy version verify
+     - Root Gradle ``verifyVersions`` can be skipped with ``-Pelassandra.skipLegacyVersionVerify`` while the stack moves off Strapdata snapshot metadata.
+
+Target pins (when the modern stack ships)
+------------------------------------------
+
+These values are recorded in ``buildSrc/version.properties`` as ``opensearch_port`` and ``lucene_opensearch`` (they match upstream OpenSearch **1.3.20**). The Cassandra **4.0** artifact version tracks ``server/cassandra/build.xml`` ``base.version`` after ``scripts/use-cassandra-40-submodule.sh`` (typically **4.0.20** on branch ``cassandra-4.0.x-elassandra``).
+
+Operator validation (staging)
+------------------------------
+
+* Exercise **rebuild-from-Cassandra** or **full reindex** flows before production; Lucene indices are not upgraded in place from ES 6.8 to OpenSearch 1.3.
+
+**Suggested staging checklist**
+
+#. Provision a non-production cluster with the target Elassandra build (same C* + search versions as production).
+#. Snapshot or otherwise record baseline index names, mappings, and critical CQL schemas.
+#. Run your chosen migration path: **rebuild indices from Cassandra** (nodetool / Elassandra rebuild procedures as documented for your release) **or** **full reindex** into fresh OpenSearch 1.3–compatible indices.
+#. Validate search correctness (spot queries, aggregations, per–DC routing if used) and operational metrics (heap, GC, repair).
+#. Roll dashboards and REST clients to OpenSearch 7.10–style APIs; retire ES 6.x–only plugins.
+
 Further reading
 ---------------
 
 * :ref:`cassandra_fork_inventory` — Cassandra-side commit inventory and 4.0 branch strategy.
 * :ref:`cassandra_40_rebase` — step-by-step patch export, 4.0 clone, and ``git am`` workflow.
+* :ref:`cassandra_40_jvm_port` — Elassandra Java integration points for Cassandra 4.0.
 * :ref:`opensearch_porting_guide` — developer map for rebasing onto OpenSearch 1.3.x.
-* Repository scripts: ``scripts/check-cassandra-submodule.sh`` (version alignment) and ``scripts/clone-opensearch-upstream.sh`` (clone OpenSearch **1.3.20** for porting).
+* Repository scripts: ``scripts/check-cassandra-submodule.sh`` (version alignment), ``scripts/use-cassandra-40-submodule.sh`` (move submodule to Cassandra 4.0), ``scripts/clone-opensearch-upstream.sh`` / ``scripts/opensearch-port-bootstrap.sh`` (OpenSearch **1.3.20** port branch).

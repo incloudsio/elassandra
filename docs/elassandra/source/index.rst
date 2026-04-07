@@ -29,6 +29,7 @@ Contents:
    migration
    developer/cassandra_fork_inventory
    developer/cassandra_40_rebase
+   developer/cassandra_40_jvm_port
    developer/opensearch_porting_guide
 
 Indices and tables

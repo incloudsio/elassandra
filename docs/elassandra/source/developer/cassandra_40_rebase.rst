@@ -73,6 +73,8 @@ clone (commit message *Elassandra: port CASSANDRA-12837…*). Reuse or cherry-pi
   submodule so ``ElasticSecondaryIndex`` can call one API before and after the 4.0 submodule bump.
   **0006** ``transform`` uses ``${build.dir.lib}`` globs and ``_main-jar`` ``depends="transform"``.
 
+**Deferred manual ports (not yet replayed as-is on 4.0):** patches **0016–0024**, **0018** (full SecondaryIndexManager state machine), **0034** (SSL context cache), and related schema/migration hooks — require hand porting onto the current 4.0 packages (see :ref:`cassandra_fork_inventory`). The **incloudsio/cassandra** branch ``cassandra-4.0.x-elassandra`` carries the Elassandra-specific commits that *did* apply; coordinate remaining items with the OpenSearch port in the main Elassandra repo.
+
 Almost every patch may **conflict** or **fail to compile** on 4.0. Resolve in order:
 
 #. Secondary index / ``Index`` SPI / ``SecondaryIndexManager`` (highest risk).

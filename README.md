@@ -8,7 +8,7 @@ This repository is a **fork** of [Strapdata Elassandra](https://github.com/strap
 
 ## Roadmap: Cassandra 4.0.x + OpenSearch 1.3.x
 
-This branch currently ships **Elasticsearch 6.8.4** embedded with **Cassandra 3.11.9** ([incloudsio/cassandra](https://github.com/incloudsio/cassandra) in `server/cassandra`). The active modernization program targets **Apache Cassandra 4.0.x** and **OpenSearch 1.3.x** (Elasticsearch 7.10 lineage). See [CONTRIBUTING.md](CONTRIBUTING.md), [RELEASING.md](RELEASING.md), and the docs under `docs/elassandra/source/` (`migration.rst`, `developer/cassandra_fork_inventory.rst`, `developer/cassandra_40_rebase.rst`, `developer/opensearch_porting_guide.rst`). **Scripts:** `scripts/export-cassandra-elassandra-patches.sh`, `scripts/bootstrap-cassandra-40-worktree.sh`, `scripts/clone-opensearch-upstream.sh`.
+This branch currently ships **Elasticsearch 6.8.4** embedded with **Cassandra 3.11.9** ([incloudsio/cassandra](https://github.com/incloudsio/cassandra) in `server/cassandra`). The active modernization program targets **Apache Cassandra 4.0.x** and **OpenSearch 1.3.x** (Elasticsearch 7.10 lineage). See [CONTRIBUTING.md](CONTRIBUTING.md), [RELEASING.md](RELEASING.md), and the docs under `docs/elassandra/source/` (`migration.rst`, `developer/cassandra_fork_inventory.rst`, `developer/cassandra_40_rebase.rst`, `developer/cassandra_40_jvm_port.rst`, `developer/opensearch_porting_guide.rst`). **Scripts:** `scripts/export-cassandra-elassandra-patches.sh`, `scripts/bootstrap-cassandra-40-worktree.sh`, `scripts/check-cassandra-submodule.sh`, `scripts/use-cassandra-40-submodule.sh`, `scripts/clone-opensearch-upstream.sh`, `scripts/opensearch-port-bootstrap.sh`.
 
 ## What Elassandra is (today)
 
