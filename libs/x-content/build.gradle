@@ -40,7 +40,7 @@ dependencies {
     compile "com.fasterxml.jackson.dataformat:jackson-dataformat-yaml:${versions.jackson}"
     compile "com.fasterxml.jackson.dataformat:jackson-dataformat-cbor:${versions.jackson}"
 
-    compile("org.elasticsearch.cassandra:cassandra-all:${versions.cassandra}") {
+    compile("io.inclouds.cassandra:cassandra-all:${versions.cassandra}") {
         exclude group:'net.java.dev.jna', module:'jna'
         exclude group:'org.ow2.asm', module:'asm'
         exclude group:'org.apache.commons', module:'commons-lang3'
@@ -59,7 +59,7 @@ dependencies {
         exclude group: 'org.elasticsearch', module: 'elasticsearch-x-content'
     }
     
-    compile("org.elasticsearch.cassandra:cassandra-all:${versions.cassandra}") {
+    compile("io.inclouds.cassandra:cassandra-all:${versions.cassandra}") {
         exclude group:'net.java.dev.jna', module:'jna'
         exclude group:'org.ow2.asm', module:'asm'
         exclude group:'org.apache.commons', module:'commons-lang3'

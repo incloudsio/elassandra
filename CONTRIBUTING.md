@@ -21,7 +21,7 @@ As shown below, forked Cassandra and Elasticsearch projects can change independe
 
 ![Elassandra developpement process](/docs/elassandra/source/images/elassandra-devprocess.png)
 
-Elassandra depends on the Cassandra fork published as **`org.elasticsearch.cassandra`** (see **buildSrc/version.properties** and [incloudsio/cassandra](https://github.com/incloudsio/cassandra)):
+Elassandra depends on the Cassandra fork published as **`io.inclouds.cassandra`** (see **buildSrc/version.properties** and [incloudsio/cassandra](https://github.com/incloudsio/cassandra)):
 * Elassandra version 5+ **core/pom.xml** includes a Maven dependency on that artifact.
 * Elassandra version 6+ **buildSrc/version.properties** includes the Gradle dependency.
 * The **server/cassandra** git submodule points at [incloudsio/cassandra](https://github.com/incloudsio/cassandra) (branch **`cassandra-3.11.9-elassandra`** for the current line).

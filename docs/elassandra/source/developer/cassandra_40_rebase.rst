@@ -93,7 +93,7 @@ When the 4.0 tree builds and tests pass:
 #. Point Elassandra’s ``.gitmodules`` ``server/cassandra`` URL at that fork and update the submodule SHA.
 #. Update ``buildSrc/version.properties`` ``cassandra=`` to match ``build.xml`` ``base.version`` in the new submodule.
 #. Run ``./scripts/check-cassandra-submodule.sh`` before release.
-#. Ensure Ant/Maven artifacts use ``groupId`` ``org.elasticsearch.cassandra`` (see ``server/cassandra/build.xml``),
+#. Ensure Ant/Maven artifacts use ``groupId`` ``io.inclouds.cassandra`` (see ``server/cassandra/build.xml``),
    matching Gradle dependencies such as ``libs/x-content`` — required for a coherent publish/install story.
 
 Step 5 — Elassandra JVM integration

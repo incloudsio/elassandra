@@ -146,7 +146,7 @@ dependencies {
   compile 'com.google.guava:guava:19.0'
 
   // Elassandra add-ons
-  runtime("org.elasticsearch.cassandra:cassandra-all:${versions.cassandra}") {
+  runtime("io.inclouds.cassandra:cassandra-all:${versions.cassandra}") {
     exclude group:'net.java.dev.jna', module:'jna'
     exclude group:'org.ow2.asm', module:'asm'
     exclude group:'org.apache.commons', module:'commons-lang3'
