@@ -4,13 +4,14 @@ Cassandra fork inventory (Strapdata → Apache 4.0.x)
 ====================================================
 
 This page records the **Elassandra-specific delta** on top of Apache Cassandra for the
-``server/cassandra`` submodule (historically ``https://github.com/strapdata/cassandra``).
+``server/cassandra`` submodule (``https://github.com/incloudsio/cassandra``, branch
+``cassandra-3.11.9-elassandra``; historically Strapdata).
 
 Baseline
 --------
 
-The Elassandra release in this repository pins submodule commit ``067af8625a`` on branch
-``cassandra-3.11.9-strapdata``. Its **merge-base with Apache ``cassandra-3.11.9``** is
+The Elassandra release in this repository pins submodule commit ``30a4c30bf0`` on branch
+``cassandra-3.11.9-elassandra``. Its **merge-base with Apache ``cassandra-3.11.9``** is
 ``5ef75dd96cb693e4041e9ecb61a6852276f0eca4`` (Apache tag ``cassandra-3.11.9``).
 
 Commit count on Strapdata after that merge-base: **36 commits** (full ``git log`` below).

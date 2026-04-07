@@ -88,7 +88,8 @@ Step 4 — Publish fork and submodule
 
 When the 4.0 tree builds and tests pass:
 
-#. Push **your** fork (e.g. ``github.com/elassandra/cassandra``) on branch ``cassandra-4.0.x-elassandra``.
+#. Push **your** fork (e.g. ``https://github.com/incloudsio/cassandra``) on branch ``cassandra-4.0.x-elassandra``
+   (and ``cassandra-3.11.9-elassandra`` for the 3.11 line).
 #. Point Elassandra’s ``.gitmodules`` ``server/cassandra`` URL at that fork and update the submodule SHA.
 #. Update ``buildSrc/version.properties`` ``cassandra=`` to match ``build.xml`` ``base.version`` in the new submodule.
 #. Run ``./scripts/check-cassandra-submodule.sh`` before release.

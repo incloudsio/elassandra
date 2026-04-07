@@ -4,7 +4,7 @@ Integration
 Integration with an existing Cassandra cluster
 ----------------------------------------------
 
-Elassandra includes a modified version of Cassandra (historically the `Strapdata fork <https://github.com/strapdata/cassandra>`_;
+Elassandra includes a modified version of Cassandra (maintained at `incloudsio/cassandra <https://github.com/incloudsio/cassandra>`_;
 see :ref:`cassandra_fork_inventory` for the porting plan toward **Apache Cassandra 4.0.x** under `Elassandra.org <https://elassandra.org/>`_),
 so **all nodes of a cluster should run Elassandra binaries**. However, you can start a node with or without 
 the Elasticsearch support.  Obviously, all nodes of a datacenter should run Cassandra only or Cassandra with 
