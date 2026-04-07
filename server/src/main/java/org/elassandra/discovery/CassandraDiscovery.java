@@ -86,6 +86,7 @@ import org.elasticsearch.transport.TransportService;
 
 import java.io.IOException;
 import java.net.InetAddress;
+import java.net.UnknownHostException;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
@@ -637,7 +638,14 @@ public class CassandraDiscovery extends AbstractLifecycleComponent implements Di
      */
     public boolean isNormal(DiscoveryNode node) {
         // endpoint address = C* broadcast address = Elasticsearch node name (transport may be bound to C* internal or C* RPC broadcast)
-        EndpointState state = Gossiper.instance.getEndpointStateForEndpoint(InetAddressAndPort.getByName(node.getName()));
+        final InetAddressAndPort endpoint;
+        try {
+            endpoint = InetAddressAndPort.getByName(node.getName());
+        } catch (UnknownHostException e) {
+            logger.warn("Node name [{}] could not be resolved to an endpoint: {}", node.getName(), e.toString());
+            return false;
+        }
+        EndpointState state = Gossiper.instance.getEndpointStateForEndpoint(endpoint);
         if (state == null) {
             logger.warn("Node endpoint address=[{}] name=[{}] state not found", node.getInetAddress(), node.getName());
             return false;
