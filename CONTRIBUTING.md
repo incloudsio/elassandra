@@ -8,7 +8,7 @@ Elassandra is based on a fork of Elasticsearch acting as a plugin for Apache Cas
 
 To achieve these operations, both Cassandra and Elasticsearch requires some modifications located in two forks:
 
-A fork of [Apache Cassandra](http://git-wip-us.apache.org/repos/asf/cassandra.git) including slight modifications, see (https://github.com/strapdata/cassandra).
+A fork of [Apache Cassandra](http://git-wip-us.apache.org/repos/asf/cassandra.git) including slight modifications, maintained at [incloudsio/cassandra](https://github.com/incloudsio/cassandra) (see `server/cassandra` submodule).
 
 A fork of Elasticsearch 5.5.0 (aka Strapdata-Elasticsearch, branch *${version}-strapdata*) including modifications in :
 * Cluster state management ([org.elassandra.cluster.InternalCassandraClusterService](/core/src/main/java/org/elassandra/cluster/InternalCassandraClusterService.java) override a modified [org.elasticsearch.cluster.service.InternalClusterService](/core/src/main/java/org/elasticsearch/cluster/service/InternalClusterService.java))
@@ -21,12 +21,12 @@ As shown below, forked Cassandra and Elasticsearch projects can change independe
 
 ![Elassandra developpement process](/docs/elassandra/source/images/elassandra-devprocess.png)
 
-Elassandra contains 2 references to the [strapdata-cassandra](https://github.com/strapdata/cassandra) :
-* The Elassandra version 5+ **core/pom.xml** include a maven dependency on the strapdata-cassandra project
-* The Elassandra version 6+ **buildSrc/version.properties** include a gradle dependency on the strapdata-cassandra project.
-* In order to build the elassandra tarball and packages, the elassandra project includes a reference to the [strapdata-cassandra](https://github.com/strapdata/cassandra) as git submodule located in **core/cassandra** for version 5+ or **server/cassandra** for version 6+.
+Elassandra depends on the Cassandra fork published as **`org.elasticsearch.cassandra`** (see **buildSrc/version.properties** and [incloudsio/cassandra](https://github.com/incloudsio/cassandra)):
+* Elassandra version 5+ **core/pom.xml** includes a Maven dependency on that artifact.
+* Elassandra version 6+ **buildSrc/version.properties** includes the Gradle dependency.
+* The **server/cassandra** git submodule points at [incloudsio/cassandra](https://github.com/incloudsio/cassandra) (branch **`cassandra-3.11.9-elassandra`** for the current line).
 
-Elassandra is an opensource project, contributors are welcome to rise issues or pull requests on both [strapdata-cassandra](https://github.com/strapdata/cassandra) or [elassandra](https://github.com/strapdata/elassandra) github repositories.
+Contributors may open issues or pull requests on **[Elassandra](https://github.com/maxts/elassandra)** and, for Cassandra-fork–specific changes, on **[incloudsio/cassandra](https://github.com/incloudsio/cassandra)**.
 
 ## Bug reports
 
@@ -40,17 +40,17 @@ It is very helpful if you can provide a test case to reproduce the bug and the a
 
 ## Feature requests
 
-Your're welcome to rise an issue on https://github.com/strapdata/elassandra for new feature, describing why and how it should work.
+You're welcome to open an issue on https://github.com/maxts/elassandra for new features, describing why and how it should work.
 
 ## Contributing code and documentation changes
 
 Contributors can clone repositories and follow guidelines from Elasticsearch and Cassandra :
 * [Contributing to the elasticsearch codebase](https://github.com/elastic/elasticsearch/blob/2.4/CONTRIBUTING.md#contributing-to-the-elasticsearch-codebase)
-* [Cassandra How To Contribute](https://wiki.apache.org/cassandra/HowToContribute)ls 
+* [Cassandra How To Contribute](https://wiki.apache.org/cassandra/HowToContribute)
 
-When cloning Elassandra, use **git clone --recurse-submodules https://github.com/strapdata/elassandra** to clone the strapdata-cassandra submodule and check that your are using the same strapdata-cassandra version in  *core/pom.xm* for elassandra v5.x (or *buildSrc/version.properties* for v6.x) and in this submodule. Alternatively, this submodule can point to your own cassandra branch, assuming this branch include mandatory modifications to support Elassandra, see [strapdata-cassandra](https://github.com/strapdata/cassandra) for details.
+When cloning Elassandra, use **git clone --recurse-submodules https://github.com/maxts/elassandra** to fetch the **server/cassandra** submodule ([incloudsio/cassandra](https://github.com/incloudsio/cassandra)) and ensure the submodule commit matches **buildSrc/version.properties** (`cassandra=`) and `./scripts/check-cassandra-submodule.sh`. You may use your own Cassandra branch if it includes the Elassandra-required changes; see the [Cassandra fork inventory](docs/elassandra/source/developer/cassandra_fork_inventory.rst).
 
-If you forgot the **--recurse-submodules** when cloning, you can also fetch the cassandra submodule with **git submodule update --init** and **git checkout cassandra-3.x-strapdata** to set the strapdata branch.
+If you cloned without **--recurse-submodules**, run **git submodule update --init** and check out the branch recorded by this repository (e.g. **cassandra-3.11.9-elassandra**).
 
 Then, to build from sources: 
 
@@ -77,7 +77,7 @@ Then, to build from sources:
 Note: For elassandra v6.X, javadoc task failed due to [https://bugs.java.com/bugdatabase/view_bug.do?bug_id=8194281](https://bugs.java.com/bugdatabase/view_bug.do?bug_id=8194281).
 
 Elassandra documentation is based on [sphinx](http://www.sphinx-doc.org/en/stable/rest.html) and published on [readthedoc.org](https://readthedocs.org/). 
-Source RestructuredText files are located at [Elassandra source documentation](https://github.com/strapdata/elassandra/tree/master/docs/elassandra). 
+Source RestructuredText files are located under [docs/elassandra](docs/elassandra) in this repository.
 To build the documentation, just run **make html** from the *${project.dir}/docs/elassandra*.
 
 ### Submitting your changes
@@ -86,8 +86,8 @@ To build the documentation, just run **make html** from the *${project.dir}/docs
 
 You can build Elassandra single-node unit tests mixing Elasticsearch and Cassandra CQL/nodetool requests. 
 See [Elassandra Testing](http://doc.elassandra.io/en/latest/testing.html) documentation and 
-existing [Elassandra unit tests](https://github.com/strapdata/elassandra/tree/master/core/src/test/java/org/elassandra). 
-For multi-nodes testing, you can use [ecm](https://github.com/strapdata/ecm), a fork of [ccm](https://github.com/pcmanus/ccm) 
+existing Elassandra unit tests under `server/src/test/java/org/elassandra` and related trees.
+For multi-node testing, you can use [ecm](https://github.com/strapdata/ecm) (historical fork of [ccm](https://github.com/pcmanus/ccm)) 
 running Elassandra.
 
 2. Rebase your changes

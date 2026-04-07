@@ -1,3 +1,4 @@
+# Legacy container images (Strapdata registry). Replace when inClouds/Elassandra.org publishes updated images.
 version: '2.4'
 services:
   seed_node:

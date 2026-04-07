@@ -9,8 +9,8 @@
 ## Branching policy
 
 - **`main`** (or **`master`**, depending on the repo default): day-to-day integration for the maintained line; keep it buildable.
-- **Release branches**: `release/x.y.z` or `v6.8.4-strapdata`-style names for long-lived maintenance; tag artifacts from these branches.
-- **Modernization branch** (optional): `elassandra-os-1.3` or `cassandra-4.0-integration` for work that does not yet compile on the legacy 6.8 tree; merge back when CI is green.
+- **Release branches**: `release/x.y.z` or historical `v6.8.4-strapdata`-style names for long-lived maintenance; tag artifacts from these branches.
+- **Modernization branch** (active in this fork): e.g. `modernization/cassandra4-opensearch13` for Cassandra 4.0 + OpenSearch 1.3 work; merge to `main` when CI is green.
 
 Document the active branch and its Cassandra/OpenSearch baseline in the release notes for every publish.
 

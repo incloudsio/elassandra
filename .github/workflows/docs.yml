@@ -1,7 +1,7 @@
 name: Docs
 on:
   push:
-    branches: [main, master, v6.8.4-strapdata]
+    branches: [main, master, v6.8.4-strapdata, modernization/cassandra4-opensearch13]
   pull_request:
 
 jobs:

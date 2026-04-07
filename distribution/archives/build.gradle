@@ -232,7 +232,7 @@ subprojects {
     dependsOn buildDist, checkExtraction
     onlyIf toolExists
     doLast {
-      final List<String> noticeLines = Arrays.asList("Strapdata", "Copyright 2017-2019 Strapdata")
+      final List<String> noticeLines = Arrays.asList("Strapdata", "Copyright 2015-2019 Strapdata")
       final Path noticePath = archiveExtractionDir.toPath().resolve("elassandra-${VersionProperties.elasticsearch}/NOTICE.txt")
       assertLinesInFile(noticePath, noticeLines)
     }

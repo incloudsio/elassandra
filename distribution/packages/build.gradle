@@ -303,13 +303,12 @@ apply plugin: 'nebula.ospackage-base'
 
 // this is package indepdendent configuration
 ospackage {
-  maintainer 'Strapdata Team <support@strapdata.com>'
+  maintainer 'Elassandra.org / inClouds <https://elassandra.org/>'
   summary '''
-    Elassandra is a multi-master distributed database and search engine from strapdata.com.
-    Reference documentation can be found at https://doc.elassandra.io and
-    commercial support is available form https://www.strapdata.com
+    Elassandra is a multi-master distributed database and search engine (Elassandra.org, inClouds).
+    Documentation: https://elassandra.readthedocs.io/ and https://elassandra.org/
     '''.stripIndent().replace('\n', ' ').trim()
-  url 'https://www.strapdata.com/'
+  url 'https://elassandra.org/'
 
   // signing setup
   if (project.hasProperty('signing.password') && System.getProperty('build.snapshot', 'true') == 'false') {
@@ -385,7 +384,7 @@ Closure commonRpmConfig() {
     arch 'NOARCH'
     os 'LINUX'
     distribution 'Elassandra'
-    vendor 'Strapdata'
+    vendor 'Elassandra'
     // TODO ospackage doesn't support icon but we used to have one
 
     // without this the rpm will have parent dirs of any files we copy in, eg /etc/elasticsearch
@@ -496,7 +495,7 @@ subprojects {
     dependsOn buildDist, checkExtraction
     onlyIf { (project.name.contains('deb') && dpkgExists.call(it)) || (project.name.contains('rpm') && rpmExists.call(it)) }
     doLast {
-      final List<String> noticeLines = Arrays.asList("Strapdata", "Copyright 2017-2019 Strapdata")
+      final List<String> noticeLines = Arrays.asList("Strapdata", "Copyright 2015-2019 Strapdata")
       final Path noticePath = packageExtractionDir.toPath().resolve("usr/share/cassandra/NOTICE.txt")
       assertLinesInFile(noticePath, noticeLines)
     }

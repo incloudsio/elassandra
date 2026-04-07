@@ -3,6 +3,7 @@ on:
   push:
     branches:
       - v6.8.4-strapdata
+      - modernization/cassandra4-opensearch13
       - main
       - master
   pull_request:

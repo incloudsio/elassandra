@@ -119,8 +119,8 @@ subprojects {
             license.appendNode('distribution', 'repo')
 
             Node developer = node.appendNode('developers').appendNode('developer')
-            developer.appendNode('name', 'Strapdata')
-            developer.appendNode('url', 'https://www.strapdata.com')
+            developer.appendNode('name', 'Elassandra.org / inClouds')
+            developer.appendNode('url', 'https://elassandra.org/')
           }
         }
         maven(MavenPublication) {
