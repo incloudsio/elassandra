@@ -277,47 +277,10 @@ public class Serializer {
                 }
             }
             return mapValue;
-        } else if (type instanceof ListType) {
-            ListType<?> ltype = (ListType<?>)type;
-            ByteBuffer input = bb.duplicate();
-            int size = CollectionSerializer.readCollectionSize(input, ProtocolVersion.CURRENT);
-            List list = new ArrayList(size);
-            for (int i = 0; i < size; i++) {
-                list.add( deserialize(ltype.getElementsType(), CollectionSerializer.readValue(input, ProtocolVersion.CURRENT), mapper));
-            }
-            if (input.hasRemaining())
-                throw new MarshalException("Unexpected extraneous bytes after map value");
-            return list;
-        } else if (type instanceof SetType) {
-            SetType<?> ltype = (SetType<?>)type;
-            ByteBuffer input = bb.duplicate();
-            int size = CollectionSerializer.readCollectionSize(input, ProtocolVersion.CURRENT);
-            Set set = new HashSet(size);
-            for (int i = 0; i < size; i++) {
-                set.add( deserialize(ltype.getElementsType(), CollectionSerializer.readValue(input, ProtocolVersion.CURRENT), mapper));
-            }
-            if (input.hasRemaining())
-                throw new MarshalException("Unexpected extraneous bytes after map value");
-            return set;
-        } else if (type instanceof MapType) {
-            MapType<?,?> ltype = (MapType<?,?>)type;
-            ByteBuffer input = bb.duplicate();
-            int size = CollectionSerializer.readCollectionSize(input, ProtocolVersion.CURRENT);
-            Map map = new LinkedHashMap(size);
-            for (int i = 0; i < size; i++) {
-                ByteBuffer kbb = CollectionSerializer.readValue(input, ProtocolVersion.CURRENT);
-                ByteBuffer vbb = CollectionSerializer.readValue(input, ProtocolVersion.CURRENT);
-                String key = (String) ltype.getKeysType().compose(kbb);
-                Mapper subMapper = null;
-                if (mapper != null) {
-                    assert mapper instanceof ObjectMapper : "Expecting an object mapper for MapType";
-                    subMapper = ((ObjectMapper)mapper).getMapper(key);
-                }
-                map.put(key, deserialize(ltype.getValuesType(), vbb, subMapper));
-            }
-            if (input.hasRemaining())
-                throw new MarshalException("Unexpected extraneous bytes after map value");
-            return map;
+        } else if (type instanceof CollectionType)
+        {
+            // Cassandra 4.0+: use AbstractType composition (CollectionSerializer.readValue signature changed).
+            return ((AbstractType<?>) type).compose(bb);
         } else {
              Object value = type.compose(bb);
              return value;

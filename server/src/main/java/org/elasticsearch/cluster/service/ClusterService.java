@@ -25,6 +25,7 @@ import com.google.common.collect.Multimap;
 import org.apache.cassandra.config.DatabaseDescriptor;
 import org.apache.cassandra.schema.Schema;
 import org.apache.cassandra.schema.TableMetadata;
+import org.apache.cassandra.cql3.CQLStatement;
 import org.apache.cassandra.cql3.QueryOptions;
 import org.apache.cassandra.cql3.QueryProcessor;
 import org.apache.cassandra.cql3.UntypedResultSet;
@@ -44,7 +45,10 @@ import org.apache.cassandra.exceptions.UnavailableException;
 import org.apache.cassandra.exceptions.WriteTimeoutException;
 import org.apache.cassandra.index.Index;
 import org.apache.cassandra.locator.AbstractReplicationStrategy;
+import org.apache.cassandra.locator.InetAddressAndPort;
 import org.apache.cassandra.locator.NetworkTopologyStrategy;
+import org.apache.cassandra.schema.ElassandraSchemaBridge;
+import org.apache.cassandra.schema.IndexMetadata;
 import org.apache.cassandra.schema.KeyspaceMetadata;
 import org.apache.cassandra.schema.ReplicationParams;
 import org.apache.cassandra.schema.SchemaKeyspace;
@@ -307,7 +311,7 @@ public class ClusterService extends BaseClusterService {
             List<ByteBuffer> boundValues = new ArrayList<ByteBuffer>(values.length);
             for (int i = 0; i < values.length; i++) {
                 Object v = values[i];
-                AbstractType type = prepared.boundNames.get(i).type;
+                AbstractType type = prepared.statement.getBindVariables().get(i).type;
                 boundValues.add(v instanceof ByteBuffer || v == null ? (ByteBuffer) v : type.decompose(v));
             }
             return boundValues;
@@ -525,9 +529,9 @@ public class ClusterService extends BaseClusterService {
         if (logger.isDebugEnabled())
             logger.debug("processing CL={} SERIAL_CL={} query={} values={}", cl, serialConsistencyLevel, query, Arrays.asList(values));
 
-        // retreive prepared
+        QueryHandler handler = ClientState.getCQLQueryHandler();
         QueryState queryState = new QueryState(clientState);
-        ResultMessage.Prepared prepared = ClientState.getCQLQueryHandler().prepare(query, queryState, Collections.EMPTY_MAP);
+        ResultMessage.Prepared prepared = handler.prepare(query, clientState, Collections.emptyMap());
 
         // bind
         List<ByteBuffer> boundValues = new ArrayList<ByteBuffer>(values.length);
@@ -539,7 +543,8 @@ public class ClusterService extends BaseClusterService {
 
         // execute
         QueryOptions queryOptions = (serialConsistencyLevel == null) ? QueryOptions.forInternalCalls(cl, boundValues) : QueryOptions.forInternalCalls(cl, serialConsistencyLevel, boundValues);
-        ResultMessage result = ClientState.getCQLQueryHandler().process(query, queryState, queryOptions, Collections.EMPTY_MAP, System.nanoTime());
+        CQLStatement statement = handler.parse(query, queryState, queryOptions);
+        ResultMessage result = handler.process(statement, queryState, queryOptions, Collections.emptyMap(), System.nanoTime());
         writetime = queryState.getTimestamp();
         return (result instanceof ResultMessage.Rows) ? UntypedResultSet.create(((ResultMessage.Rows) result).result) : null;
     }
@@ -587,9 +592,9 @@ public class ClusterService extends BaseClusterService {
     public static int replicationFactor(String keyspace) {
         if (Schema.instance != null && Schema.instance.getKeyspaceInstance(keyspace) != null) {
             AbstractReplicationStrategy replicationStrategy = Schema.instance.getKeyspaceInstance(keyspace).getReplicationStrategy();
-            int rf = replicationStrategy.getReplicationFactor();
+            int rf = replicationStrategy.getReplicationFactor().allReplicas;
             if (replicationStrategy instanceof NetworkTopologyStrategy) {
-                rf = ((NetworkTopologyStrategy)replicationStrategy).getReplicationFactor(DatabaseDescriptor.getLocalDataCenter());
+                rf = ((NetworkTopologyStrategy)replicationStrategy).getReplicationFactor(DatabaseDescriptor.getLocalDataCenter()).allReplicas;
             }
             return rf;
         }
@@ -725,7 +730,7 @@ public class ClusterService extends BaseClusterService {
     }
 
     public boolean isDatacenterGroupMember(InetAddress endpoint) {
-        String endpointDc = DatabaseDescriptor.getEndpointSnitch().getDatacenter(endpoint);
+        String endpointDc = DatabaseDescriptor.getEndpointSnitch().getDatacenter(InetAddressAndPort.getByAddress(endpoint));
         KeyspaceMetadata  elasticAdminMetadata = Schema.instance.getKeyspaceMetadata(this.elasticAdminKeyspaceName);
         if (elasticAdminMetadata != null) {
             ReplicationParams replicationParams = elasticAdminMetadata.params.replication;
@@ -756,7 +761,7 @@ public class ClusterService extends BaseClusterService {
     public void writeMetadataToSchemaMutations(MetaData metadata, final Collection<Mutation> mutations, final Collection<Event.SchemaChange> events) throws ConfigurationException, IOException {
         KeyspaceMetadata ksm = Schema.instance.getKeyspaceMetadata(elasticAdminKeyspaceName);
         assert ksm != null : elasticAdminKeyspaceName+" does not exists";
-        Mutation.SimpleBuilder builder = SchemaKeyspace.makeCreateKeyspaceMutation(ksm.name, FBUtilities.timestampMicros());
+        Mutation.SimpleBuilder builder = ElassandraSchemaBridge.makeCreateKeyspaceMutation(ksm, FBUtilities.timestampMicros());
         addMetadataMutations(metadata, builder);
         mutations.add(builder.build());
         events.add(new Event.SchemaChange(Event.SchemaChange.Change.UPDATED, Event.SchemaChange.Target.TABLE, elasticAdminKeyspaceName, ELASTIC_ADMIN_METADATA_TABLE));
@@ -812,7 +817,7 @@ public class ClusterService extends BaseClusterService {
                 for(TableMetadata cfm : perTableIndices.keySet()) {
                     KeyspaceMetadata ksm = SchemaManager.getKSMetaData(cfm.keyspace);
                     TableMetadata cfm2 = this.getSchemaManager().updateTableExtensions(ksm, cfm, perTableIndices.get(cfm));
-                    mutations.add(SchemaKeyspace.makeUpdateTableMutation(ksm, cfm, cfm2, FBUtilities.timestampMicros()).build());
+                    mutations.add(ElassandraSchemaBridge.makeUpdateTableMutation(ksm, cfm, cfm2, FBUtilities.timestampMicros()).build());
                 }
 
                 //do not announce schema migration because gossip not yet ready.
@@ -953,24 +958,28 @@ public class ClusterService extends BaseClusterService {
                 for(String keyspace : Schema.instance.getUserKeyspaces()) {
                     KeyspaceMetadata ksmx = Schema.instance.getKeyspaceMetadata(keyspace);
                     if (ksmx != null) {
-                        logger.trace("ksmx={} indices={}", ksmx.name, ksmx.existingIndexNames(null));
-                        for(String indexName : ksmx.existingIndexNames(null)) {
-                            Optional<TableMetadata> cfmOption = ksmx.findIndexedTable(indexName);
-                            if (indexName.startsWith("elastic_") && cfmOption.isPresent()) {
-                                TableMetadata cfmx = cfmOption.get();
-                                if (cfmx.params.extensions != null) {
-                                    logger.trace("ks.cf={}.{} metadata.version={} extensions={}", ksmx.name, cfmx.name, metaData.version(), cfmx.params.extensions);
-                                    for(Map.Entry<String, ByteBuffer> entry : cfmx.params.extensions.entrySet()) {
-                                        if (isValidExtensionKey(entry.getKey())) {
-                                            IndexMetaData indexMetaData = getIndexMetaDataFromExtension(entry.getValue());
-                                            indexMetaDataExtensions.put(indexMetaData.getIndex().getName(), indexMetaData);
+                        if (logger.isTraceEnabled())
+                            logger.trace("ksmx={}", ksmx.name);
+                        for (TableMetadata table : ksmx.tables) {
+                            for (IndexMetadata idx : table.indexes) {
+                                String indexName = idx.name;
+                                Optional<TableMetadata> cfmOption = ksmx.findIndexedTable(indexName);
+                                if (indexName.startsWith("elastic_") && cfmOption.isPresent()) {
+                                    TableMetadata cfmx = cfmOption.get();
+                                    if (cfmx.params.extensions != null) {
+                                        logger.trace("ks.cf={}.{} metadata.version={} extensions={}", ksmx.name, cfmx.name, metaData.version(), cfmx.params.extensions);
+                                        for(Map.Entry<String, ByteBuffer> entry : cfmx.params.extensions.entrySet()) {
+                                            if (isValidExtensionKey(entry.getKey())) {
+                                                IndexMetaData indexMetaData = getIndexMetaDataFromExtension(entry.getValue());
+                                                indexMetaDataExtensions.put(indexMetaData.getIndex().getName(), indexMetaData);
 
-                                            // initialize typeToCfName map for later reverse lookup in ElasticSecondaryIndex
-                                            schemaManager.typeToCfName(cfmx, keyspace, false);
+                                                // initialize typeToCfName map for later reverse lookup in ElasticSecondaryIndex
+                                                schemaManager.typeToCfName(cfmx, keyspace, false);
+                                            }
                                         }
+                                    } else {
+                                        logger.warn("No extentions for index.type={}.{}", keyspace, cfmx.name);
                                     }
-                                } else {
-                                    logger.warn("No extentions for index.type={}.{}", keyspace, cfmx.name);
                                 }
                             }
                         }
@@ -1043,25 +1052,28 @@ public class ClusterService extends BaseClusterService {
             KeyspaceMetadata ksmx = Schema.instance.getKeyspaceMetadata(keyspace);
             if (ksmx != null) {
                 if (logger.isTraceEnabled())
-                    logger.trace("ksmx={} indices={}", ksmx.name, ksmx.existingIndexNames(null));
-                for(String indexName : ksmx.existingIndexNames(null)) {
-                    Optional<TableMetadata> cfmOption = ksmx.findIndexedTable(indexName);
-                    if (indexName.startsWith("elastic_") && cfmOption.isPresent()) {
-                        TableMetadata cfmx = cfmOption.get();
-                        if (cfmx.params.extensions != null) {
-                            if (logger.isTraceEnabled())
-                                logger.trace("ks.cf={} extensions={}", ksmx.name, cfmx.name,cfmx.params.extensions);
-                            for(Map.Entry<String, ByteBuffer> entry : cfmx.params.extensions.entrySet()) {
-                                if (isValidExtensionKey(entry.getKey())) {
-                                    IndexMetaData indexMetaData = getIndexMetaDataFromExtension(entry.getValue());
-                                    indexMetaDataExtensions.put(indexMetaData.getIndex().getName(), indexMetaData);
+                    logger.trace("ksmx={}", ksmx.name);
+                for (TableMetadata table : ksmx.tables) {
+                    for (IndexMetadata idx : table.indexes) {
+                        String indexName = idx.name;
+                        Optional<TableMetadata> cfmOption = ksmx.findIndexedTable(indexName);
+                        if (indexName.startsWith("elastic_") && cfmOption.isPresent()) {
+                            TableMetadata cfmx = cfmOption.get();
+                            if (cfmx.params.extensions != null) {
+                                if (logger.isTraceEnabled())
+                                    logger.trace("ks.cf={} extensions={}", ksmx.name, cfmx.name,cfmx.params.extensions);
+                                for(Map.Entry<String, ByteBuffer> entry : cfmx.params.extensions.entrySet()) {
+                                    if (isValidExtensionKey(entry.getKey())) {
+                                        IndexMetaData indexMetaData = getIndexMetaDataFromExtension(entry.getValue());
+                                        indexMetaDataExtensions.put(indexMetaData.getIndex().getName(), indexMetaData);
 
-                                    // initialize typeToCfName map for later reverse lookup in ElasticSecondaryIndex
-                                    schemaManager.typeToCfName(cfmx, keyspace, false);
+                                        // initialize typeToCfName map for later reverse lookup in ElasticSecondaryIndex
+                                        schemaManager.typeToCfName(cfmx, keyspace, false);
+                                    }
                                 }
+                            } else {
+                                logger.warn("No extentions for index.type={}.{}", keyspace, cfmx.name);
                             }
-                        } else {
-                            logger.warn("No extentions for index.type={}.{}", keyspace, cfmx.name);
                         }
                     }
                 }
@@ -1262,10 +1274,10 @@ public class ClusterService extends BaseClusterService {
     public ShardInfo shardInfo(String index, ConsistencyLevel cl) {
         Keyspace keyspace = Schema.instance.getKeyspaceInstance(state().metaData().index(index).keyspace());
         AbstractReplicationStrategy replicationStrategy = keyspace.getReplicationStrategy();
-        int rf = replicationStrategy.getReplicationFactor();
+        int rf = replicationStrategy.getReplicationFactor().allReplicas;
         if (replicationStrategy instanceof NetworkTopologyStrategy)
-            rf = ((NetworkTopologyStrategy)replicationStrategy).getReplicationFactor(DatabaseDescriptor.getLocalDataCenter());
-        return new ShardInfo(rf, cl.blockFor(keyspace));
+            rf = ((NetworkTopologyStrategy)replicationStrategy).getReplicationFactor(DatabaseDescriptor.getLocalDataCenter()).allReplicas;
+        return new ShardInfo(rf, cl.blockFor(replicationStrategy));
     }
 
 

@@ -27,6 +27,9 @@ import org.apache.cassandra.dht.Token;
 import org.apache.cassandra.exceptions.ConfigurationException;
 import org.apache.cassandra.gms.VersionedValue;
 import org.apache.cassandra.locator.AbstractReplicationStrategy;
+import org.apache.cassandra.locator.EndpointsForRange;
+import org.apache.cassandra.locator.InetAddressAndPort;
+import org.apache.cassandra.locator.Replica;
 import org.apache.cassandra.locator.TokenMetadata;
 import org.apache.cassandra.service.StorageService;
 import org.apache.cassandra.utils.FBUtilities;
@@ -112,12 +115,15 @@ public abstract class AbstractSearchStrategy {
                 this.strategy = Keyspace.open(ksName).getReplicationStrategy();
                 this.metadata = StorageService.instance.getTokenMetadata().cloneOnlyTokenMap();
                 for(DiscoveryNode node : clusterState.nodes()) {
-                    InetAddress endpoint = node.getNameAsInetAddress();
-                    if (endpoint == null) {
-                        endpoint = this.metadata.getEndpointForHostId(node.uuid());
+                    InetAddressAndPort endpointAddr = null;
+                    InetAddress inet = node.getNameAsInetAddress();
+                    if (inet == null) {
+                        endpointAddr = this.metadata.getEndpointForHostId(node.uuid());
+                    } else {
+                        endpointAddr = InetAddressAndPort.getByAddress(inet);
                     }
-                    if (endpoint != null && this.metadata.isMember(endpoint)) {
-                        for(Token token : this.metadata.getTokens(endpoint)) {
+                    if (endpointAddr != null && this.metadata.isMember(endpointAddr)) {
+                        for(Token token : this.metadata.getTokens(endpointAddr)) {
                             this.tokens.add(token);
                             this.tokenToNodes.put(token, node);
                         }
@@ -145,8 +151,10 @@ public abstract class AbstractSearchStrategy {
 
                 // greenshard = available node -> token range bitset,
                 boolean orphanRange = true;
-                for(InetAddress endpoint :  this.strategy.calculateNaturalEndpoints(token, this.metadata)) {
-                    UUID uuid = StorageService.instance.getHostId(endpoint);
+                EndpointsForRange natural = this.strategy.calculateNaturalReplicas(token, this.metadata);
+                for (Replica replica : natural) {
+                    InetAddressAndPort endpoint = replica.endpoint();
+                    UUID uuid = StorageService.instance.getHostIdForEndpoint(endpoint);
                     assert uuid != null : "host_id not found for endpoint "+endpoint;
                     DiscoveryNode node =  (localNode.uuid().equals(uuid)) ? localNode : clusterState.nodes().get(uuid.toString());
                     if (node != null && node.status() == DiscoveryNode.DiscoveryNodeStatus.ALIVE) {

@@ -130,7 +130,7 @@ public class ElasticQueryHandler extends QueryProcessor {
     public ResultMessage processStatement(CQLStatement statement, QueryState queryState, QueryOptions options, long queryStartNanoTime)
         throws RequestExecutionException, RequestValidationException {
         ClientState clientState = queryState.getClientState();
-        statement.checkAccess(clientState);
+        statement.authorize(clientState);
         statement.validate(clientState);
 
         if (statement instanceof SelectStatement) {
@@ -193,8 +193,8 @@ public class ElasticQueryHandler extends QueryProcessor {
             if (Tracing.isTracing()) {
                 extraParams = new HashMap<>();
                 extraParams.put("_cassandra.trace.session", Tracing.instance.getSessionId().toString());
-                extraParams.put("_cassandra.trace.coordinator", FBUtilities.getBroadcastAddress().getHostAddress());
-                Tracing.instance.begin("Elasticsearch query", FBUtilities.getBroadcastAddress(), Collections.EMPTY_MAP);
+                extraParams.put("_cassandra.trace.coordinator", FBUtilities.getBroadcastAddressAndPort().address.getHostAddress());
+                Tracing.instance.begin("Elasticsearch query", FBUtilities.getBroadcastAddressAndPort().address, Collections.EMPTY_MAP);
             }
 
             boolean hasAgregation = false;

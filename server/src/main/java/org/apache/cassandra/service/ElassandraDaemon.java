@@ -19,6 +19,7 @@ import com.google.common.collect.Lists;
 import com.google.common.util.concurrent.Uninterruptibles;
 
 import org.apache.cassandra.config.DatabaseDescriptor;
+import org.apache.cassandra.schema.MigrationManager;
 import org.apache.cassandra.schema.Schema;
 import org.apache.cassandra.schema.SchemaConstants;
 import org.apache.cassandra.db.SystemKeyspace;
@@ -434,18 +435,18 @@ public class ElassandraDaemon extends CassandraDaemon {
                  // overloadable settings from elasticsearch.yml
                  // by default, HTTP is bound to C* rpc address, Transport is bound to C* internal listen address.
                 .put("network.bind_host", DatabaseDescriptor.getRpcAddress().getHostAddress())
-                .put("network.publish_host", FBUtilities.getBroadcastRpcAddress().getHostAddress())
-                .put("transport.bind_host", FBUtilities.getLocalAddress().getHostAddress())
-                .put("transport.publish_host", Boolean.getBoolean("es.use_internal_address") ? FBUtilities.getLocalAddress().getHostAddress() : FBUtilities.getBroadcastAddress().getHostAddress())
+                .put("network.publish_host", FBUtilities.getBroadcastNativeAddressAndPort().address.getHostAddress())
+                .put("transport.bind_host", FBUtilities.getLocalAddressAndPort().address.getHostAddress())
+                .put("transport.publish_host", Boolean.getBoolean("es.use_internal_address") ? FBUtilities.getLocalAddressAndPort().address.getHostAddress() : FBUtilities.getBroadcastAddressAndPort().address.getHostAddress())
                 .put("path.data", getElasticsearchDataDir())
                 .put(settings)
                  // not overloadable settings.
                 .put("discovery.type", "cassandra")
                 .put("node.data", true)
                 .put("node.master", true)
-                .put("node.name", FBUtilities.getBroadcastAddress().getHostAddress())
+                .put("node.name", FBUtilities.getBroadcastAddressAndPort().address.getHostAddress())
                 .put("node.attr.dc", DatabaseDescriptor.getLocalDataCenter())
-                .put("node.attr.rack", DatabaseDescriptor.getEndpointSnitch().getRack(FBUtilities.getBroadcastAddress()))
+                .put("node.attr.rack", DatabaseDescriptor.getEndpointSnitch().getRack(FBUtilities.getBroadcastAddressAndPort()))
                 .put("cluster.name", ClusterService.getElasticsearchClusterName(env.settings()))
                 .build();
     }

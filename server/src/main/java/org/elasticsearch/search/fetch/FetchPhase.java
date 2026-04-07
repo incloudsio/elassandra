@@ -535,7 +535,7 @@ public class FetchPhase implements SearchPhase {
 
             QueryHandler.Prepared cqlStatement = getCqlPreparedStatement(searchContext, indexService, fieldVisitor, typeKey, docPk.isStaticDocument);
             if (cqlStatement != null) {
-                ResultMessage result = cqlStatement.statement.executeInternal(new QueryState(ClientState.forInternalCalls()), QueryOptions.forInternalCalls(ConsistencyLevel.ONE, docPk.serialize(cqlStatement)));
+                ResultMessage result = cqlStatement.statement.executeLocally(new QueryState(ClientState.forInternalCalls()), QueryOptions.forInternalCalls(ConsistencyLevel.ONE, docPk.serialize(cqlStatement)));
                 if (result instanceof ResultMessage.Rows) {
                     processCqlResultSet(searchContext, indexService, fieldVisitor, ((ResultMessage.Rows)result).result);
                 }

@@ -24,7 +24,7 @@ import com.google.common.collect.HashMultimap;
 import org.apache.cassandra.schema.TableMetadata;
 import org.apache.cassandra.db.Mutation;
 import org.apache.cassandra.schema.KeyspaceMetadata;
-import org.apache.cassandra.schema.SchemaKeyspace;
+import org.apache.cassandra.schema.ElassandraSchemaBridge;
 import org.apache.cassandra.transport.Event;
 import org.apache.cassandra.utils.FBUtilities;
 import org.apache.logging.log4j.LogManager;
@@ -181,12 +181,14 @@ public class MetaDataDeleteIndexService {
                         tableExtensionToRemove.put(table, indexMetaData);
                 }
             }
-            Mutation.SimpleBuilder builder = SchemaKeyspace.makeCreateKeyspaceMutation(ksm.name, FBUtilities.timestampMicros());
+            Mutation.SimpleBuilder builder = ElassandraSchemaBridge.makeCreateKeyspaceMutation(ksm, FBUtilities.timestampMicros());
+            boolean removedExtension = false;
             for(String table : tableExtensionToRemove.keySet()) {
                 TableMetadata cfm = ksm.getTableOrViewNullable(table);
                 MetaDataDeleteIndexService.this.clusterService.getSchemaManager().removeTableExtensionToMutationBuilder(cfm, tableExtensionToRemove.get(table), builder);
+                removedExtension = true;
             }
-            if (!builder.isEmpty())
+            if (removedExtension)
                 mutations.add(builder.build());
         }
     }

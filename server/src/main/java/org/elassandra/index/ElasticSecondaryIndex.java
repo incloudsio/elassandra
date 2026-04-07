@@ -960,11 +960,11 @@ public class ElasticSecondaryIndex implements Index {
                                 ByteBuffer startByteBuffer = null, endByteBuffer = null;
                                 boolean startIsInclusive = true, endIsInclusive = true;
                                 if (i - partitionKeyLen < start.size()) {
-                                    startByteBuffer = start.get(i - partitionKeyLen);
+                                    startByteBuffer = (ByteBuffer) start.get(i - partitionKeyLen);
                                     startIsInclusive = start.isInclusive();
                                 }
                                 if (i - partitionKeyLen < end.size()) {
-                                    endByteBuffer = end.get(i - partitionKeyLen);
+                                    endByteBuffer = (ByteBuffer) end.get(i - partitionKeyLen);
                                     endIsInclusive = end.isInclusive();
                                 }
                                 q = buildQuery(cd, mapper, startByteBuffer, endByteBuffer, startIsInclusive, endIsInclusive);
@@ -1530,11 +1530,11 @@ public class ElasticSecondaryIndex implements Index {
                     if (logger.isTraceEnabled()) {
                         if (inRow != null)
                             logger.trace("indexer={} inRowData={} clustering={} static={} hasLiveData={}",
-                                WideRowcumentIndexer.this.hashCode(), inRow.toString(baseCfs.metadata, true, true), inRow.clustering(),
+                                WideRowcumentIndexer.this.hashCode(), inRow.toString(baseCfs.metadata.get(), true, true), inRow.clustering(),
                                 inRow.isStatic(), inRow.hasLiveData(nowInSec, baseCfs.metadata.get().enforceStrictLiveness()));
                         if (outRow != null)
                             logger.trace("indexer={} outRowData={} clustering={} static={} hasLiveData={}",
-                                WideRowcumentIndexer.this.hashCode(), outRow.toString(baseCfs.metadata, true, true), outRow.clustering(),
+                                WideRowcumentIndexer.this.hashCode(), outRow.toString(baseCfs.metadata.get(), true, true), outRow.clustering(),
                                 outRow.isStatic(), outRow.hasLiveData(nowInSec, baseCfs.metadata.get().enforceStrictLiveness()));
                     }
 
@@ -1617,7 +1617,7 @@ public class ElasticSecondaryIndex implements Index {
                             }
                         }
                         ClusteringIndexSliceFilter filter = new ClusteringIndexSliceFilter(slices.build(), false);
-                        SinglePartitionReadCommand command = SinglePartitionReadCommand.create(baseCfs.metadata, nowInSec, columnFilter, RowFilter.NONE, DataLimits.NONE, key, filter);
+                        SinglePartitionReadCommand command = SinglePartitionReadCommand.create(baseCfs.metadata.get(), nowInSec, columnFilter, RowFilter.NONE, DataLimits.NONE, key, filter);
                         readBeforeWrite(command);
                     }
                 }
@@ -1638,8 +1638,9 @@ public class ElasticSecondaryIndex implements Index {
                         // read-before-write for consistency
                         if (logger.isTraceEnabled())
                             logger.trace("indexer={} read partition for clusterings={}", this.hashCode(), clusterings);
-                        ClusteringIndexNamesFilter filter = new ClusteringIndexNamesFilter(clusterings, false);
-                        SinglePartitionReadCommand command = SinglePartitionReadCommand.create(baseCfs.metadata, nowInSec, columnFilter, RowFilter.NONE, DataLimits.NONE, key, filter);
+                        @SuppressWarnings("unchecked")
+                        ClusteringIndexNamesFilter filter = new ClusteringIndexNamesFilter((java.util.NavigableSet) clusterings, false);
+                        SinglePartitionReadCommand command = SinglePartitionReadCommand.create(baseCfs.metadata.get(), nowInSec, columnFilter, RowFilter.NONE, DataLimits.NONE, key, filter);
                         //SinglePartitionReadCommand command = SinglePartitionReadCommand.create(baseCfs.metadata, nowInSec, key, clusterings);
                         readBeforeWrite(command);
                     }
@@ -1766,7 +1767,7 @@ public class ElasticSecondaryIndex implements Index {
                     if (rowcument != null)
                         rowcument.write();
                 } else {
-                    SinglePartitionReadCommand command = SinglePartitionReadCommand.create(baseCfs.metadata, nowInSec, columnFilter, RowFilter.NONE, DataLimits.NONE, key, SKINNY_FILTER);
+                    SinglePartitionReadCommand command = SinglePartitionReadCommand.create(baseCfs.metadata.get(), nowInSec, columnFilter, RowFilter.NONE, DataLimits.NONE, key, SKINNY_FILTER);
                     RowIterator rowIt = read(command);
                     if (rowIt.hasNext()) {
                         try {
@@ -2056,7 +2057,7 @@ public class ElasticSecondaryIndex implements Index {
                     if (!row.isStatic() && row.clustering().size() > 0) {
                         int i = 0;
                         for (ColumnMetadata ccd : baseCfs.metadata.get().clusteringColumns()) {
-                            Object value = Serializer.deserialize(ccd.type, row.clustering().get(i));
+                            Object value = Serializer.deserialize(ccd.type, (ByteBuffer) row.clustering().get(i));
                             pkCols[baseCfs.metadata.get().partitionKeyColumns().size() + i] = value;
                             if (indexedPkColumns[baseCfs.metadata.get().partitionKeyColumns().size() + i])
                                 values[x++] = value;
@@ -2100,7 +2101,7 @@ public class ElasticSecondaryIndex implements Index {
 
                             switch (ctype.kind) {
                                 case LIST:
-                                    value = Serializer.deserialize(((ListType) cd.type).getElementsType(), cell.value());
+                                    value = Serializer.deserialize(((ListType) cd.type).getElementsType(), (ByteBuffer) cell.value());
                                     if (logger.isTraceEnabled())
                                         logger.trace("indexer={} list name={} kind={} type={} value={}",
                                             RowcumentIndexer.this.hashCode(), cellNameString, cd.kind, cd.type.asCQL3Type().toString(), value);
@@ -2124,7 +2125,7 @@ public class ElasticSecondaryIndex implements Index {
                                     s.add(value);
                                     break;
                                 case MAP:
-                                    value = Serializer.deserialize(((MapType) cd.type).getValuesType(), cell.value());
+                                    value = Serializer.deserialize(((MapType) cd.type).getValuesType(), (ByteBuffer) cell.value());
                                     CellPath cellPath = cell.path();
                                     Object key = Serializer.deserialize(((MapType) cd.type).getKeysType(), cellPath.get(cellPath.size() - 1));
                                     if (logger.isTraceEnabled())
@@ -2141,7 +2142,7 @@ public class ElasticSecondaryIndex implements Index {
                                     break;
                             }
                         } else {
-                            Object value = Serializer.deserialize(cd.type, cell.value());
+                            Object value = Serializer.deserialize(cd.type, (ByteBuffer) cell.value());
                             if (logger.isTraceEnabled())
                                 logger.trace("indexer={} name={} kind={} type={} value={}",
                                     RowcumentIndexer.this.hashCode(), cellNameString, cd.kind, cd.type.asCQL3Type().toString(), value);
@@ -2528,7 +2529,7 @@ public class ElasticSecondaryIndex implements Index {
     {
         needBuild.set(false);
         return () -> {
-            this.baseCfs.indexManager.buildIndex(this);
+            this.baseCfs.indexManager.initIndex(this);
             return null;
         };
     }

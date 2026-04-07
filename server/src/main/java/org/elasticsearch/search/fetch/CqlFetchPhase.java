@@ -14,6 +14,7 @@ import org.apache.cassandra.tracing.TraceState;
 import org.apache.cassandra.tracing.TraceStateImpl;
 import org.apache.cassandra.tracing.Tracing;
 import org.apache.cassandra.tracing.Tracing.TraceType;
+import org.apache.cassandra.locator.InetAddressAndPort;
 import org.apache.cassandra.utils.FBUtilities;
 import org.apache.logging.log4j.Logger;
 import org.apache.lucene.index.LeafReaderContext;
@@ -89,7 +90,7 @@ public class CqlFetchPhase extends FetchPhase {
                 if (session != null) {
                     String coordinator = (String)searchContext.request().extraParams().get("_cassandra.trace.coordinator");
                     if (coordinator != null) {
-                        TraceState state = new TraceStateImpl( InetAddresses.forString(coordinator), UUID.fromString(session), TraceType.QUERY);
+                        TraceState state = new TraceStateImpl(InetAddressAndPort.getByAddress(InetAddresses.forString(coordinator)), UUID.fromString(session), TraceType.QUERY);
                         Tracing.instance.set(state);
                     }
                 }
@@ -111,7 +112,7 @@ public class CqlFetchPhase extends FetchPhase {
                 // binary response for cassandra coordinator.
                 fieldVisitor.setValues(resultSet.firstRow());
                 String coordinator = (String)searchContext.request().extraParams().get("_cassandra.trace.coordinator");
-                if ( coordinator != null && !coordinator.equals(FBUtilities.getBroadcastAddress().getHostAddress())) {
+                if ( coordinator != null && !coordinator.equals(FBUtilities.getBroadcastAddressAndPort().address.getHostAddress())) {
                     Tracing.instance.set((TraceState) null);
                 }
             } else {

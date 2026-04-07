@@ -25,7 +25,7 @@ import com.google.common.collect.Multimap;
 import org.apache.cassandra.schema.TableMetadata;
 import org.apache.cassandra.db.Mutation;
 import org.apache.cassandra.schema.KeyspaceMetadata;
-import org.apache.cassandra.schema.SchemaKeyspace;
+import org.apache.cassandra.schema.ElassandraSchemaBridge;
 import org.apache.cassandra.transport.Event;
 import org.apache.cassandra.utils.FBUtilities;
 import org.apache.logging.log4j.LogManager;
@@ -264,8 +264,8 @@ public class MetaDataUpdateSettingsService {
                 for(TableMetadata cfm : perTableIndices.keySet()) {
                     KeyspaceMetadata ksm = SchemaManager.getKSMetaData(cfm.keyspace);
                     TableMetadata cfm2 = clusterService.getSchemaManager().updateTableExtensions(ksm, cfm, perTableIndices.get(cfm));
-                    Mutation.SimpleBuilder builder = SchemaKeyspace.makeCreateKeyspaceMutation(ksm.name, FBUtilities.timestampMicros());
-                    SchemaKeyspace.addTableToSchemaMutation(cfm2, false, builder);
+                    Mutation.SimpleBuilder builder = ElassandraSchemaBridge.makeCreateKeyspaceMutation(ksm, FBUtilities.timestampMicros());
+                    ElassandraSchemaBridge.addTableToSchemaMutation(cfm2, false, builder);
                     mutations.add(builder.build());
                 }
 

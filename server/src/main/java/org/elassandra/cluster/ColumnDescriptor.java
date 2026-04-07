@@ -60,7 +60,7 @@ public class ColumnDescriptor implements Comparable<ColumnDescriptor> {
         if (cd.kind != this.kind && this.kind != ColumnMetadata.Kind.REGULAR)
             throw new ConfigurationException("Bad mapping, column ["+this.name+"] kind [" + this.kind + "] does not match the existing one type [" + cd.kind + "]");
 
-        AbstractType<?> cql3Type = this.type.prepare(ksm).getType();
+        AbstractType<?> cql3Type = this.type.prepare(ksm.name, ksm.types).getType();
 
         if (!cd.type.isCollection()) {
             if (cql3Type.toString().equals("frozen<geo_point>")) {
@@ -85,7 +85,7 @@ public class ColumnDescriptor implements Comparable<ColumnDescriptor> {
     }
 
     public ColumnMetadata createColumnMetadata(KeyspaceMetadata ksm, String tableName) {
-        AbstractType<?> t = type.prepare(ksm).getType();
+        AbstractType<?> t = type.prepare(ksm.name, ksm.types).getType();
         switch (kind) {
             case PARTITION_KEY:
                 return ColumnMetadata.partitionKeyColumn(ksm.name, tableName, name, t, position);

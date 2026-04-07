@@ -334,7 +334,7 @@ public class MapperService extends AbstractIndexComponent implements Closeable {
                             props.put(TypeParsers.CQL_CLUSTERING_KEY_DESC, true);
                         }
                         CQL3Type.Raw rawType = CQLFragmentParser.parseAny(CqlParser::comparatorType, row.getString("type"), "CQL type");
-                        AbstractType<?> atype =  rawType.prepare(ksm).getType();
+                        AbstractType<?> atype =  rawType.prepare(ksm.name, ksm.types).getType();
                         buildCollectionMapping(props, atype);
                     }
                 }

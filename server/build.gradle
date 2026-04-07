@@ -145,6 +145,9 @@ dependencies {
   testCompile 'com.google.jimfs:jimfs:1.1'
   compile 'com.google.guava:guava:19.0'
 
+  // Cassandra 4.0 bytecode references javax.annotation.concurrent.GuardedBy (compile with -Werror)
+  compile 'com.google.code.findbugs:jsr305:3.0.2'
+
   // Elassandra add-ons — cassandra-all is built by Ant (:cassandra-jar), not published to Maven Central
   compile files("${rootProject.projectDir}/server/cassandra/build/elassandra-cassandra-${versions.cassandra}.jar")
 

@@ -87,7 +87,6 @@ import org.elasticsearch.transport.TransportService;
 import java.io.IOException;
 import java.net.InetAddress;
 import java.util.*;
-import java.util.Map.Entry;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.Future;
@@ -455,7 +454,7 @@ public class CassandraDiscovery extends AbstractLifecycleComponent implements Di
             // initialize cluster from cassandra local token map
             for(InetAddressAndPort endpoint : StorageService.instance.getTokenMetadata().getAllEndpoints()) {
                 if (!this.localAddress.equals(endpoint) && this.localDc.equals(DatabaseDescriptor.getEndpointSnitch().getDatacenter(endpoint))) {
-                    String hostId = StorageService.instance.getHostId(endpoint).toString();
+                    String hostId = StorageService.instance.getHostIdForEndpoint(endpoint).toString();
                     UntypedResultSet rs = executeInternal("SELECT preferred_ip, rpc_address from system." + SystemKeyspace.LEGACY_PEERS +"  WHERE peer = ?", endpoint.address);
                     if (!rs.isEmpty()) {
                         UntypedResultSet.Row row = rs.one();
@@ -466,9 +465,10 @@ public class CassandraDiscovery extends AbstractLifecycleComponent implements Di
             }
 
             // walk the gossip states
-            for (Entry<InetAddressAndPort, EndpointState> entry : Gossiper.instance.getEndpointStateMap().entrySet()) {
-                EndpointState epState = entry.getValue();
-                InetAddressAndPort endpoint = entry.getKey();
+            for (InetAddressAndPort endpoint : Gossiper.instance.getEndpoints()) {
+                EndpointState epState = Gossiper.instance.getEndpointStateForEndpoint(endpoint);
+                if (epState == null)
+                    continue;
 
                 if (!epState.getStatus().equals(VersionedValue.STATUS_NORMAL) && !epState.getStatus().equals(VersionedValue.SHUTDOWN)) {
                     logger.info("Ignoring node state={}", epState);
