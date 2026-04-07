@@ -22,7 +22,7 @@ package org.elasticsearch.cluster.metadata;
 import com.carrotsearch.hppc.cursors.ObjectCursor;
 import com.google.common.collect.ArrayListMultimap;
 import com.google.common.collect.Multimap;
-import org.apache.cassandra.config.CFMetaData;
+import org.apache.cassandra.schema.TableMetadata;
 import org.apache.cassandra.db.Mutation;
 import org.apache.cassandra.schema.KeyspaceMetadata;
 import org.apache.cassandra.schema.SchemaKeyspace;
@@ -205,7 +205,7 @@ public class MetaDataUpdateSettingsService {
                 maybeUpdateClusterBlock(actualIndices, blocks, IndexMetaData.INDEX_READ_BLOCK,
                     IndexMetaData.INDEX_BLOCKS_READ_SETTING, openSettings);
 
-                Multimap<CFMetaData, IndexMetaData> perTableIndices = ArrayListMultimap.create();
+                Multimap<TableMetadata, IndexMetaData> perTableIndices = ArrayListMultimap.create();
                 if (!openIndices.isEmpty()) {
                     for (Index index : openIndices) {
                         IndexMetaData indexMetaData = metaDataBuilder.getSafe(index);
@@ -224,7 +224,7 @@ public class MetaDataUpdateSettingsService {
                             for(ObjectCursor<MappingMetaData> mmd : newIndexMetaData.getMappings().values()) {
                                 KeyspaceMetadata ksm = SchemaManager.getKSMetaDataCopy(newIndexMetaData.keyspace());
                                 String cfName = SchemaManager.typeToCfName(newIndexMetaData.keyspace(), mmd.value.type());
-                                final CFMetaData cfm = ksm.getTableOrViewNullable(cfName);
+                                final TableMetadata cfm = ksm.getTableOrViewNullable(cfName);
                                 assert cfm != null : "Table "+newIndexMetaData.keyspace()+"."+cfName+" not found";
                                 perTableIndices.put(cfm,  newIndexMetaData);
                             }
@@ -251,7 +251,7 @@ public class MetaDataUpdateSettingsService {
                             for(ObjectCursor<MappingMetaData> mmd : newIndexMetaData.getMappings().values()) {
                                 KeyspaceMetadata ksm = SchemaManager.getKSMetaDataCopy(newIndexMetaData.keyspace());
                                 String cfName = SchemaManager.typeToCfName(newIndexMetaData.keyspace(), mmd.value.type());
-                                final CFMetaData cfm = ksm.getTableOrViewNullable(cfName);
+                                final TableMetadata cfm = ksm.getTableOrViewNullable(cfName);
                                 assert cfm != null : "Table "+newIndexMetaData.keyspace()+"."+cfName+" not found";
                                 perTableIndices.put(cfm,  newIndexMetaData);
                             }
@@ -261,9 +261,9 @@ public class MetaDataUpdateSettingsService {
                 }
 
                 // update table extensions with related index metadata
-                for(CFMetaData cfm : perTableIndices.keySet()) {
-                    KeyspaceMetadata ksm = SchemaManager.getKSMetaData(cfm.ksName);
-                    CFMetaData cfm2 = clusterService.getSchemaManager().updateTableExtensions(ksm, cfm, perTableIndices.get(cfm));
+                for(TableMetadata cfm : perTableIndices.keySet()) {
+                    KeyspaceMetadata ksm = SchemaManager.getKSMetaData(cfm.keyspace);
+                    TableMetadata cfm2 = clusterService.getSchemaManager().updateTableExtensions(ksm, cfm, perTableIndices.get(cfm));
                     Mutation.SimpleBuilder builder = SchemaKeyspace.makeCreateKeyspaceMutation(ksm.name, FBUtilities.timestampMicros());
                     SchemaKeyspace.addTableToSchemaMutation(cfm2, false, builder);
                     mutations.add(builder.build());

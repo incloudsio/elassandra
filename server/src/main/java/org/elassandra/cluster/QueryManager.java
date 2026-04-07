@@ -22,13 +22,12 @@ package org.elassandra.cluster;
 import com.fasterxml.jackson.core.JsonParseException;
 import com.fasterxml.jackson.databind.JsonMappingException;
 import com.google.common.collect.ImmutableList;
-import org.apache.cassandra.config.CFMetaData;
-import org.apache.cassandra.config.ColumnDefinition;
+import org.apache.cassandra.schema.ColumnMetadata;
+import org.apache.cassandra.schema.TableMetadata;
 import org.apache.cassandra.cql3.CQL3Type;
 import org.apache.cassandra.cql3.ColumnSpecification;
 import org.apache.cassandra.cql3.QueryProcessor;
 import org.apache.cassandra.cql3.UntypedResultSet;
-import org.apache.cassandra.db.CBuilder;
 import org.apache.cassandra.db.ConsistencyLevel;
 import org.apache.cassandra.db.marshal.*;
 import org.apache.cassandra.dht.Token;
@@ -119,7 +118,7 @@ public class QueryManager extends AbstractComponent {
     }
 
     public boolean isStaticDocument(final IndexShard indexShard, Uid uid) throws JsonParseException, JsonMappingException, IOException {
-        CFMetaData metadata = SchemaManager.getCFMetaData(indexShard.mapperService().keyspace(),
+        TableMetadata metadata = SchemaManager.getTableMetadata(indexShard.mapperService().keyspace(),
             SchemaManager.typeToCfName(indexShard.mapperService().keyspace(), uid.type()));
         String id = uid.id();
         if (id.startsWith("[") && id.endsWith("]")) {
@@ -233,11 +232,10 @@ public class QueryManager extends AbstractComponent {
 
     public Token getToken(final String ksName, final String type, final String routing) throws JsonParseException, JsonMappingException, IOException {
         DocPrimaryKey pk = parseElasticRouting(ksName, type, routing);
-        CFMetaData cfm = SchemaManager.getCFMetaData(ksName, type);
-        CBuilder builder = CBuilder.create(cfm.getKeyValidatorAsClusteringComparator());
-        for (int i = 0; i < cfm.partitionKeyColumns().size(); i++)
-            builder.add(pk.values[i]);
-        return cfm.partitioner.getToken(CFMetaData.serializePartitionKey(builder.build()));
+        String cfName = SchemaManager.typeToCfName(ksName, type);
+        TableMetadata cfm = SchemaManager.getTableMetadata(ksName, cfName);
+        ByteBuffer key = cfm.partitionKeyAsClusteringComparator().make(pk.values).serializeAsPartitionKey();
+        return cfm.partitioner.getToken(key);
     }
 
     public Set<Token> getTokens(final String ksName, final String[] types, final String routing) throws JsonParseException, JsonMappingException, IOException {
@@ -258,10 +256,10 @@ public class QueryManager extends AbstractComponent {
      */
     public DocPrimaryKey parseElasticId(final String ksName, final String type, final String id, Map<String, Object> map) throws JsonParseException, JsonMappingException, IOException {
         String cfName = SchemaManager.typeToCfName(ksName, type);
-        CFMetaData metadata = SchemaManager.getCFMetaData(ksName, cfName);
+        TableMetadata metadata = SchemaManager.getTableMetadata(ksName, cfName);
 
-        List<ColumnDefinition> partitionColumns = metadata.partitionKeyColumns();
-        List<ColumnDefinition> clusteringColumns = metadata.clusteringColumns();
+        List<ColumnMetadata> partitionColumns = metadata.partitionKeyColumns();
+        List<ColumnMetadata> clusteringColumns = metadata.clusteringColumns();
         int ptLen = partitionColumns.size();
 
         if (id.startsWith("[") && id.endsWith("]")) {
@@ -274,7 +272,7 @@ public class QueryManager extends AbstractComponent {
                 throw new JsonMappingException("_id="+id+" longer than the primary key size="+(ptLen+clusteringColumns.size()) );
 
             for(int i=0; i < elements.length; i++) {
-                ColumnDefinition cd = (i < ptLen) ? partitionColumns.get(i) : clusteringColumns.get(i - ptLen);
+                ColumnMetadata cd = (i < ptLen) ? partitionColumns.get(i) : clusteringColumns.get(i - ptLen);
                 AbstractType<?> atype = cd.type;
                 if (map == null) {
                     names[i] = cd.name.toString();
@@ -298,8 +296,8 @@ public class QueryManager extends AbstractComponent {
 
     public DocPrimaryKey parseElasticRouting(final String ksName, final String type, final String routing) throws JsonParseException, JsonMappingException, IOException {
         String cfName = SchemaManager.typeToCfName(ksName, type);
-        CFMetaData metadata = SchemaManager.getCFMetaData(ksName, cfName);
-        List<ColumnDefinition> partitionColumns = metadata.partitionKeyColumns();
+        TableMetadata metadata = SchemaManager.getTableMetadata(ksName, cfName);
+        List<ColumnMetadata> partitionColumns = metadata.partitionKeyColumns();
         int ptLen = partitionColumns.size();
         if (routing.startsWith("[") && routing.endsWith("]")) {
             // _routing is JSON array of values.
@@ -311,11 +309,10 @@ public class QueryManager extends AbstractComponent {
                 throw new JsonMappingException("_routing="+routing+" does not match the partition key size="+ptLen);
 
             for(int i=0; i < elements.length; i++) {
-                ColumnDefinition cd = partitionColumns.get(i);
+                ColumnMetadata cd = partitionColumns.get(i);
                 AbstractType<?> atype = cd.type;
                 names[i] = cd.name.toString();
                 values[i] = atype.compose( Serializer.fromString(atype, elements[i].toString()) );
-                i++;
             }
             return new DocPrimaryKey(names, values) ;
         } else {
@@ -337,17 +334,17 @@ public class QueryManager extends AbstractComponent {
     /**
      * Fetch from the coordinator node.
      */
-    public UntypedResultSet fetchRow(final IndexShard indexShard, final String type, DocPrimaryKey docPk, final String[] columns, Map<String,ColumnDefinition> columnDefs)
+    public UntypedResultSet fetchRow(final IndexShard indexShard, final String type, DocPrimaryKey docPk, final String[] columns, Map<String,ColumnMetadata> columnDefs)
             throws InvalidRequestException, RequestExecutionException, RequestValidationException, IOException {
         return fetchRow(indexShard, type, docPk, columns, ConsistencyLevel.LOCAL_ONE, columnDefs);
     }
 
-    public UntypedResultSet fetchRow(final IndexShard indexShard, final String type, final  DocPrimaryKey docPk, final String[] columns, final ConsistencyLevel cl, Map<String,ColumnDefinition> columnDefs)
+    public UntypedResultSet fetchRow(final IndexShard indexShard, final String type, final  DocPrimaryKey docPk, final String[] columns, final ConsistencyLevel cl, Map<String,ColumnMetadata> columnDefs)
             throws InvalidRequestException, RequestExecutionException, RequestValidationException, IOException {
         return this.clusterService.process(cl, buildFetchQuery(indexShard, type, columns, docPk.isStaticDocument, columnDefs), docPk. values);
     }
 
-    public Engine.GetResult fetchSourceInternal(final IndexShard indexShard, String type, String id, Map<String,ColumnDefinition> columnDefs, LongConsumer onRefresh) throws IOException {
+    public Engine.GetResult fetchSourceInternal(final IndexShard indexShard, String type, String id, Map<String,ColumnMetadata> columnDefs, LongConsumer onRefresh) throws IOException {
         long time = System.nanoTime();
         DocPrimaryKey docPk = parseElasticId(indexShard.mapperService().keyspace(), type, id);
         UntypedResultSet result = fetchRowInternal(indexShard, type, docPk, columnDefs.keySet().toArray(new String[columnDefs.size()]), columnDefs);
@@ -358,11 +355,11 @@ public class QueryManager extends AbstractComponent {
         return Engine.GetResult.NOT_EXISTS;
     }
 
-    public UntypedResultSet fetchRowInternal(final IndexShard indexShard, final String cfName, final  DocPrimaryKey docPk, final String[] columns, Map<String,ColumnDefinition> columnDefs) throws ConfigurationException, IOException  {
+    public UntypedResultSet fetchRowInternal(final IndexShard indexShard, final String cfName, final  DocPrimaryKey docPk, final String[] columns, Map<String,ColumnMetadata> columnDefs) throws ConfigurationException, IOException  {
         return fetchRowInternal(indexShard, cfName, columns, docPk.values, docPk.isStaticDocument, columnDefs);
     }
 
-    public UntypedResultSet fetchRowInternal(final IndexShard indexShard, final String cfName, final String[] columns, final Object[] pkColumns, boolean forStaticDocument, Map<String,ColumnDefinition> columnDefs) throws ConfigurationException, IOException  {
+    public UntypedResultSet fetchRowInternal(final IndexShard indexShard, final String cfName, final String[] columns, final Object[] pkColumns, boolean forStaticDocument, Map<String,ColumnMetadata> columnDefs) throws ConfigurationException, IOException  {
         return QueryProcessor.executeInternal(buildFetchQuery(indexShard, cfName, columns, forStaticDocument, columnDefs), pkColumns);
     }
 
@@ -387,12 +384,12 @@ public class QueryManager extends AbstractComponent {
         return null;
     }
 
-    public String buildFetchQuery(final IndexShard indexShard, final String type, final String[] requiredColumns, boolean forStaticDocument, Map<String, ColumnDefinition> columnDefs)
+    public String buildFetchQuery(final IndexShard indexShard, final String type, final String[] requiredColumns, boolean forStaticDocument, Map<String, ColumnMetadata> columnDefs)
             throws IOException
     {
         DocumentMapper docMapper = indexShard.mapperService().documentMapper(type);
         String cfName = SchemaManager.typeToCfName(indexShard.mapperService().keyspace(), type);
-        CFMetaData metadata = SchemaManager.getCFMetaData(indexShard.mapperService().keyspace(), cfName);
+        TableMetadata metadata = SchemaManager.getTableMetadata(indexShard.mapperService().keyspace(), cfName);
         DocumentMapper.CqlFragments cqlFragment = docMapper.getCqlFragments();
         String regularColumn = null;
         StringBuilder query = new StringBuilder();
@@ -445,7 +442,7 @@ public class QueryManager extends AbstractComponent {
                     // nothing to add.
                     break;
                 default:
-                    ColumnDefinition cd = columnDefs.get(c);
+                    ColumnMetadata cd = columnDefs.get(c);
                     if (cd != null && (cd.isPartitionKey() || cd.isStatic() || !forStaticDocument)) {
                         query.append(query.length() > prefixLength ? ',' : ' ').append("\"").append(c).append("\"");
                     }
@@ -753,13 +750,13 @@ public class QueryManager extends AbstractComponent {
                 indexShard.shardId().getIndex().getName(), cfName, request.id(), sourceMap,
                 request.waitForActiveShards().toCassandraConsistencyLevel());
 
-        final CFMetaData cfm = SchemaManager.getCFMetaData(keyspaceName, cfName);
+        final TableMetadata cfm = SchemaManager.getTableMetadata(keyspaceName, cfName);
 
         String id = request.id();
         Map<String, ByteBuffer> map = new HashMap<String, ByteBuffer>();
         if (indexMetaData.isOpaqueStorage()) {
-            map.put(IdFieldMapper.NAME, Serializer.serialize(request.index(), cfName, cfm.getColumnDefinition(docMapper.idFieldMapper().cqlName()).type, IdFieldMapper.NAME, id, docMapper.idFieldMapper()));
-            map.put(SourceFieldMapper.NAME, Serializer.serialize(request.index(), cfName, cfm.getColumnDefinition(docMapper.sourceMapper().cqlName()).type, SourceFieldMapper.NAME, request.source(), docMapper.sourceMapper()));
+            map.put(IdFieldMapper.NAME, Serializer.serialize(request.index(), cfName, cfm.getColumn(docMapper.idFieldMapper().cqlName()).type, IdFieldMapper.NAME, id, docMapper.idFieldMapper()));
+            map.put(SourceFieldMapper.NAME, Serializer.serialize(request.index(), cfName, cfm.getColumn(docMapper.sourceMapper().cqlName()).type, SourceFieldMapper.NAME, request.source(), docMapper.sourceMapper()));
         } else {
             if (request.parent() != null)
                 sourceMap.put(ParentFieldMapper.NAME, request.parent());
@@ -785,7 +782,7 @@ public class QueryManager extends AbstractComponent {
                         fieldMappers.getMapper(field);
                 final Mapper mapper = (fieldMapper != null) ? fieldMapper : objectMappers.get(field);
                 final ByteBuffer colName = (mapper == null) ? ByteBufferUtil.bytes(field) : mapper.cqlName();    // cached ByteBuffer column name.
-                final ColumnDefinition cd = cfm.getColumnDefinition(colName);
+                final ColumnMetadata cd = cfm.getColumn(colName);
                 if (cd != null) {
                     // we got a CQL column.
                     Object fieldValue = sourceMap.get(field);
@@ -814,7 +811,7 @@ public class QueryManager extends AbstractComponent {
                         }
 
                         // hack to store percolate query as a string while mapper is an object mapper.
-                        if (cfm.cfName.equals("_percolator") && field.equals("query")) {
+                        if (cfm.name.equals("_percolator") && field.equals("query")) {
                             if (cd.type.isCollection()) {
                                 switch (((CollectionType<?>) cd.type).kind) {
                                     case LIST:
@@ -862,11 +859,11 @@ public class QueryManager extends AbstractComponent {
             ByteBuffer NULL_VALUE = (esi == null || !esi.isInsertOnly()) ? null : ByteBufferUtil.UNSET_BYTE_BUFFER;
             for(Mapper m : fieldMappers) {
                 String fullname = m.name();
-                if (map.get(fullname) == null && !fullname.startsWith("_") && fullname.indexOf('.') == -1 && cfm.getColumnDefinition(m.cqlName()) != null)
+                if (map.get(fullname) == null && !fullname.startsWith("_") && fullname.indexOf('.') == -1 && cfm.getColumn(m.cqlName()) != null)
                     map.put(fullname, NULL_VALUE);
             }
             for(String m : objectMappers.keySet()) {
-                if (map.get(m) == null && m.indexOf('.') == -1 && cfm.getColumnDefinition(objectMappers.get(m).cqlName()) != null)
+                if (map.get(m) == null && m.indexOf('.') == -1 && cfm.getColumn(objectMappers.get(m).cqlName()) != null)
                     map.put(m, NULL_VALUE);
             }
             values = new ByteBuffer[map.size()];

@@ -22,9 +22,9 @@ import com.google.common.collect.ArrayListMultimap;
 import com.google.common.collect.ListMultimap;
 import com.google.common.collect.Multimap;
 
-import org.apache.cassandra.config.CFMetaData;
 import org.apache.cassandra.config.DatabaseDescriptor;
-import org.apache.cassandra.config.Schema;
+import org.apache.cassandra.schema.Schema;
+import org.apache.cassandra.schema.TableMetadata;
 import org.apache.cassandra.cql3.QueryOptions;
 import org.apache.cassandra.cql3.QueryProcessor;
 import org.apache.cassandra.cql3.UntypedResultSet;
@@ -738,7 +738,7 @@ public class ClusterService extends BaseClusterService {
 
     private void addMetadataMutations(MetaData metadata, Mutation.SimpleBuilder builder) throws ConfigurationException, IOException {
         KeyspaceMetadata ksm = Schema.instance.getKSMetaData(elasticAdminKeyspaceName);
-        CFMetaData cfm = ksm.getTableOrViewNullable(ELASTIC_ADMIN_METADATA_TABLE);
+        TableMetadata cfm = ksm.getTableOrViewNullable(ELASTIC_ADMIN_METADATA_TABLE);
 
         Map<String, ByteBuffer> extensions = new HashMap<>();
         if (cfm.params.extensions != null)
@@ -799,22 +799,20 @@ public class ClusterService extends BaseClusterService {
                 Collection<SchemaChange> events = new ArrayList<>();
                 writeMetadataToSchemaMutations(metadata, mutations, events);
 
-                Multimap<CFMetaData, IndexMetaData> perTableIndices = ArrayListMultimap.create();
+                Multimap<TableMetadata, IndexMetaData> perTableIndices = ArrayListMultimap.create();
                 for(ObjectCursor<IndexMetaData> imd : metadata.indices().values()) {
                     for(ObjectCursor<MappingMetaData> mmd : imd.value.getMappings().values()) {
                         KeyspaceMetadata ksm = SchemaManager.getKSMetaDataCopy(imd.value.keyspace());
                         String cfName = SchemaManager.typeToCfName(imd.value.keyspace(), mmd.value.type());
-                        final CFMetaData cfm = ksm.getTableOrViewNullable(cfName);
+                        final TableMetadata cfm = ksm.getTableOrViewNullable(cfName);
                         assert cfm != null : "Table "+imd.value.keyspace()+"."+cfName+" not found";
                         perTableIndices.put(cfm,  imd.value);
                     }
                 }
-                for(CFMetaData cfm : perTableIndices.keySet()) {
-                    KeyspaceMetadata ksm = SchemaManager.getKSMetaData(cfm.ksName);
-                    CFMetaData cfm2 = this.getSchemaManager().updateTableExtensions(ksm, cfm, perTableIndices.get(cfm));
-                    Mutation.SimpleBuilder builder = SchemaKeyspace.makeCreateKeyspaceMutation(ksm.name, FBUtilities.timestampMicros());
-                    SchemaKeyspace.addTableToSchemaMutation(cfm2, false, builder);
-                    mutations.add(builder.build());
+                for(TableMetadata cfm : perTableIndices.keySet()) {
+                    KeyspaceMetadata ksm = SchemaManager.getKSMetaData(cfm.keyspace);
+                    TableMetadata cfm2 = this.getSchemaManager().updateTableExtensions(ksm, cfm, perTableIndices.get(cfm));
+                    mutations.add(SchemaKeyspace.makeUpdateTableMutation(ksm, cfm, cfm2, FBUtilities.timestampMicros()).build());
                 }
 
                 //do not announce schema migration because gossip not yet ready.
@@ -856,7 +854,7 @@ public class ClusterService extends BaseClusterService {
         if (ksm == null)
             return null;
 
-        CFMetaData cfm = ksm.getTableOrViewNullable(ELASTIC_ADMIN_METADATA_TABLE);
+        TableMetadata cfm = ksm.getTableOrViewNullable(ELASTIC_ADMIN_METADATA_TABLE);
         if (cfm != null &&
                 cfm.params.extensions != null &&
                 cfm.params.extensions.get(ELASTIC_EXTENSION_VERSION) != null &&
@@ -868,7 +866,7 @@ public class ClusterService extends BaseClusterService {
         throw new NoPersistedMetaDataException("No extension found for table "+this.elasticAdminKeyspaceName+"."+ELASTIC_ADMIN_METADATA_TABLE);
     }
 
-    public MetaData readMetaData(CFMetaData cfm) {
+    public MetaData readMetaData(TableMetadata cfm) {
         try {
             byte[] bytes = ByteBufferUtil.getArray(cfm.params.extensions.get(ClusterService.ELASTIC_EXTENSION_METADATA));
             MetaData metadata = metaStateService.loadGlobalState(bytes);
@@ -944,7 +942,7 @@ public class ClusterService extends BaseClusterService {
         if (ksm == null)
             throw new NoPersistedMetaDataException("Keyspace "+this.elasticAdminKeyspaceName+" metadata not available");
 
-        CFMetaData cfm = ksm.getTableOrViewNullable(metadataTableName.orElse(ELASTIC_ADMIN_METADATA_TABLE));
+        TableMetadata cfm = ksm.getTableOrViewNullable(metadataTableName.orElse(ELASTIC_ADMIN_METADATA_TABLE));
         if (cfm != null && cfm.params.extensions != null) {
             try {
                 final MetaData metaData =  readMetaData(cfm);
@@ -957,11 +955,11 @@ public class ClusterService extends BaseClusterService {
                     if (ksmx != null) {
                         logger.trace("ksmx={} indices={}", ksmx.name, ksmx.existingIndexNames(null));
                         for(String indexName : ksmx.existingIndexNames(null)) {
-                            Optional<CFMetaData> cfmOption = ksmx.findIndexedTable(indexName);
+                            Optional<TableMetadata> cfmOption = ksmx.findIndexedTable(indexName);
                             if (indexName.startsWith("elastic_") && cfmOption.isPresent()) {
-                                CFMetaData cfmx = cfmOption.get();
+                                TableMetadata cfmx = cfmOption.get();
                                 if (cfmx.params.extensions != null) {
-                                    logger.trace("ks.cf={}.{} metadata.version={} extensions={}", ksmx.name, cfmx.cfName, metaData.version(), cfmx.params.extensions);
+                                    logger.trace("ks.cf={}.{} metadata.version={} extensions={}", ksmx.name, cfmx.name, metaData.version(), cfmx.params.extensions);
                                     for(Map.Entry<String, ByteBuffer> entry : cfmx.params.extensions.entrySet()) {
                                         if (isValidExtensionKey(entry.getKey())) {
                                             IndexMetaData indexMetaData = getIndexMetaDataFromExtension(entry.getValue());
@@ -972,7 +970,7 @@ public class ClusterService extends BaseClusterService {
                                         }
                                     }
                                 } else {
-                                    logger.warn("No extentions for index.type={}.{}", keyspace, cfmx.cfName);
+                                    logger.warn("No extentions for index.type={}.{}", keyspace, cfmx.name);
                                 }
                             }
                         }
@@ -1047,12 +1045,12 @@ public class ClusterService extends BaseClusterService {
                 if (logger.isTraceEnabled())
                     logger.trace("ksmx={} indices={}", ksmx.name, ksmx.existingIndexNames(null));
                 for(String indexName : ksmx.existingIndexNames(null)) {
-                    Optional<CFMetaData> cfmOption = ksmx.findIndexedTable(indexName);
+                    Optional<TableMetadata> cfmOption = ksmx.findIndexedTable(indexName);
                     if (indexName.startsWith("elastic_") && cfmOption.isPresent()) {
-                        CFMetaData cfmx = cfmOption.get();
+                        TableMetadata cfmx = cfmOption.get();
                         if (cfmx.params.extensions != null) {
                             if (logger.isTraceEnabled())
-                                logger.trace("ks.cf={} extensions={}", ksmx.name, cfmx.cfName,cfmx.params.extensions);
+                                logger.trace("ks.cf={} extensions={}", ksmx.name, cfmx.name,cfmx.params.extensions);
                             for(Map.Entry<String, ByteBuffer> entry : cfmx.params.extensions.entrySet()) {
                                 if (isValidExtensionKey(entry.getKey())) {
                                     IndexMetaData indexMetaData = getIndexMetaDataFromExtension(entry.getValue());
@@ -1063,7 +1061,7 @@ public class ClusterService extends BaseClusterService {
                                 }
                             }
                         } else {
-                            logger.warn("No extentions for index.type={}.{}", keyspace, cfmx.cfName);
+                            logger.warn("No extentions for index.type={}.{}", keyspace, cfmx.name);
                         }
                     }
                 }

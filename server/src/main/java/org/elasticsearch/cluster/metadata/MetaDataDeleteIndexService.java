@@ -21,7 +21,7 @@ package org.elasticsearch.cluster.metadata;
 
 import com.carrotsearch.hppc.cursors.ObjectCursor;
 import com.google.common.collect.HashMultimap;
-import org.apache.cassandra.config.CFMetaData;
+import org.apache.cassandra.schema.TableMetadata;
 import org.apache.cassandra.db.Mutation;
 import org.apache.cassandra.schema.KeyspaceMetadata;
 import org.apache.cassandra.schema.SchemaKeyspace;
@@ -183,7 +183,7 @@ public class MetaDataDeleteIndexService {
             }
             Mutation.SimpleBuilder builder = SchemaKeyspace.makeCreateKeyspaceMutation(ksm.name, FBUtilities.timestampMicros());
             for(String table : tableExtensionToRemove.keySet()) {
-                CFMetaData cfm = ksm.getTableOrViewNullable(table);
+                TableMetadata cfm = ksm.getTableOrViewNullable(table);
                 MetaDataDeleteIndexService.this.clusterService.getSchemaManager().removeTableExtensionToMutationBuilder(cfm, tableExtensionToRemove.get(table), builder);
             }
             if (!builder.isEmpty())

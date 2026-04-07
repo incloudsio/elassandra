@@ -23,9 +23,9 @@ import com.carrotsearch.hppc.cursors.ObjectCursor;
 import com.google.common.collect.ArrayListMultimap;
 import com.google.common.collect.ListMultimap;
 
-import org.apache.cassandra.config.CFMetaData;
 import org.apache.cassandra.config.DatabaseDescriptor;
-import org.apache.cassandra.config.Schema;
+import org.apache.cassandra.schema.Schema;
+import org.apache.cassandra.schema.TableMetadata;
 import org.apache.cassandra.locator.NetworkTopologyStrategy;
 import org.apache.cassandra.schema.KeyspaceMetadata;
 import org.apache.cassandra.service.MigrationListener;
@@ -138,12 +138,12 @@ public class SchemaListener extends MigrationListener implements ClusterStateLis
     }
 
     @Override
-    public void onCreateColumnFamily(KeyspaceMetadata ksm, CFMetaData cfm) {
+    public void onCreateColumnFamily(KeyspaceMetadata ksm, TableMetadata cfm) {
         if (!record)
             return;
 
-        logger.trace("{}.{}", ksm.name, cfm.cfName);
-        if (!isElasticAdmin(ksm.name, cfm.cfName)) {
+        logger.trace("{}.{}", ksm.name, cfm.name);
+        if (!isElasticAdmin(ksm.name, cfm.name)) {
             updateElasticsearchMapping(ksm, cfm);
         }
     }
@@ -153,12 +153,12 @@ public class SchemaListener extends MigrationListener implements ClusterStateLis
      * then trigger 2i mapping update and a clusterState update.
      */
     @Override
-    public void onUpdateColumnFamily(KeyspaceMetadata ksm, CFMetaData cfm, boolean affectsStatements) {
+    public void onUpdateColumnFamily(KeyspaceMetadata ksm, TableMetadata cfm, boolean affectsStatements) {
         if (!record)
             return;
 
-        logger.trace("{}.{}", ksm.name, cfm.cfName);
-        if (isElasticAdmin(ksm.name, cfm.cfName)) {
+        logger.trace("{}.{}", ksm.name, cfm.name);
+        if (isElasticAdmin(ksm.name, cfm.name)) {
             recordedMetaData =  clusterService.readMetaData(cfm);
         } else {
             updateElasticsearchMapping(ksm, cfm);
@@ -204,8 +204,8 @@ public class SchemaListener extends MigrationListener implements ClusterStateLis
                 ClusterService.ELASTIC_ADMIN_METADATA_TABLE.equals(cfName));
     }
 
-    void updateElasticsearchMapping(KeyspaceMetadata ksm, CFMetaData cfm) {
-        boolean hasSecondaryIndex = cfm.getIndexes().has(SchemaManager.buildIndexName(cfm.cfName));
+    void updateElasticsearchMapping(KeyspaceMetadata ksm, TableMetadata cfm) {
+        boolean hasSecondaryIndex = cfm.indexes.has(SchemaManager.buildIndexName(cfm.name));
         for(Map.Entry<String, ByteBuffer> e : cfm.params.extensions.entrySet()) {
             if (clusterService.isValidExtensionKey(e.getKey())) {
                     IndexMetaData indexMetaData = clusterService.getIndexMetaDataFromExtension(e.getValue());

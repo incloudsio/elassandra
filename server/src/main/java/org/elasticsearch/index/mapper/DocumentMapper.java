@@ -19,8 +19,8 @@
 
 package org.elasticsearch.index.mapper;
 
-import org.apache.cassandra.config.CFMetaData;
-import org.apache.cassandra.config.ColumnDefinition;
+import org.apache.cassandra.schema.ColumnMetadata;
+import org.apache.cassandra.schema.TableMetadata;
 import org.apache.cassandra.cql3.ColumnIdentifier;
 import org.apache.lucene.document.StoredField;
 import org.apache.lucene.index.LeafReaderContext;
@@ -140,13 +140,13 @@ public class DocumentMapper implements ToXContentFragment {
 
 
     private CqlFragments cqlFragments = null;
-    private Map<String, ColumnDefinition> columnDefs = null;
+    private Map<String, ColumnMetadata> columnDefs = null;
 
     public CqlFragments getCqlFragments() {
         if (this.cqlFragments == null) {
             synchronized(this) {
                 if (this.cqlFragments == null)
-                    this.cqlFragments = new CqlFragments(SchemaManager.getCFMetaData(mapperService.keyspace(), SchemaManager.typeToCfName(mapperService.keyspace(), type)));
+                    this.cqlFragments = new CqlFragments(SchemaManager.getTableMetadata(mapperService.keyspace(), SchemaManager.typeToCfName(mapperService.keyspace(), type)));
             }
         }
         return this.cqlFragments;
@@ -159,11 +159,11 @@ public class DocumentMapper implements ToXContentFragment {
         public String pkCols;
         public String pkWhere;
 
-        CqlFragments(CFMetaData metadata) {
+        CqlFragments(TableMetadata metadata) {
             StringBuilder pkColsBuilder = new StringBuilder();
             StringBuilder pkWhereBuilder = new StringBuilder();
 
-            for (ColumnDefinition cd : metadata.partitionKeyColumns()) {
+            for (ColumnMetadata cd : metadata.partitionKeyColumns()) {
                 if (pkColsBuilder.length() > 0) {
                     pkColsBuilder.append(',');
                     pkWhereBuilder.append(" AND ");
@@ -175,7 +175,7 @@ public class DocumentMapper implements ToXContentFragment {
             this.ptCols = pkColsBuilder.toString();
             this.ptWhere = pkWhereBuilder.toString();
 
-            for (ColumnDefinition cd : metadata.clusteringColumns()) {
+            for (ColumnMetadata cd : metadata.clusteringColumns()) {
                 if (pkColsBuilder.length() > 0) {
                     pkColsBuilder.append(',');
                     pkWhereBuilder.append(" AND ");
@@ -190,22 +190,22 @@ public class DocumentMapper implements ToXContentFragment {
     }
 
     // returns ColumnDefintion
-    public Map<String, ColumnDefinition> getColumnDefinitions() {
+    public Map<String, ColumnMetadata> getColumnDefinitions() {
         if (this.columnDefs == null) {
             synchronized(this) {
                 if (this.columnDefs == null) {
-                    CFMetaData metadata = SchemaManager.getCFMetaData(mapperService.keyspace(), SchemaManager.typeToCfName(mapperService.keyspace(), type));
-                    this.columnDefs = new HashMap<String, ColumnDefinition>();
+                    TableMetadata metadata = SchemaManager.getTableMetadata(mapperService.keyspace(), SchemaManager.typeToCfName(mapperService.keyspace(), type));
+                    this.columnDefs = new HashMap<String, ColumnMetadata>();
                     for(Mapper fieldMapper : fieldMappers) {
                         if (fieldMapper.name().indexOf('.') == -1) {
-                            ColumnDefinition cd = metadata.getColumnDefinition(new ColumnIdentifier(fieldMapper.name(), true));
+                            ColumnMetadata cd = metadata.getColumn(new ColumnIdentifier(fieldMapper.name(), true));
                             if (cd != null)
                                 columnDefs.put(fieldMapper.name(), cd);
                         }
                     }
                     for(String name : objectMappers.keySet()) {
                         if (name.indexOf('.') == -1) {
-                            ColumnDefinition cd = metadata.getColumnDefinition(new ColumnIdentifier(name, true));
+                            ColumnMetadata cd = metadata.getColumn(new ColumnIdentifier(name, true));
                             if (cd != null)
                                 columnDefs.put(name, cd);
                         }

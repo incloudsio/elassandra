@@ -19,7 +19,7 @@
 
 package org.elasticsearch.index.get;
 
-import org.apache.cassandra.config.ColumnDefinition;
+import org.apache.cassandra.schema.ColumnMetadata;
 import org.apache.cassandra.cql3.UntypedResultSet;
 import org.apache.cassandra.db.ConsistencyLevel;
 import org.apache.cassandra.exceptions.RequestExecutionException;
@@ -279,7 +279,7 @@ public final class ShardGetService extends AbstractIndexShardComponent {
                 // fetch source from cassandra
                 DocPrimaryKey docPk = clusterService.getQueryManager().parseElasticId(indexShard.mapperService().keyspace(), type, id);
                 String cfName = SchemaManager.typeToCfName(indexShard.mapperService().keyspace(), type);
-                Map<String, ColumnDefinition> columnDefs = mapperService.documentMapper(type).getColumnDefinitions();
+                Map<String, ColumnMetadata> columnDefs = mapperService.documentMapper(type).getColumnDefinitions();
                 UntypedResultSet result = clusterService.getQueryManager().fetchRow(this.indexShard,
                         cfName, docPk,
                         columnDefs.keySet().toArray(new String[columnDefs.size()]),

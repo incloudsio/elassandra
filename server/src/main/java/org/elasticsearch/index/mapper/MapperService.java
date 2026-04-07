@@ -24,10 +24,9 @@ import com.carrotsearch.hppc.cursors.ObjectCursor;
 import com.google.common.collect.Iterables;
 import com.google.common.collect.Maps;
 
-import org.apache.cassandra.config.CFMetaData;
-import org.apache.cassandra.config.ColumnDefinition;
-import org.apache.cassandra.config.ColumnDefinition.ClusteringOrder;
-import org.apache.cassandra.config.Schema;
+import org.apache.cassandra.schema.ColumnMetadata;
+import org.apache.cassandra.schema.Schema;
+import org.apache.cassandra.schema.TableMetadata;
 import org.apache.cassandra.cql3.CQL3Type;
 import org.apache.cassandra.cql3.CQLFragmentParser;
 import org.apache.cassandra.cql3.ColumnIdentifier;
@@ -300,9 +299,9 @@ public class MapperService extends AbstractIndexComponent implements Closeable {
             String ksName = keyspace();
             KeyspaceMetadata ksm = Schema.instance.getKSMetaDataSafe(ksName);
             try {
-                CFMetaData metadata = SchemaManager.getCFMetaData(ksName, cfName);
+                TableMetadata metadata = SchemaManager.getTableMetadata(ksName, cfName);
                 List<String> pkColNames = new ArrayList<String>(metadata.partitionKeyColumns().size() + metadata.clusteringColumns().size());
-                for(ColumnDefinition cd: Iterables.concat(metadata.partitionKeyColumns(), metadata.clusteringColumns())) {
+                for(ColumnMetadata cd: Iterables.concat(metadata.partitionKeyColumns(), metadata.clusteringColumns())) {
                     pkColNames.add(cd.name.toString());
                 }
 
@@ -327,11 +326,11 @@ public class MapperService extends AbstractIndexComponent implements Closeable {
                                 props.put(TypeParsers.CQL_PARTITION_KEY, true);
                             }
                         }
-                        ColumnDefinition colDef = metadata.getColumnDefinition(new ColumnIdentifier(columnName, true));
+                        ColumnMetadata colDef = metadata.getColumn(new ColumnIdentifier(columnName, true));
                         if (colDef.isStatic()) {
                             props.put(TypeParsers.CQL_STATIC_COLUMN, true);
                         }
-                        if (colDef.clusteringOrder() == ClusteringOrder.DESC) {
+                        if (colDef.clusteringOrder() == ColumnMetadata.ClusteringOrder.DESC) {
                             props.put(TypeParsers.CQL_CLUSTERING_KEY_DESC, true);
                         }
                         CQL3Type.Raw rawType = CQLFragmentParser.parseAny(CqlParser::comparatorType, row.getString("type"), "CQL type");

@@ -16,7 +16,7 @@
 package org.elassandra;
 
 import org.apache.cassandra.config.DatabaseDescriptor;
-import org.apache.cassandra.config.Schema;
+import org.apache.cassandra.schema.Schema;
 import org.apache.cassandra.cql3.UntypedResultSet;
 import org.apache.cassandra.db.ConsistencyLevel;
 import org.apache.cassandra.service.StorageService;
@@ -92,7 +92,7 @@ public class SnapshotTests extends ESSingleNodeTestCase {
         createIndex("ks", Settings.builder().put("index.snapshot_with_sstable",true).build(),"t1", mapping);
         ensureGreen("ks");
         Index initialIndex = resolveIndex("ks");
-        UUID srcCfId = Schema.instance.getCFMetaData("ks", "t1").cfId;
+        UUID srcCfId = Schema.instance.getTableMetadata("ks", "t1").id.asUUID();
 
         for(long i=0; i < 1000; i++)
            process(ConsistencyLevel.ONE,String.format(Locale.ROOT, "INSERT INTO ks.t1 (name, age) VALUES ('name%d', %d)",i,i));
@@ -109,7 +109,7 @@ public class SnapshotTests extends ESSingleNodeTestCase {
         assertAcked(client().admin().indices().prepareClose("ks").get());
 
         String dataLocation = DatabaseDescriptor.getAllDataFileLocations()[0];
-        restoreSSTable(dataLocation, "ks", "t1", srcCfId, Schema.instance.getCFMetaData("ks", "t1").cfId, "snap1");
+        restoreSSTable(dataLocation, "ks", "t1", srcCfId, Schema.instance.getTableMetadata("ks", "t1").id.asUUID(), "snap1");
         restoreLucenceFiles(dataLocation, initialIndex, initialIndex, "snap1");
 
         // refresh SSTables and repopen index
@@ -135,7 +135,7 @@ public class SnapshotTests extends ESSingleNodeTestCase {
            process(ConsistencyLevel.ONE,String.format(Locale.ROOT, "INSERT INTO ks.t1 (name, age) VALUES ('name%d', %d)",i,i));
         assertThat(client().prepareSearch().setIndices("ks").setTypes("t1").setQuery(QueryBuilders.matchAllQuery()).get().getHits().getTotalHits(), equalTo(1000L));
 
-        UUID cfId = Schema.instance.getCFMetaData("ks","t1").cfId;
+        UUID cfId = Schema.instance.getTableMetadata("ks","t1").id.asUUID();
         String id = cfId.toString().replaceAll("\\-", "");
 
         if (!DatabaseDescriptor.isAutoSnapshot())
@@ -163,7 +163,7 @@ public class SnapshotTests extends ESSingleNodeTestCase {
         System.out.println("snapshot name="+snap);
         stream.close();
 
-        UUID cfId2 = Schema.instance.getCFMetaData("ks","t1").cfId;
+        UUID cfId2 = Schema.instance.getTableMetadata("ks","t1").id.asUUID();
         restoreSSTable(dataLocation, "ks", "t1", cfId, cfId2, snap);
         restoreLucenceFiles(dataLocation, index1, index2, snap);
 

@@ -19,19 +19,18 @@
 
 package org.elassandra.cluster;
 
-import org.apache.cassandra.config.CFMetaData;
-import org.apache.cassandra.config.ColumnDefinition;
-import org.apache.cassandra.config.ColumnDefinition.Kind;
 import org.apache.cassandra.cql3.CQL3Type;
 import org.apache.cassandra.cql3.ColumnIdentifier;
 import org.apache.cassandra.db.marshal.AbstractType;
 import org.apache.cassandra.exceptions.ConfigurationException;
+import org.apache.cassandra.schema.ColumnMetadata;
 import org.apache.cassandra.schema.KeyspaceMetadata;
+import org.apache.cassandra.schema.TableMetadata;
 
 public class ColumnDescriptor implements Comparable<ColumnDescriptor> {
     public String name;
     public CQL3Type.Raw type;
-    public ColumnDefinition.Kind kind;
+    public ColumnMetadata.Kind kind;
     public int position;
     public boolean desc;
     public boolean exists = false;
@@ -41,24 +40,24 @@ public class ColumnDescriptor implements Comparable<ColumnDescriptor> {
     }
 
     public ColumnDescriptor(String name, CQL3Type.Raw type) {
-        this(name, type, Kind.REGULAR, ColumnDefinition.NO_POSITION);
+        this(name, type, ColumnMetadata.Kind.REGULAR, ColumnMetadata.NO_POSITION);
     }
 
-    public ColumnDescriptor(String name, CQL3Type.Raw type, Kind kind, int position) {
+    public ColumnDescriptor(String name, CQL3Type.Raw type, ColumnMetadata.Kind kind, int position) {
         this.name = name;
         this.type = type;
         this.kind = kind;
         this.position = position;
     }
 
-    public void validate(KeyspaceMetadata ksm , CFMetaData cfm) throws ConfigurationException {
-        ColumnDefinition cd = cfm.getColumnDefinition(new ColumnIdentifier(name, true));
+    public void validate(KeyspaceMetadata ksm, TableMetadata cfm) throws ConfigurationException {
+        ColumnMetadata cd = cfm.getColumn(new ColumnIdentifier(name, true));
         if (cd == null)
             return;
         exists = true;
 
         // do not enforce PK constraints if not specified explicitly in oder to keep backward compatibility.
-        if (cd.kind != this.kind && this.kind != Kind.REGULAR)
+        if (cd.kind != this.kind && this.kind != ColumnMetadata.Kind.REGULAR)
             throw new ConfigurationException("Bad mapping, column ["+this.name+"] kind [" + this.kind + "] does not match the existing one type [" + cd.kind + "]");
 
         AbstractType<?> cql3Type = this.type.prepare(ksm).getType();
@@ -85,8 +84,18 @@ public class ColumnDescriptor implements Comparable<ColumnDescriptor> {
         // TODO: Add collection type check
     }
 
-    public ColumnDefinition createColumnDefinition(KeyspaceMetadata ksm, String cfName) {
-        return new ColumnDefinition(ksm.name, cfName, ColumnIdentifier.getInterned(name, true), type.prepare(ksm).getType(), position, kind);
+    public ColumnMetadata createColumnMetadata(KeyspaceMetadata ksm, String tableName) {
+        AbstractType<?> t = type.prepare(ksm).getType();
+        switch (kind) {
+            case PARTITION_KEY:
+                return ColumnMetadata.partitionKeyColumn(ksm.name, tableName, name, t, position);
+            case CLUSTERING:
+                return ColumnMetadata.clusteringColumn(ksm.name, tableName, name, t, position);
+            case STATIC:
+                return ColumnMetadata.staticColumn(ksm.name, tableName, name, t);
+            default:
+                return ColumnMetadata.regularColumn(ksm.name, tableName, name, t);
+        }
     }
 
     public boolean exists() {
@@ -95,7 +104,7 @@ public class ColumnDescriptor implements Comparable<ColumnDescriptor> {
 
     @Override
     public String toString() {
-        return this.kind + "[" + this.name + "/" + this.type + "/"+ this.position + ((kind==Kind.CLUSTERING) ? (desc ? "/DESC":"/ASC") : "") + "]";
+        return this.kind + "[" + this.name + "/" + this.type + "/"+ this.position + ((kind== ColumnMetadata.Kind.CLUSTERING) ? (desc ? "/DESC":"/ASC") : "") + "]";
     }
 
     @Override

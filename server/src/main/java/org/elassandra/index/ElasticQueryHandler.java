@@ -15,7 +15,7 @@
 
 package org.elassandra.index;
 
-import org.apache.cassandra.config.ColumnDefinition;
+import org.apache.cassandra.schema.ColumnMetadata;
 import org.apache.cassandra.cql3.CQLStatement;
 import org.apache.cassandra.cql3.ColumnSpecification;
 import org.apache.cassandra.cql3.QueryOptions;
@@ -287,7 +287,7 @@ public class ElasticQueryHandler extends QueryProcessor {
                     List<ColumnSpecification> columns = aggMetadataBuilder.getColumns();
                     List<ColumnSpecification> projectionColumns = new ArrayList<>(aggMetadataBuilder.getColumns().size());
                     int i = 0;
-                    for (ColumnDefinition cd : select.getSelection().getColumns()) {
+                    for (ColumnMetadata cd : select.getSelection().getColumns()) {
                         if (i < columns.size() && !cd.type.isValueCompatibleWith(columns.get(i).type)) {
                             logger.warn("Aggregation column [" + columns.get(i).name.toString() + "] of type [" +
                                 columns.get(i).type + "] is not compatible with projection term [" + cd.name.toCQLString() + "] of type [" + cd.type + "]");

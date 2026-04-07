@@ -22,36 +22,22 @@ package org.elassandra.cluster;
 import com.carrotsearch.hppc.cursors.ObjectCursor;
 
 import org.antlr.runtime.RecognitionException;
-import org.apache.cassandra.config.CFMetaData;
-import org.apache.cassandra.config.ColumnDefinition;
-import org.apache.cassandra.config.ColumnDefinition.Kind;
 import org.apache.cassandra.config.DatabaseDescriptor;
-import org.apache.cassandra.config.Schema;
-import org.apache.cassandra.config.ViewDefinition;
-import org.apache.cassandra.cql3.CFName;
 import org.apache.cassandra.cql3.CQL3Type;
 import org.apache.cassandra.cql3.CQLFragmentParser;
 import org.apache.cassandra.cql3.ColumnIdentifier;
 import org.apache.cassandra.cql3.CqlParser;
 import org.apache.cassandra.cql3.FieldIdentifier;
-import org.apache.cassandra.cql3.IndexName;
+import org.apache.cassandra.cql3.QualifiedName;
 import org.apache.cassandra.cql3.UTName;
-import org.apache.cassandra.cql3.statements.AlterTableStatement;
-import org.apache.cassandra.cql3.statements.AlterTableStatementColumn;
-import org.apache.cassandra.cql3.statements.AlterTypeStatement;
-import org.apache.cassandra.cql3.statements.CreateIndexStatement;
-import org.apache.cassandra.cql3.statements.CreateKeyspaceStatement;
-import org.apache.cassandra.cql3.statements.CreateTableStatement;
-import org.apache.cassandra.cql3.statements.CreateTypeStatement;
-import org.apache.cassandra.cql3.statements.DropIndexStatement;
-import org.apache.cassandra.cql3.statements.DropTableStatement;
-import org.apache.cassandra.cql3.statements.IndexPropDefs;
 import org.apache.cassandra.cql3.statements.IndexTarget;
-import org.apache.cassandra.cql3.statements.KeyspaceAttributes;
-import org.apache.cassandra.cql3.statements.ParsedStatement;
-import org.apache.cassandra.cql3.statements.TableAttributes;
+import org.apache.cassandra.cql3.statements.schema.KeyspaceAttributes;
+import org.apache.cassandra.cql3.statements.schema.CreateKeyspaceStatement;
+import org.apache.cassandra.cql3.statements.schema.CreateTableStatement;
+import org.apache.cassandra.cql3.statements.schema.TableAttributes;
 import org.apache.cassandra.db.Keyspace;
 import org.apache.cassandra.db.Mutation;
+import org.apache.cassandra.db.marshal.AbstractType;
 import org.apache.cassandra.db.marshal.UTF8Type;
 import org.apache.cassandra.db.marshal.UserType;
 import org.apache.cassandra.exceptions.ConfigurationException;
@@ -59,16 +45,19 @@ import org.apache.cassandra.exceptions.InvalidRequestException;
 import org.apache.cassandra.exceptions.RequestExecutionException;
 import org.apache.cassandra.exceptions.RequestValidationException;
 import org.apache.cassandra.locator.NetworkTopologyStrategy;
+import org.apache.cassandra.schema.ColumnMetadata;
 import org.apache.cassandra.schema.IndexMetadata;
 import org.apache.cassandra.schema.KeyspaceMetadata;
 import org.apache.cassandra.schema.KeyspaceParams;
+import org.apache.cassandra.schema.SchemaConstants;
 import org.apache.cassandra.schema.SchemaKeyspace;
+import org.apache.cassandra.schema.Schema;
+import org.apache.cassandra.schema.TableMetadata;
 import org.apache.cassandra.schema.TableParams;
-import org.apache.cassandra.schema.Views;
 import org.apache.cassandra.service.ClientState;
 import org.apache.cassandra.service.MigrationListener;
-import org.apache.cassandra.thrift.ThriftValidation;
 import org.apache.cassandra.transport.Event;
+import org.apache.cassandra.utils.ByteBufferUtil;
 import org.apache.cassandra.utils.FBUtilities;
 import org.apache.cassandra.utils.Pair;
 import org.apache.logging.log4j.LogManager;
@@ -103,7 +92,6 @@ import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
-import java.util.stream.StreamSupport;
 import org.apache.logging.log4j.Logger;
 
 public class SchemaManager {
@@ -209,8 +197,8 @@ public class SchemaManager {
         return typeName;
     }
 
-    public String typeToCfName(CFMetaData cfm, String typeName, boolean remove) {
-        return SchemaManager.typeToCfName(cfm.ksName, typeName, remove);
+    public String typeToCfName(TableMetadata cfm, String typeName, boolean remove) {
+        return SchemaManager.typeToCfName(cfm.keyspace, typeName, remove);
     }
 
     public static String cfNameToType(String keyspaceName, String cfName) {
@@ -228,8 +216,8 @@ public class SchemaManager {
             .append("_idx").toString();
     }
 
-    public static CFMetaData getCFMetaData(final String ksName, final String cfName) throws ActionRequestValidationException {
-        CFMetaData metadata = Schema.instance.getCFMetaData(ksName, cfName);
+    public static TableMetadata getTableMetadata(final String ksName, final String cfName) throws ActionRequestValidationException {
+        TableMetadata metadata = Schema.instance.getTableMetadata(ksName, cfName);
         if (metadata == null) {
             ActionRequestValidationException arve = new ActionRequestValidationException();
             arve.addValidationError(ksName+"."+cfName+" table does not exists");
@@ -258,19 +246,33 @@ public class SchemaManager {
             final Collection<Event.SchemaChange> events) throws RequestExecutionException
     {
         ColumnIdentifier ci = new ColumnIdentifier(typeName, true);
-        UTName name = new UTName(new ColumnIdentifier(ksm.name, true), ci);
         Optional<UserType> typeOption = getType(ksm, ci);
         if (typeOption.isPresent())
             return Pair.create(ksm, typeOption.get());
 
         logger.debug("create type keyspace=[{}] name=[{}] fields={}", ksm.name, typeName, fields);
-        CreateTypeStatement typeStatement = new CreateTypeStatement(name, true);
-        for(Map.Entry<String, CQL3Type.Raw> field : fields.entrySet())
-            typeStatement.addDefinition(FieldIdentifier.forInternalString(field.getKey()), field.getValue());
-        typeStatement.validate(ClientState.forInternalCalls(), ksm, FBUtilities.timestampMicros());
-
-        UserType userType = typeStatement.createType(ksm);
-        CreateTypeStatement.checkForDuplicateNames(userType);
+        List<FieldIdentifier> fieldNames = new ArrayList<>();
+        List<CQL3Type.Raw> rawFieldTypes = new ArrayList<>();
+        for (Map.Entry<String, CQL3Type.Raw> field : fields.entrySet()) {
+            fieldNames.add(FieldIdentifier.forInternalString(field.getKey()));
+            rawFieldTypes.add(field.getValue());
+        }
+        Set<FieldIdentifier> usedNames = new HashSet<>();
+        for (FieldIdentifier name : fieldNames) {
+            if (!usedNames.add(name))
+                throw new InvalidRequestException(String.format(Locale.ROOT, "Duplicate field name '%s' in type '%s'", name, typeName));
+        }
+        for (CQL3Type.Raw type : rawFieldTypes) {
+            if (type.isCounter())
+                throw new InvalidRequestException("A user type cannot contain counters");
+            if (type.isUDT() && !type.isFrozen())
+                throw new InvalidRequestException("A user type cannot contain non-frozen UDTs");
+        }
+        List<AbstractType<?>> fieldTypes =
+                rawFieldTypes.stream()
+                        .map(t -> t.prepare(ksm.name, ksm.types).getType())
+                        .collect(Collectors.toList());
+        UserType userType = new UserType(ksm.name, ByteBufferUtil.bytes(typeName), fieldNames, fieldTypes, true);
 
         Mutation.SimpleBuilder builder = SchemaKeyspace.makeCreateKeyspaceMutation(ksm.name, FBUtilities.timestampMicros());
         SchemaKeyspace.addTypeToSchemaMutation(userType, builder);
@@ -291,19 +293,33 @@ public class SchemaManager {
         } else {
             KeyspaceMetadata ksmOut = ksm;
             UserType userType = userTypeOption.get();
-            UTName name = new UTName(new ColumnIdentifier(ksm.name, true), ci);
             logger.trace("update keyspace.type=[{}].[{}] fields={}", ksm.name, typeName, fields);
-            for(Map.Entry<String, CQL3Type.Raw> field : fields.entrySet()) {
+            for (Map.Entry<String, CQL3Type.Raw> field : fields.entrySet()) {
                 FieldIdentifier fieldIdentifier = FieldIdentifier.forInternalString(field.getKey());
                 int i = userType.fieldPosition(fieldIdentifier);
                 if (i == -1) {
-                    // add missing field
                     logger.trace("add field to keyspace.type=[{}].[{}] field={}", ksm.name, typeName, fieldIdentifier);
-                    AlterTypeStatement ats = AlterTypeStatement.addition(name, fieldIdentifier, field.getValue());
-                    userType = ats.updateUserType(ksmOut, mutations, events);
-                    ksmOut = ksmOut.withSwapped(ksmOut.types.without(userType.name).with(userType));
+                    CQL3Type.Raw rawType = field.getValue();
+                    if (rawType.isCounter())
+                        throw new InvalidRequestException("A user type cannot contain counters");
+                    if (rawType.isUDT() && !rawType.isFrozen())
+                        throw new InvalidRequestException("A user type cannot contain non-frozen UDTs");
+                    AbstractType<?> fieldType = rawType.prepare(ksmOut.name, ksmOut.types).getType();
+                    if (fieldType.referencesUserType(userType.name))
+                        throw new InvalidRequestException("Cannot add field that would create a circular reference");
+                    List<FieldIdentifier> fn = new ArrayList<>(userType.fieldNames());
+                    fn.add(fieldIdentifier);
+                    List<AbstractType<?>> ft = new ArrayList<>(userType.fieldTypes());
+                    ft.add(fieldType);
+                    userType = new UserType(ksmOut.name, userType.name, fn, ft, true);
+
+                    Mutation.SimpleBuilder builder = SchemaKeyspace.makeCreateKeyspaceMutation(ksmOut.name, FBUtilities.timestampMicros());
+                    SchemaKeyspace.addTypeToSchemaMutation(userType, builder);
+                    mutations.add(builder.build());
+                    events.add(new Event.SchemaChange(Event.SchemaChange.Change.UPDATED, Event.SchemaChange.Target.TYPE, ksmOut.name, typeName));
+                    ksmOut = ksmOut.withUpdatedUserType(userType);
                 } else {
-                    CQL3Type newType = field.getValue().prepare(ksmOut);
+                    CQL3Type newType = field.getValue().prepare(ksmOut.name, ksmOut.types);
                     CQL3Type existingType = userType.fieldType(i).asCQL3Type();
                     if (!newType.getType().isCompatibleWith(existingType.getType())) {
                         throw new InvalidRequestException(
@@ -317,8 +333,7 @@ public class SchemaManager {
     }
 
     private Optional<UserType> getType(KeyspaceMetadata ksm, ColumnIdentifier typeName) {
-        UTName name = new UTName(new ColumnIdentifier(ksm.name, true), typeName);
-        return ksm.types.get(name.getUserTypeName());
+        return Optional.ofNullable(ksm.types.getNullable(ByteBufferUtil.bytes(typeName.toString())));
     }
 
     private Pair<KeyspaceMetadata, CQL3Type.Raw> createRawTypeIfNotExists(KeyspaceMetadata ksm,
@@ -362,9 +377,8 @@ public class SchemaManager {
             ksAttrs.addProperty(KeyspaceParams.Option.DURABLE_WRITES.toString(), "true");
             ksAttrs.addProperty(KeyspaceParams.Option.REPLICATION.toString(), replication);
 
-            CreateKeyspaceStatement ksStatement = new CreateKeyspaceStatement(ksName, ksAttrs, true);
-            ksStatement.validate(ClientState.forInternalCalls());
-            ksm =  KeyspaceMetadata.create(ksStatement.keyspace(), ksAttrs.asNewKeyspaceParams());
+            ksAttrs.validate();
+            ksm = KeyspaceMetadata.create(ksName, ksAttrs.asNewKeyspaceParams());
             mutations.add(SchemaKeyspace.makeCreateKeyspaceMutation(ksm, FBUtilities.timestampMicros()).build());
             events.add(new Event.SchemaChange(Event.SchemaChange.Change.CREATED, ksName));
         }
@@ -377,10 +391,8 @@ public class SchemaManager {
             final Collection<IndexMetaData> siblings, // include the indexMetaData and all other indices having a mapping to the same table.
             final Collection<Mutation> mutations,
             final Collection<Event.SchemaChange> events) throws IOException, RecognitionException {
-        CFName cfn = new CFName();
-        cfn.setColumnFamily(cfName, true);
-        cfn.setKeyspace(ksm.name, true);
-        CreateTableStatement.RawStatement cts = new CreateTableStatement.RawStatement(cfn, true);
+        QualifiedName qn = new QualifiedName(ksm.name, cfName);
+        CreateTableStatement.Raw cts = new CreateTableStatement.Raw(qn, true);
 
         logger.debug("columnsMap="+columnsMap);
         List<ColumnDescriptor> columnsList = new ArrayList<>();
@@ -388,37 +400,37 @@ public class SchemaManager {
         Collections.sort(columnsList); // sort primary key columns
 
         List<ColumnIdentifier> pk = new ArrayList<>();
-        for(ColumnDescriptor cd : columnsList) {
+        for (ColumnDescriptor cd : columnsList) {
             ColumnIdentifier ci = ColumnIdentifier.getInterned(cd.name, true);
-            cts.addDefinition(ci, cd.type, cd.kind == Kind.STATIC);
-            if (cd.kind == Kind.PARTITION_KEY)
+            cts.addColumn(ci, cd.type, cd.kind == ColumnMetadata.Kind.STATIC);
+            if (cd.kind == ColumnMetadata.Kind.PARTITION_KEY)
                 pk.add(ci);
-            if (cd.kind == Kind.CLUSTERING) {
-                cts.addColumnAlias(ci);
-                cts.properties.setOrdering(ci, cd.desc);
+            if (cd.kind == ColumnMetadata.Kind.CLUSTERING) {
+                cts.markClusteringColumn(ci);
+                cts.extendClusteringOrder(ci, !cd.desc);
             }
         }
-        cts.addKeyAliases(pk);
+        cts.setPartitionKeyColumns(pk);
 
         if (tableOptions != null && tableOptions.length() > 0) {
             CQLFragmentParser.parseAnyUnhandled(new CQLFragmentParser.CQLParserFunction<TableAttributes>() {
                 @Override
                 public TableAttributes parse(CqlParser parser) throws RecognitionException {
-                    parser.properties(cts.properties.properties);
-                    return cts.properties.properties;
+                    parser.properties(cts.attrs);
+                    return cts.attrs;
                 }
             }, tableOptions);
         }
 
-        ParsedStatement.Prepared stmt = cts.prepare(ksm.types);
-        CFMetaData cfm = ((CreateTableStatement)stmt.statement).getCFMetaData();
-        updateTableExtensions(ksm, cfm, siblings);
+        CreateTableStatement prepared = cts.prepare(ClientState.forInternalCalls());
+        TableMetadata cfm = prepared.builder(ksm.types).build();
+        cfm = updateTableExtensions(ksm, cfm, siblings);
 
         Mutation.SimpleBuilder builder = SchemaKeyspace.makeCreateKeyspaceMutation(ksm.name, FBUtilities.timestampMicros());
         SchemaKeyspace.addTableToSchemaMutation(cfm, true, builder);
         mutations.add(builder.build());
 
-        events.add(new Event.SchemaChange(Event.SchemaChange.Change.CREATED, Event.SchemaChange.Target.TABLE, cts.keyspace(), cts.columnFamily()));
+        events.add(new Event.SchemaChange(Event.SchemaChange.Change.CREATED, Event.SchemaChange.Target.TABLE, ksm.name, cfName));
         return ksm.withSwapped(ksm.tables.with(cfm));
     }
 
@@ -429,50 +441,41 @@ public class SchemaManager {
             final Collection<IndexMetaData> siblings,
             final Collection<Mutation> mutations,
             final Collection<Event.SchemaChange> events) {
-        KeyspaceMetadata ksm2 = ksm;
-        CFMetaData cfm = ThriftValidation.validateColumnFamily(ksm, cfName);
-        CFName cfn = new CFName();
-        cfn.setColumnFamily(cfName, true);
-        cfn.setKeyspace(ksm.name, true);
+        TableMetadata cfm = ksm.getTableOrViewNullable(cfName);
+        if (cfm == null)
+            throw new InvalidRequestException(String.format(Locale.ROOT, "Table '%s.%s' doesn't exist", ksm.name, cfName));
 
-        List<AlterTableStatementColumn> colDataList = columnsMap.values().stream()
+        TableMetadata.Builder builder = cfm.unbuild();
+        List<ColumnDescriptor> newCols = columnsMap.values().stream()
                 .filter(cd -> !cd.exists())
-                .map(cd ->  new AlterTableStatementColumn(ColumnDefinition.Raw.forColumn(cd.createColumnDefinition(ksm, cfName)), cd.type, cd.kind == Kind.STATIC))
                 .collect(Collectors.toList());
-
-        Pair<CFMetaData, List<ViewDefinition>> x = Pair.create(cfm, StreamSupport.stream(ksm.views(cfName).spliterator(), false).collect(Collectors.toList()));
-        if (colDataList.size() > 0) {
+        if (newCols.size() > 0) {
             logger.debug("table {}.{} add columnsMap={}", ksm.name, cfName, columnsMap);
-            AlterTableStatement ats = new AlterTableStatement(cfn, AlterTableStatement.Type.ADD, colDataList, tableAttrs, null, null);
-            x = ats.updateTable(ksm, cfm, FBUtilities.timestampMicros());
+            for (ColumnDescriptor cd : newCols)
+                builder.addColumn(cd.createColumnMetadata(ksm, cfName));
         }
-        // update extensions
-        updateTableExtensions(ksm, x.left, siblings);
-        mutations.add(SchemaKeyspace.makeUpdateTableMutation(ksm, cfm, x.left, FBUtilities.timestampMicros()).build());
+        if (tableAttrs != null) {
+            builder.params(tableAttrs.asAlteredTableParams(cfm.params));
+        }
+        TableMetadata x = builder.build();
+        x = updateTableExtensions(ksm, x, siblings);
+        mutations.add(SchemaKeyspace.makeUpdateTableMutation(ksm, cfm, x, FBUtilities.timestampMicros()).build());
 
-        ksm2 = ksm.withSwapped(ksm.tables.without(cfm.cfName).with(x.left));
-        if (x.right != null && x.right.size() > 0) {
-            ksm2 = ksm2.withSwapped(Views.builder().add(x.right).build());
-            for(ViewDefinition view : x.right) {
-                Mutation.SimpleBuilder builder = SchemaKeyspace.makeCreateKeyspaceMutation(ksm.name, FBUtilities.timestampMicros());
-                mutations.add(SchemaKeyspace.makeUpdateViewMutation(builder, ksm2.views.getNullable(view.viewName), view).build());
-            }
-        }
+        KeyspaceMetadata ksm2 = ksm.withSwapped(ksm.tables.without(cfm.name).with(x));
         events.add(new Event.SchemaChange(Event.SchemaChange.Change.UPDATED, Event.SchemaChange.Target.TABLE, ksm.name, cfName));
         return ksm2;
     }
 
-    public CFMetaData removeTableExtensionToMutationBuilder(CFMetaData cfm, final Set<IndexMetaData> indexMetaDataSet, Mutation.SimpleBuilder builder) {
-        CFMetaData cfm2 = cfm.copy();
-        Map<String, ByteBuffer> extensions = new LinkedHashMap<String, ByteBuffer>();
+    public TableMetadata removeTableExtensionToMutationBuilder(TableMetadata cfm, final Set<IndexMetaData> indexMetaDataSet, Mutation.SimpleBuilder builder) {
+        Map<String, ByteBuffer> extensions = new LinkedHashMap<>();
         if (cfm.params != null && cfm.params.extensions != null) {
             Set<String> toRemoveExtentsions = indexMetaDataSet.stream().map(imd -> clusterService.getExtensionKey(imd)).collect(Collectors.toSet());
             extensions = cfm.params.extensions.entrySet().stream()
                 .filter( x -> !toRemoveExtentsions.contains(x.getKey()))
-                .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
+                .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue, (a, b) -> a, LinkedHashMap::new));
         }
-        cfm2.extensions(extensions);
-        SchemaKeyspace.addTableExtensionsToSchemaMutation(cfm2, extensions, builder);
+        TableMetadata cfm2 = cfm.unbuild().params(cfm.params.unbuild().extensions(extensions).build()).build();
+        SchemaKeyspace.addTableExtensionsToSchemaMutation(cfm, extensions, builder);
         return cfm2;
     }
 
@@ -555,7 +558,8 @@ public class SchemaManager {
     public void dropIndexKeyspace(final String ksName,
             final Collection<Mutation> mutations,
             final Collection<Event.SchemaChange> events) throws ConfigurationException {
-        ThriftValidation.validateKeyspaceNotSystem(ksName);
+        if (SchemaConstants.isSystemKeyspace(ksName))
+            throw new ConfigurationException("Cannot drop a system keyspace.");
         KeyspaceMetadata oldKsm = Schema.instance.getKSMetaData(ksName);
         if (oldKsm == null)
             throw new ConfigurationException(String.format("Cannot drop non existing keyspace '%s'.", ksName));
@@ -568,8 +572,8 @@ public class SchemaManager {
     /**
      * Update table extensions when index settings change. This allow to get index settings+mappings in the CQL backup of the table.
      */
-    public CFMetaData updateTableExtensions(final KeyspaceMetadata ksm, final CFMetaData cfm, final Collection<IndexMetaData> siblings) {
-        Map<String, ByteBuffer> extensions = new LinkedHashMap<String, ByteBuffer>();
+    public TableMetadata updateTableExtensions(final KeyspaceMetadata ksm, final TableMetadata cfm, final Collection<IndexMetaData> siblings) {
+        Map<String, ByteBuffer> extensions = new LinkedHashMap<>();
         if (cfm.params != null && cfm.params.extensions != null)
             extensions.putAll(cfm.params.extensions);
 
@@ -578,15 +582,14 @@ public class SchemaManager {
             clusterService.putIndexMetaDataExtension(imd, extensions);
         }
 
-        cfm.extensions(extensions);
-        return cfm;
+        return cfm.unbuild().params(cfm.params.unbuild().extensions(extensions).build()).build();
     }
 
     /**
      * Populate the columnsMap of a table for the provided indeMetaData/mapperService
      */
     private KeyspaceMetadata buildColumns(final KeyspaceMetadata ksm2,
-            final CFMetaData cfm,
+            final TableMetadata cfm,
             final String type,
             final IndexMetaData indexMetaData,
             final MapperService mapperService,
@@ -622,7 +625,7 @@ public class SchemaManager {
 
             ColumnDescriptor colDesc = new ColumnDescriptor(column);
             FieldMapper fieldMapper = docMapper.mappers().smartNameFieldMapper(column);
-            ColumnDefinition cdef = (newTable) ? null : cfm.getColumnDefinition(new ColumnIdentifier(column, true));
+            ColumnMetadata cdef = (newTable) ? null : cfm.getColumn(new ColumnIdentifier(column, true));
 
             if (fieldMapper != null) {
                 if (fieldMapper.cqlCollection().equals(CqlCollection.NONE))
@@ -678,14 +681,14 @@ public class SchemaManager {
                 if (fieldMapper.cqlPrimaryKeyOrder() >= 0) {
                     colDesc.position = fieldMapper.cqlPrimaryKeyOrder();
                     if (fieldMapper.cqlPartitionKey()) {
-                        colDesc.kind = Kind.PARTITION_KEY;
+                        colDesc.kind = ColumnMetadata.Kind.PARTITION_KEY;
                     } else {
-                        colDesc.kind = Kind.CLUSTERING;
+                        colDesc.kind = ColumnMetadata.Kind.CLUSTERING;
                         colDesc.desc = fieldMapper.cqlClusteringKeyDesc();
                     }
                 }
                 if (fieldMapper.cqlStaticColumn())
-                    colDesc.kind = Kind.STATIC;
+                    colDesc.kind = ColumnMetadata.Kind.STATIC;
                 colDesc.type = fieldMapper.collection(colDesc.type);
             } else {
                 ObjectMapper objectMapper = docMapper.objectMappers().get(column);
@@ -723,16 +726,16 @@ public class SchemaManager {
                     */
                 }
                 if (objectMapper.cqlPrimaryKeyOrder() >= 0) {
-                    colDesc.position = fieldMapper.cqlPrimaryKeyOrder();
+                    colDesc.position = objectMapper.cqlPrimaryKeyOrder();
                     if (objectMapper.cqlPartitionKey()) {
-                        colDesc.kind = Kind.PARTITION_KEY;
+                        colDesc.kind = ColumnMetadata.Kind.PARTITION_KEY;
                     } else {
-                        colDesc.kind = Kind.CLUSTERING;
-                        colDesc.desc = fieldMapper.cqlClusteringKeyDesc();
+                        colDesc.kind = ColumnMetadata.Kind.CLUSTERING;
+                        colDesc.desc = objectMapper.cqlClusteringKeyDesc();
                     }
                 }
                 if (objectMapper.cqlStaticColumn())
-                    colDesc.kind = Kind.STATIC;
+                    colDesc.kind = ColumnMetadata.Kind.STATIC;
             }
             columnsMap.putIfAbsent(colDesc.name, colDesc);
         }
@@ -764,7 +767,7 @@ public class SchemaManager {
             ksName = ksm2.name;
             cfName = typeToCfName(ksName, type);
 
-            final CFMetaData cfm = ksm.getTableOrViewNullable(cfName);
+            final TableMetadata cfm = ksm.getTableOrViewNullable(cfName);
             boolean newTable = (cfm == null);
 
             MapperService mapperService = null; // set with one of the IndexMetaData !
@@ -781,13 +784,13 @@ public class SchemaManager {
             if (newTable) {
                 boolean hasPartitionKey = false;
                 for(ColumnDescriptor cd : columnsMap.values()) {
-                    if (cd.kind == Kind.PARTITION_KEY) {
+                    if (cd.kind == ColumnMetadata.Kind.PARTITION_KEY) {
                         hasPartitionKey = true;
                         break;
                     }
                 }
                 if (!hasPartitionKey)
-                    columnsMap.putIfAbsent(ELASTIC_ID_COLUMN_NAME, new ColumnDescriptor(ELASTIC_ID_COLUMN_NAME, CQL3Type.Raw.from(CQL3Type.Native.TEXT), Kind.PARTITION_KEY, 0));
+                    columnsMap.putIfAbsent(ELASTIC_ID_COLUMN_NAME, new ColumnDescriptor(ELASTIC_ID_COLUMN_NAME, CQL3Type.Raw.from(CQL3Type.Native.TEXT), ColumnMetadata.Kind.PARTITION_KEY, 0));
                 ksm = createTable(ksm, cfName, columnsMap, mapperService.tableOptions(), indiceMap.values().stream().map(p->p.left).collect(Collectors.toList()), mutations, events);
             } else {
                 // check column properties matches existing ones, or add it to columnsDefinitions
@@ -823,62 +826,46 @@ public class SchemaManager {
             final String className,
             final Collection<Mutation> mutations,
             final Collection<Event.SchemaChange> events) {
-    	KeyspaceMetadata ksm2 = ksm;
-        CFMetaData cfm0 = ksm.getTableOrViewNullable(tableName);
+        KeyspaceMetadata ksm2 = ksm;
+        TableMetadata cfm0 = ksm.getTableOrViewNullable(tableName);
         assert cfm0 != null : "Table "+tableName+" not found in keyspace metadata";
 
-        IndexPropDefs indexPropDefs = new IndexPropDefs();
-        indexPropDefs.isCustom = true;
-        indexPropDefs.customClass = className;
-        IndexName indexName = new IndexName();
-        indexName.setKeyspace(ksm.name, true);
-        indexName.setIndex(buildIndexName(tableName), true);
+        String idxName = buildIndexName(tableName);
+        if (cfm0.indexes.get(idxName).isPresent())
+            return ksm2;
 
-        if (!cfm0.getIndexes().get(indexName.getIdx()).isPresent()) {
-            logger.debug("Create secondary index on table {}.{}", ksm.name, tableName);
-            CFName cfName = new CFName();
-            cfName.setKeyspace(ksm.name, true);
-            cfName.setColumnFamily(tableName, true);
-            CreateIndexStatement cis = new CreateIndexStatement(cfName, indexName, Collections.EMPTY_LIST, indexPropDefs, true);
-            cis.validate(ksm);
-            CFMetaData cfm = cis.createIndex(ksm, cfm0);
-            ksm2 = ksm.withSwapped(ksm.tables.without(cfm0.cfName).with(cfm));
-            IndexMetadata indexMetadata = cfm.getIndexes().get(indexName.getIdx()).get();
+        logger.debug("Create secondary index on table {}.{}", ksm.name, tableName);
+        Map<String, String> options = new HashMap<>();
+        options.put(IndexTarget.CUSTOM_INDEX_OPTION_NAME, className);
+        IndexMetadata indexMetadata = IndexMetadata.fromIndexTargets(Collections.emptyList(), idxName, IndexMetadata.Kind.CUSTOM, options);
+        indexMetadata.validate(cfm0);
+        TableMetadata cfm = cfm0.withSwapped(cfm0.indexes.with(indexMetadata));
+        ksm2 = ksm.withSwapped(ksm.tables.without(cfm0.name).with(cfm));
 
-            Mutation.SimpleBuilder builder = SchemaKeyspace.makeCreateKeyspaceMutation(ksm.name, FBUtilities.timestampMicros());
-            SchemaKeyspace.addUpdatedIndexToSchemaMutation(cfm, indexMetadata, builder);
-            mutations.add(builder.build());
+        Mutation.SimpleBuilder builder = SchemaKeyspace.makeCreateKeyspaceMutation(ksm.name, FBUtilities.timestampMicros());
+        SchemaKeyspace.addUpdatedIndexToSchemaMutation(cfm, indexMetadata, builder);
+        mutations.add(builder.build());
 
-            events.add(new Event.SchemaChange(Event.SchemaChange.Change.UPDATED, Event.SchemaChange.Target.TABLE, ksm.name, tableName));
-        }
+        events.add(new Event.SchemaChange(Event.SchemaChange.Change.UPDATED, Event.SchemaChange.Target.TABLE, ksm.name, tableName));
         return ksm2;
     }
 
     public KeyspaceMetadata dropSecondaryIndex(final KeyspaceMetadata ksm,
-            final CFMetaData cfm0,
+            final TableMetadata cfm0,
             final Collection<Mutation> mutations,
             final Collection<Event.SchemaChange> events) throws RequestExecutionException  {
         KeyspaceMetadata ksm2 = ksm;
-        for(IndexMetadata idx : cfm0.getIndexes()) {
+        for (org.apache.cassandra.schema.IndexMetadata idx : cfm0.indexes) {
             if (idx.isCustom() && idx.name.startsWith("elastic_")) {
                 String className = idx.options.get(IndexTarget.CUSTOM_INDEX_OPTION_NAME);
                 if (className != null && className.endsWith("ElasticSecondaryIndex")) {
-                    IndexName indexName = new IndexName();
-                    indexName.setKeyspace(ksm.name, true);
-                    indexName.setIndex(idx.name, true);
+                    TableMetadata withoutIdx = cfm0.withSwapped(cfm0.indexes.without(idx.name));
+                    TableMetadata cfm = withoutIdx.unbuild().params(withoutIdx.params.unbuild().extensions(Collections.emptyMap()).build()).build();
+                    ksm2 = ksm.withSwapped(ksm.tables.without(cfm0.name).with(cfm));
 
-                    DropIndexStatement dis = new DropIndexStatement(indexName, true);
-                    CFMetaData cfm = dis.dropIndex(cfm0);
-                    cfm.params  = TableParams.builder(cfm.params).extensions(Collections.EMPTY_MAP).build();
-                    ksm2 = ksm.withSwapped(ksm.tables.without(cfm.cfName).with(cfm));
-
-                    logger.info("Drop secondary index '{}'", indexName);
-                    Mutation.SimpleBuilder builder = SchemaKeyspace.makeCreateKeyspaceMutation(ksm.name, FBUtilities.timestampMicros());
-                    SchemaKeyspace.dropIndexFromSchemaMutation(cfm, idx, builder);
-                    SchemaKeyspace.addTableExtensionsToSchemaMutation(cfm, Collections.EMPTY_MAP, builder); // drop table extensions
-
-                    mutations.add(builder.build());
-                    events.add(new Event.SchemaChange(Event.SchemaChange.Change.UPDATED, Event.SchemaChange.Target.TABLE, ksm.name, cfm.cfName));
+                    logger.info("Drop secondary index '{}'", idx.name);
+                    mutations.add(SchemaKeyspace.makeUpdateTableMutation(ksm, cfm0, cfm, FBUtilities.timestampMicros()).build());
+                    events.add(new Event.SchemaChange(Event.SchemaChange.Change.UPDATED, Event.SchemaChange.Target.TABLE, ksm.name, cfm.name));
                     break;
                 }
             }
@@ -890,15 +877,15 @@ public class SchemaManager {
             throws RequestExecutionException {
         String ksName = indexMetaData.keyspace();
         KeyspaceMetadata ksm = Schema.instance.getKSMetaData(ksName);
-        for(CFMetaData cfm : ksm.tablesAndViews()) {
-            if (cfm.isCQLTable())
+        for (TableMetadata cfm : ksm.tablesAndViews()) {
+            if (org.apache.cassandra.schema.TableMetadata.Flag.isCQLTable(cfm.flags))
                 dropSecondaryIndex(ksm, cfm, mutations, events);
         }
     }
 
     public void dropSecondaryIndex(KeyspaceMetadata ksm, String cfName, final Collection<Mutation> mutations, final Collection<Event.SchemaChange> events)
             throws RequestExecutionException {
-        CFMetaData cfm = Schema.instance.getCFMetaData(ksm.name, cfName);
+        TableMetadata cfm = Schema.instance.getTableMetadata(ksm.name, cfName);
         if (cfm != null)
             dropSecondaryIndex(ksm, cfm, mutations, events);
     }
@@ -907,7 +894,7 @@ public class SchemaManager {
             throws RequestExecutionException {
         String ksName = indexMetaData.keyspace();
         for(ObjectCursor<String> cursor : indexMetaData.getMappings().keys()) {
-            CFMetaData cfm = Schema.instance.getCFMetaData(ksName, cursor.value);
+            TableMetadata cfm = Schema.instance.getTableMetadata(ksName, cursor.value);
             ksm = dropTable(ksm, cfm, mutations, events);
         }
         return ksm;
@@ -915,25 +902,19 @@ public class SchemaManager {
 
     public KeyspaceMetadata dropTable(final KeyspaceMetadata ksm, final String table, final Collection<Mutation> mutations, final Collection<Event.SchemaChange> events)
             throws RequestExecutionException  {
-        CFMetaData cfm = Schema.instance.getCFMetaData(ksm.name, table);
+        TableMetadata cfm = Schema.instance.getTableMetadata(ksm.name, table);
         return (cfm != null) ? dropTable(ksm, cfm, mutations, events) : ksm;
     }
 
-    public KeyspaceMetadata dropTable(final KeyspaceMetadata ksm, final CFMetaData cfm, final Collection<Mutation> mutations, final Collection<Event.SchemaChange> events)
+    public KeyspaceMetadata dropTable(final KeyspaceMetadata ksm, final TableMetadata cfm, final Collection<Mutation> mutations, final Collection<Event.SchemaChange> events)
             throws RequestExecutionException  {
         KeyspaceMetadata ksm2 = ksm;
         if (cfm != null) {
-            CFName cfName = new CFName();
-            cfName.setKeyspace(ksm.name, true);
-            cfName.setColumnFamily(cfm.cfName, true);
+            ksm2 = ksm.withSwapped(ksm.tables.without(cfm.name));
 
-            DropTableStatement dts = new DropTableStatement(cfName, true);
-            dts.dropTable(ksm);
-            ksm2 = ksm.withSwapped(ksm.tables.without(cfm.cfName));
-
-            logger.info("Drop table '{}'", cfName);
+            logger.info("Drop table '{}'", cfm.name);
             mutations.add(SchemaKeyspace.makeDropTableMutation(ksm, cfm, FBUtilities.timestampMicros()).build());
-            events.add(new Event.SchemaChange(Event.SchemaChange.Change.DROPPED, Event.SchemaChange.Target.TABLE, ksm.name, cfm.cfName));
+            events.add(new Event.SchemaChange(Event.SchemaChange.Change.DROPPED, Event.SchemaChange.Target.TABLE, ksm.name, cfm.name));
         }
         return ksm2;
     }

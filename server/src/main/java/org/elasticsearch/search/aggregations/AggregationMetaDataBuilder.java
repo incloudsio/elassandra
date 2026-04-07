@@ -5,7 +5,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-import org.apache.cassandra.config.ColumnDefinition;
+import org.apache.cassandra.schema.ColumnMetadata;
 import org.apache.cassandra.cql3.ColumnIdentifier;
 import org.apache.cassandra.cql3.ColumnSpecification;
 import org.apache.cassandra.cql3.selection.Selection;
@@ -87,7 +87,7 @@ public class AggregationMetaDataBuilder {
                      if (selection.isWildcard()) {
                          addColumn(baseName+"key", UTF8Type.instance);
                      } else {
-                         ColumnDefinition cd = selection.getColumns().get(columns.size());
+                         ColumnMetadata cd = selection.getColumns().get(columns.size());
                          addColumn(baseName+"key", cd.type);
                      }
                      addColumn(baseName+"count", LongType.instance);
