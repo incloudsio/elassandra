@@ -9,7 +9,7 @@ import java.util.UUID;
 import org.apache.cassandra.cql3.QueryProcessor;
 import org.apache.cassandra.cql3.ResultSet;
 import org.apache.cassandra.cql3.UntypedResultSet;
-import org.apache.cassandra.cql3.statements.ParsedStatement;
+import org.apache.cassandra.cql3.QueryHandler;
 import org.apache.cassandra.tracing.TraceState;
 import org.apache.cassandra.tracing.TraceStateImpl;
 import org.apache.cassandra.tracing.Tracing;
@@ -73,8 +73,8 @@ public class CqlFetchPhase extends FetchPhase {
     }
 
     @Override
-    protected ParsedStatement.Prepared getCqlPreparedStatement(final SearchContext searchContext, final IndexService indexService, FieldsVisitor fieldVisitor, String typeKey, boolean staticDocument) throws IOException {
-        ParsedStatement.Prepared cqlStatement = searchContext.getCqlPreparedStatement( typeKey );
+    protected QueryHandler.Prepared getCqlPreparedStatement(final SearchContext searchContext, final IndexService indexService, FieldsVisitor fieldVisitor, String typeKey, boolean staticDocument) throws IOException {
+        QueryHandler.Prepared cqlStatement = searchContext.getCqlPreparedStatement( typeKey );
         if (cqlStatement == null) {
             final String projection = projection(searchContext);
             if (projection != null) {

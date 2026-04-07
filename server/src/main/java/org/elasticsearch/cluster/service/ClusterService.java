@@ -29,7 +29,7 @@ import org.apache.cassandra.cql3.QueryOptions;
 import org.apache.cassandra.cql3.QueryProcessor;
 import org.apache.cassandra.cql3.UntypedResultSet;
 import org.apache.cassandra.cql3.UntypedResultSet.Row;
-import org.apache.cassandra.cql3.statements.ParsedStatement;
+import org.apache.cassandra.cql3.QueryHandler;
 import org.apache.cassandra.db.ConsistencyLevel;
 import org.apache.cassandra.db.Keyspace;
 import org.apache.cassandra.db.Mutation;
@@ -51,7 +51,7 @@ import org.apache.cassandra.schema.SchemaKeyspace;
 import org.apache.cassandra.serializers.UUIDSerializer;
 import org.apache.cassandra.service.ClientState;
 import org.apache.cassandra.service.ElassandraDaemon;
-import org.apache.cassandra.service.MigrationManager;
+import org.apache.cassandra.schema.MigrationManager;
 import org.apache.cassandra.service.QueryState;
 import org.apache.cassandra.service.StorageService;
 import org.apache.cassandra.transport.Event;
@@ -303,7 +303,7 @@ public class ClusterService extends BaseClusterService {
             this.isStaticDocument = false;
         }
 
-        public List<ByteBuffer> serialize(ParsedStatement.Prepared prepared) {
+        public List<ByteBuffer> serialize(QueryHandler.Prepared prepared) {
             List<ByteBuffer> boundValues = new ArrayList<ByteBuffer>(values.length);
             for (int i = 0; i < values.length; i++) {
                 Object v = values[i];
@@ -395,12 +395,12 @@ public class ClusterService extends BaseClusterService {
     @Override
     protected synchronized void doStart() {
         super.doStart();
-        MigrationManager.instance.register(schemaManager.getSchemaListener());
+        Schema.instance.registerListener(schemaManager.getSchemaListener());
     }
 
     @Override
     protected synchronized void doStop() {
-        MigrationManager.instance.unregister(schemaManager.getSchemaListener());
+        Schema.instance.unregisterListener(schemaManager.getSchemaListener());
         super.doStop();
     }
 
@@ -726,7 +726,7 @@ public class ClusterService extends BaseClusterService {
 
     public boolean isDatacenterGroupMember(InetAddress endpoint) {
         String endpointDc = DatabaseDescriptor.getEndpointSnitch().getDatacenter(endpoint);
-        KeyspaceMetadata  elasticAdminMetadata = Schema.instance.getKSMetaData(this.elasticAdminKeyspaceName);
+        KeyspaceMetadata  elasticAdminMetadata = Schema.instance.getKeyspaceMetadata(this.elasticAdminKeyspaceName);
         if (elasticAdminMetadata != null) {
             ReplicationParams replicationParams = elasticAdminMetadata.params.replication;
             if (replicationParams.klass == NetworkTopologyStrategy.class && replicationParams.options.get(endpointDc) != null) {
@@ -737,7 +737,7 @@ public class ClusterService extends BaseClusterService {
     }
 
     private void addMetadataMutations(MetaData metadata, Mutation.SimpleBuilder builder) throws ConfigurationException, IOException {
-        KeyspaceMetadata ksm = Schema.instance.getKSMetaData(elasticAdminKeyspaceName);
+        KeyspaceMetadata ksm = Schema.instance.getKeyspaceMetadata(elasticAdminKeyspaceName);
         TableMetadata cfm = ksm.getTableOrViewNullable(ELASTIC_ADMIN_METADATA_TABLE);
 
         Map<String, ByteBuffer> extensions = new HashMap<>();
@@ -754,7 +754,7 @@ public class ClusterService extends BaseClusterService {
     }
 
     public void writeMetadataToSchemaMutations(MetaData metadata, final Collection<Mutation> mutations, final Collection<Event.SchemaChange> events) throws ConfigurationException, IOException {
-        KeyspaceMetadata ksm = Schema.instance.getKSMetaData(elasticAdminKeyspaceName);
+        KeyspaceMetadata ksm = Schema.instance.getKeyspaceMetadata(elasticAdminKeyspaceName);
         assert ksm != null : elasticAdminKeyspaceName+" does not exists";
         Mutation.SimpleBuilder builder = SchemaKeyspace.makeCreateKeyspaceMutation(ksm.name, FBUtilities.timestampMicros());
         addMetadataMutations(metadata, builder);
@@ -816,7 +816,7 @@ public class ClusterService extends BaseClusterService {
                 }
 
                 //do not announce schema migration because gossip not yet ready.
-                SchemaKeyspace.mergeSchema(mutations, getSchemaManager().getInhibitedSchemaListeners());
+                MigrationManager.mergeSchema(mutations, getSchemaManager().getInhibitedSchemaListeners());
                 logger.warn("Elasticsearch metadata upgraded, source={}", source);
             } catch (Exception e) {
                 logger.error("Failed to upgrade elasticsearch metadata source="+source, e);
@@ -850,7 +850,7 @@ public class ClusterService extends BaseClusterService {
     }
 
     public Pair<UUID, Long> readUUIDAndVersion() throws NoPersistedMetaDataException {
-        KeyspaceMetadata ksm = Schema.instance.getKSMetaData(this.elasticAdminKeyspaceName);
+        KeyspaceMetadata ksm = Schema.instance.getKeyspaceMetadata(this.elasticAdminKeyspaceName);
         if (ksm == null)
             return null;
 
@@ -925,7 +925,7 @@ public class ClusterService extends BaseClusterService {
     }
 
     public boolean hasMetaDataTable() {
-        KeyspaceMetadata ksm = Schema.instance.getKSMetaData(this.elasticAdminKeyspaceName);
+        KeyspaceMetadata ksm = Schema.instance.getKeyspaceMetadata(this.elasticAdminKeyspaceName);
         return ksm != null && ksm.getTableOrViewNullable(ELASTIC_ADMIN_METADATA_TABLE) != null;
     }
 
@@ -938,7 +938,7 @@ public class ClusterService extends BaseClusterService {
      * If no global index entry exists, the one from the table level is used (when restoring CQL table with index+mapping definition)
      */
     public MetaData readMetaDataFromTableExtensions(Optional<String> metadataTableName) throws NoPersistedMetaDataException {
-        KeyspaceMetadata ksm = Schema.instance.getKSMetaData(this.elasticAdminKeyspaceName);
+        KeyspaceMetadata ksm = Schema.instance.getKeyspaceMetadata(this.elasticAdminKeyspaceName);
         if (ksm == null)
             throw new NoPersistedMetaDataException("Keyspace "+this.elasticAdminKeyspaceName+" metadata not available");
 
@@ -951,7 +951,7 @@ public class ClusterService extends BaseClusterService {
                 // load table extensions for tables having an elastic 2i index and having a valid table extension.
                 ListMultimap<String, IndexMetaData> indexMetaDataExtensions = ArrayListMultimap.create();
                 for(String keyspace : Schema.instance.getUserKeyspaces()) {
-                    KeyspaceMetadata ksmx = Schema.instance.getKSMetaData(keyspace);
+                    KeyspaceMetadata ksmx = Schema.instance.getKeyspaceMetadata(keyspace);
                     if (ksmx != null) {
                         logger.trace("ksmx={} indices={}", ksmx.name, ksmx.existingIndexNames(null));
                         for(String indexName : ksmx.existingIndexNames(null)) {
@@ -1040,7 +1040,7 @@ public class ClusterService extends BaseClusterService {
     public MetaData.Builder mergeWithTableExtensions(final MetaData.Builder metaDataBuilder)  {
         final ListMultimap<String, IndexMetaData> indexMetaDataExtensions = ArrayListMultimap.create();
         for(String keyspace : Schema.instance.getUserKeyspaces()) {
-            KeyspaceMetadata ksmx = Schema.instance.getKSMetaData(keyspace);
+            KeyspaceMetadata ksmx = Schema.instance.getKeyspaceMetadata(keyspace);
             if (ksmx != null) {
                 if (logger.isTraceEnabled())
                     logger.trace("ksmx={} indices={}", ksmx.name, ksmx.existingIndexNames(null));

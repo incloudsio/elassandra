@@ -30,8 +30,7 @@ import org.apache.cassandra.cql3.CqlParser;
 import org.apache.cassandra.cql3.FieldIdentifier;
 import org.apache.cassandra.cql3.QualifiedName;
 import org.apache.cassandra.cql3.UTName;
-import org.apache.cassandra.cql3.statements.IndexTarget;
-import org.apache.cassandra.cql3.statements.schema.KeyspaceAttributes;
+import org.apache.cassandra.cql3.statements.schema.IndexTarget;
 import org.apache.cassandra.cql3.statements.schema.CreateKeyspaceStatement;
 import org.apache.cassandra.cql3.statements.schema.CreateTableStatement;
 import org.apache.cassandra.cql3.statements.schema.TableAttributes;
@@ -50,12 +49,13 @@ import org.apache.cassandra.schema.IndexMetadata;
 import org.apache.cassandra.schema.KeyspaceMetadata;
 import org.apache.cassandra.schema.KeyspaceParams;
 import org.apache.cassandra.schema.SchemaConstants;
+import org.apache.cassandra.schema.ElassandraSchemaBridge;
 import org.apache.cassandra.schema.SchemaKeyspace;
 import org.apache.cassandra.schema.Schema;
+import org.apache.cassandra.schema.SchemaChangeListener;
 import org.apache.cassandra.schema.TableMetadata;
 import org.apache.cassandra.schema.TableParams;
 import org.apache.cassandra.service.ClientState;
-import org.apache.cassandra.service.MigrationListener;
 import org.apache.cassandra.transport.Event;
 import org.apache.cassandra.utils.ByteBufferUtil;
 import org.apache.cassandra.utils.FBUtilities;
@@ -100,9 +100,9 @@ public class SchemaManager {
     final SchemaListener schemaListener;
 
     /**
-     * Inhibited MigrationListener avoid loops when applying new cluster state in CQL schema.
+     * Inhibited schema listeners avoid loops when applying new cluster state in CQL schema.
      */
-    private final Collection<MigrationListener> inhibitedSchemaListeners;
+    private final Collection<SchemaChangeListener> inhibitedSchemaListeners;
 
     public static final String GEO_POINT_TYPE = "geo_point";
     public static final ColumnIdentifier GEO_POINT_NAME = new ColumnIdentifier(GEO_POINT_TYPE, true);
@@ -166,7 +166,7 @@ public class SchemaManager {
         return schemaListener;
     }
 
-    public Collection<MigrationListener> getInhibitedSchemaListeners() {
+    public Collection<SchemaChangeListener> getInhibitedSchemaListeners() {
         return inhibitedSchemaListeners;
     }
 
@@ -227,7 +227,7 @@ public class SchemaManager {
     }
 
     public static KeyspaceMetadata getKSMetaData(final String ksName) throws ActionRequestValidationException {
-        KeyspaceMetadata metadata = Schema.instance.getKSMetaData(ksName);
+        KeyspaceMetadata metadata = Schema.instance.getKeyspaceMetadata(ksName);
         if (metadata == null) {
             ActionRequestValidationException arve = new ActionRequestValidationException();
             arve.addValidationError("Keyspace " + ksName + " does not exists");
@@ -237,8 +237,8 @@ public class SchemaManager {
     }
 
     public static KeyspaceMetadata getKSMetaDataCopy(final String ksName) {
-        KeyspaceMetadata metadata = Schema.instance.getKSMetaDataSafe(ksName);
-        return metadata.copy();
+        KeyspaceMetadata metadata = Schema.instance.getKeyspaceMetadata(ksName);
+        return metadata;
     }
 
     private Pair<KeyspaceMetadata, UserType> createUserTypeIfNotExists(KeyspaceMetadata ksm, String typeName, Map<String, CQL3Type.Raw> fields,
@@ -274,7 +274,7 @@ public class SchemaManager {
                         .collect(Collectors.toList());
         UserType userType = new UserType(ksm.name, ByteBufferUtil.bytes(typeName), fieldNames, fieldTypes, true);
 
-        Mutation.SimpleBuilder builder = SchemaKeyspace.makeCreateKeyspaceMutation(ksm.name, FBUtilities.timestampMicros());
+        Mutation.SimpleBuilder builder = ElassandraSchemaBridge.makeCreateKeyspaceMutation(ksm.name, ksm.params, FBUtilities.timestampMicros());
         SchemaKeyspace.addTypeToSchemaMutation(userType, builder);
         mutations.add(builder.build());
 
@@ -313,7 +313,7 @@ public class SchemaManager {
                     ft.add(fieldType);
                     userType = new UserType(ksmOut.name, userType.name, fn, ft, true);
 
-                    Mutation.SimpleBuilder builder = SchemaKeyspace.makeCreateKeyspaceMutation(ksmOut.name, FBUtilities.timestampMicros());
+                    Mutation.SimpleBuilder builder = ElassandraSchemaBridge.makeCreateKeyspaceMutation(ksmOut.name, ksmOut.params, FBUtilities.timestampMicros());
                     SchemaKeyspace.addTypeToSchemaMutation(userType, builder);
                     mutations.add(builder.build());
                     events.add(new Event.SchemaChange(Event.SchemaChange.Change.UPDATED, Event.SchemaChange.Target.TYPE, ksmOut.name, typeName));
@@ -364,7 +364,7 @@ public class SchemaManager {
         }
         if (ks != null) {
             // TODO: check replication
-            ksm =  ks.getMetadata().copy();
+            ksm = ks.getMetadata();
         } else {
             Map<String, String> replication = new HashMap<>();
             replication.put("class", "NetworkTopologyStrategy");
@@ -373,13 +373,9 @@ public class SchemaManager {
                 replication.put(entry.getKey(), Integer.toString(entry.getValue()));
             logger.trace("Creating new keyspace [{}] with replication={}", ksName, replication);
 
-            KeyspaceAttributes ksAttrs = new KeyspaceAttributes();
-            ksAttrs.addProperty(KeyspaceParams.Option.DURABLE_WRITES.toString(), "true");
-            ksAttrs.addProperty(KeyspaceParams.Option.REPLICATION.toString(), replication);
-
-            ksAttrs.validate();
-            ksm = KeyspaceMetadata.create(ksName, ksAttrs.asNewKeyspaceParams());
-            mutations.add(SchemaKeyspace.makeCreateKeyspaceMutation(ksm, FBUtilities.timestampMicros()).build());
+            KeyspaceParams params = KeyspaceParams.create(true, replication);
+            ksm = KeyspaceMetadata.create(ksName, params);
+            mutations.add(ElassandraSchemaBridge.makeCreateKeyspaceMutation(ksm, FBUtilities.timestampMicros()).build());
             events.add(new Event.SchemaChange(Event.SchemaChange.Change.CREATED, ksName));
         }
         return ksm;
@@ -426,8 +422,8 @@ public class SchemaManager {
         TableMetadata cfm = prepared.builder(ksm.types).build();
         cfm = updateTableExtensions(ksm, cfm, siblings);
 
-        Mutation.SimpleBuilder builder = SchemaKeyspace.makeCreateKeyspaceMutation(ksm.name, FBUtilities.timestampMicros());
-        SchemaKeyspace.addTableToSchemaMutation(cfm, true, builder);
+        Mutation.SimpleBuilder builder = ElassandraSchemaBridge.makeCreateKeyspaceMutation(ksm.name, ksm.params, FBUtilities.timestampMicros());
+        ElassandraSchemaBridge.addTableToSchemaMutation(cfm, true, builder);
         mutations.add(builder.build());
 
         events.add(new Event.SchemaChange(Event.SchemaChange.Change.CREATED, Event.SchemaChange.Target.TABLE, ksm.name, cfName));
@@ -459,7 +455,7 @@ public class SchemaManager {
         }
         TableMetadata x = builder.build();
         x = updateTableExtensions(ksm, x, siblings);
-        mutations.add(SchemaKeyspace.makeUpdateTableMutation(ksm, cfm, x, FBUtilities.timestampMicros()).build());
+        mutations.add(ElassandraSchemaBridge.makeUpdateTableMutation(ksm, cfm, x, FBUtilities.timestampMicros()).build());
 
         KeyspaceMetadata ksm2 = ksm.withSwapped(ksm.tables.without(cfm.name).with(x));
         events.add(new Event.SchemaChange(Event.SchemaChange.Change.UPDATED, Event.SchemaChange.Target.TABLE, ksm.name, cfName));
@@ -545,7 +541,7 @@ public class SchemaManager {
                     //String subType = buildCql(ksName,cfName,childMapper.simpleName(),(ObjectMapper)childMapper, updatedUserTypes, validateOnly);
                     //return (subType==null) ? null : "map<text,frozen<"+subType+">>";
                     Pair<KeyspaceMetadata, CQL3Type.Raw> x = buildObject(ksm, cfName, childMapper.simpleName(), (ObjectMapper)childMapper, mutations, events);
-                    return (x.right == null) ? null : Pair.create(x.left, CQL3Type.Raw.map(CQL3Type.Raw.from(CQL3Type.Native.TEXT), CQL3Type.Raw.frozen(x.right)));
+                    return (x.right == null) ? null : Pair.create(x.left, CQL3Type.Raw.map(CQL3Type.Raw.from(CQL3Type.Native.TEXT), x.right).freeze());
                 }
             }
             // default map prototype, no mapper to determine the value type.
@@ -560,12 +556,12 @@ public class SchemaManager {
             final Collection<Event.SchemaChange> events) throws ConfigurationException {
         if (SchemaConstants.isSystemKeyspace(ksName))
             throw new ConfigurationException("Cannot drop a system keyspace.");
-        KeyspaceMetadata oldKsm = Schema.instance.getKSMetaData(ksName);
+        KeyspaceMetadata oldKsm = Schema.instance.getKeyspaceMetadata(ksName);
         if (oldKsm == null)
             throw new ConfigurationException(String.format("Cannot drop non existing keyspace '%s'.", ksName));
 
         logger.info("Drop Keyspace '{}'", oldKsm.name);
-        mutations.add(SchemaKeyspace.makeDropKeyspaceMutation(oldKsm, FBUtilities.timestampMicros()).build());
+        mutations.add(ElassandraSchemaBridge.makeDropKeyspaceMutation(oldKsm, FBUtilities.timestampMicros()).build());
         events.add(new Event.SchemaChange(Event.SchemaChange.Change.DROPPED, ksName));
     }
 
@@ -842,7 +838,7 @@ public class SchemaManager {
         TableMetadata cfm = cfm0.withSwapped(cfm0.indexes.with(indexMetadata));
         ksm2 = ksm.withSwapped(ksm.tables.without(cfm0.name).with(cfm));
 
-        Mutation.SimpleBuilder builder = SchemaKeyspace.makeCreateKeyspaceMutation(ksm.name, FBUtilities.timestampMicros());
+        Mutation.SimpleBuilder builder = ElassandraSchemaBridge.makeCreateKeyspaceMutation(ksm.name, ksm.params, FBUtilities.timestampMicros());
         SchemaKeyspace.addUpdatedIndexToSchemaMutation(cfm, indexMetadata, builder);
         mutations.add(builder.build());
 
@@ -864,7 +860,7 @@ public class SchemaManager {
                     ksm2 = ksm.withSwapped(ksm.tables.without(cfm0.name).with(cfm));
 
                     logger.info("Drop secondary index '{}'", idx.name);
-                    mutations.add(SchemaKeyspace.makeUpdateTableMutation(ksm, cfm0, cfm, FBUtilities.timestampMicros()).build());
+                    mutations.add(ElassandraSchemaBridge.makeUpdateTableMutation(ksm, cfm0, cfm, FBUtilities.timestampMicros()).build());
                     events.add(new Event.SchemaChange(Event.SchemaChange.Change.UPDATED, Event.SchemaChange.Target.TABLE, ksm.name, cfm.name));
                     break;
                 }
@@ -876,7 +872,7 @@ public class SchemaManager {
     public void dropSecondaryIndices(final IndexMetaData indexMetaData, final Collection<Mutation> mutations, final Collection<Event.SchemaChange> events)
             throws RequestExecutionException {
         String ksName = indexMetaData.keyspace();
-        KeyspaceMetadata ksm = Schema.instance.getKSMetaData(ksName);
+        KeyspaceMetadata ksm = Schema.instance.getKeyspaceMetadata(ksName);
         for (TableMetadata cfm : ksm.tablesAndViews()) {
             if (org.apache.cassandra.schema.TableMetadata.Flag.isCQLTable(cfm.flags))
                 dropSecondaryIndex(ksm, cfm, mutations, events);
@@ -913,7 +909,7 @@ public class SchemaManager {
             ksm2 = ksm.withSwapped(ksm.tables.without(cfm.name));
 
             logger.info("Drop table '{}'", cfm.name);
-            mutations.add(SchemaKeyspace.makeDropTableMutation(ksm, cfm, FBUtilities.timestampMicros()).build());
+            mutations.add(ElassandraSchemaBridge.makeDropTableMutation(ksm, cfm, FBUtilities.timestampMicros()).build());
             events.add(new Event.SchemaChange(Event.SchemaChange.Change.DROPPED, Event.SchemaChange.Target.TABLE, ksm.name, cfm.name));
         }
         return ksm2;

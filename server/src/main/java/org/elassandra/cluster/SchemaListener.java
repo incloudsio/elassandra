@@ -24,11 +24,12 @@ import com.google.common.collect.ArrayListMultimap;
 import com.google.common.collect.ListMultimap;
 
 import org.apache.cassandra.config.DatabaseDescriptor;
-import org.apache.cassandra.schema.Schema;
-import org.apache.cassandra.schema.TableMetadata;
+import org.apache.cassandra.locator.InetAddressAndPort;
 import org.apache.cassandra.locator.NetworkTopologyStrategy;
 import org.apache.cassandra.schema.KeyspaceMetadata;
-import org.apache.cassandra.service.MigrationListener;
+import org.apache.cassandra.schema.Schema;
+import org.apache.cassandra.schema.SchemaChangeListener;
+import org.apache.cassandra.schema.TableMetadata;
 import org.apache.cassandra.utils.FBUtilities;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
@@ -36,6 +37,7 @@ import org.elassandra.index.ElasticSecondaryIndex;
 import org.elasticsearch.cluster.ClusterChangedEvent;
 import org.elasticsearch.cluster.ClusterState;
 import org.elasticsearch.cluster.ClusterStateListener;
+import org.elasticsearch.cluster.ClusterStateTaskConfig.SchemaUpdate;
 import org.elasticsearch.cluster.ClusterStateUpdateTask;
 import org.elasticsearch.cluster.block.ClusterBlocks;
 import org.elasticsearch.cluster.metadata.IndexMetaData;
@@ -51,15 +53,13 @@ import java.util.Map;
 /**
  * Listen for cassandra schema changes and elasticsearch cluster state changes.
  */
-public class SchemaListener extends MigrationListener implements ClusterStateListener
+public class SchemaListener extends SchemaChangeListener implements ClusterStateListener
 {
     final ClusterService clusterService;
     final Logger logger;
 
-    // record per transaction changes (
-    boolean record = false;
     MetaData recordedMetaData = null;
-    final ListMultimap<String, IndexMetaData> recordedIndexMetaData = ArrayListMultimap.create(); // indexName -> List of IndexMetaData with a single mapping
+    final ListMultimap<String, IndexMetaData> recordedIndexMetaData = ArrayListMultimap.create();
 
     public SchemaListener(Settings settings, ClusterService clusterService) {
         this.clusterService = clusterService;
@@ -68,45 +68,28 @@ public class SchemaListener extends MigrationListener implements ClusterStateLis
     }
 
     /**
-     * Not called when resulting from a cluster state update involving a CQL update (see inhibited MigrationListeners in MigrationManager.announce()).
+     * Apply pending mapping updates to Elasticsearch cluster state (Cassandra 4 uses per-change callbacks; we flush after each table change).
      */
-    @Override
-    public void onBeginTransaction() {
-        record = true;
-        recordedIndexMetaData.clear();
-        recordedMetaData = null;
-    }
-
-    /**
-     * Rebuild MetaData from per transaction updated extensions and submit a clusterState update task.
-     */
-    @Override
-    public void onEndTransaction() {
+    private void flushTransaction() {
         if (recordedMetaData != null || !recordedIndexMetaData.isEmpty()) {
             final ClusterState currentState = this.clusterService.state();
             final ClusterBlocks.Builder blocks = ClusterBlocks.builder().blocks(currentState.blocks());
             final MetaData sourceMetaData = (recordedMetaData == null) ? currentState.metaData() : recordedMetaData;
             final MetaData.Builder metaDataBuilder = MetaData.builder(sourceMetaData);
             if (recordedMetaData == null) {
-                // add collected mappings coming from a CQL update (table schema restoration)
                 recordedIndexMetaData.keySet().forEach( i -> clusterService.mergeIndexMetaData(metaDataBuilder, i, recordedIndexMetaData.get(i)));
             } else {
-                // add all mappings from table extensions
                 clusterService.mergeWithTableExtensions(metaDataBuilder);
             }
 
-            // update blocks
             if (sourceMetaData.settings().getAsBoolean("cluster.blocks.read_only", false))
                 blocks.addGlobalBlock(MetaData.CLUSTER_READ_ONLY_BLOCK);
 
-            // update indices block.
             for (IndexMetaData indexMetaData : sourceMetaData)
                 blocks.updateBlocks(indexMetaData);
 
             final MetaData targetMetaData = metaDataBuilder.build();
 
-            // summit the new clusterState to the MasterService for a local update.
-            // keep the metadata.clusterUuid from the coordinator node.
             clusterService.submitStateUpdateTask("cql-schema-mapping-update", new ClusterStateUpdateTask(Priority.URGENT) {
                 @Override
                 public ClusterState execute(ClusterState currentState) {
@@ -132,68 +115,66 @@ public class SchemaListener extends MigrationListener implements ClusterStateLis
                 }
             });
         }
-        record = false;
         recordedIndexMetaData.clear();
         recordedMetaData = null;
     }
 
     @Override
-    public void onCreateColumnFamily(KeyspaceMetadata ksm, TableMetadata cfm) {
-        if (!record)
+    public void onCreateTable(String keyspace, String table) {
+        recordedIndexMetaData.clear();
+        recordedMetaData = null;
+        KeyspaceMetadata ksm = Schema.instance.getKeyspaceMetadata(keyspace);
+        TableMetadata cfm = Schema.instance.getTableMetadata(keyspace, table);
+        if (ksm == null || cfm == null)
             return;
-
         logger.trace("{}.{}", ksm.name, cfm.name);
         if (!isElasticAdmin(ksm.name, cfm.name)) {
             updateElasticsearchMapping(ksm, cfm);
         }
+        flushTransaction();
     }
 
-    /**
-     * if elastic_admin.metadata.extensions.get('version') greater than curent.metadata.version
-     * then trigger 2i mapping update and a clusterState update.
-     */
     @Override
-    public void onUpdateColumnFamily(KeyspaceMetadata ksm, TableMetadata cfm, boolean affectsStatements) {
-        if (!record)
+    public void onAlterTable(String keyspace, String table, boolean affectsStatements) {
+        recordedIndexMetaData.clear();
+        recordedMetaData = null;
+        KeyspaceMetadata ksm = Schema.instance.getKeyspaceMetadata(keyspace);
+        TableMetadata cfm = Schema.instance.getTableMetadata(keyspace, table);
+        if (ksm == null || cfm == null)
             return;
-
         logger.trace("{}.{}", ksm.name, cfm.name);
         if (isElasticAdmin(ksm.name, cfm.name)) {
-            recordedMetaData =  clusterService.readMetaData(cfm);
+            recordedMetaData = clusterService.readMetaData(cfm);
         } else {
             updateElasticsearchMapping(ksm, cfm);
         }
+        flushTransaction();
     }
 
-    /**
-     * Update number of shards if replication map changed
-     */
     @Override
-    public void onUpdateKeyspace(final String ksName) {
+    public void onAlterKeyspace(String ksName) {
         logger.trace("{}", ksName);
         MetaData metadata = this.clusterService.state().metaData();
+        InetAddressAndPort local = FBUtilities.getBroadcastAddressAndPort();
         for(ObjectCursor<IndexMetaData> imdCursor : metadata.indices().values()) {
             if (ksName.equals(imdCursor.value.keyspace())) {
-                KeyspaceMetadata ksm = Schema.instance.getKSMetaData(ksName);
-                if (ksm.params != null && ksm.params.replication != null && ksm.params.replication.klass.isAssignableFrom(NetworkTopologyStrategy.class)) {
-                    String localDc = DatabaseDescriptor.getEndpointSnitch().getDatacenter(FBUtilities.getBroadcastAddress());
+                KeyspaceMetadata ksm = Schema.instance.getKeyspaceMetadata(ksName);
+                if (ksm != null && ksm.params != null && ksm.params.replication != null && ksm.params.replication.klass.isAssignableFrom(NetworkTopologyStrategy.class)) {
+                    String localDc = DatabaseDescriptor.getEndpointSnitch().getDatacenter(local);
                     try {
                         Integer rf = Integer.parseInt(ksm.params.replication.asMap().get(localDc));
                         if (!rf.equals(imdCursor.value.getNumberOfReplicas()+1)) {
-                            // submit a cluster state update task to update number of replica shards.
-                            // TODO: update index replication_map ?
                             logger.debug("Submit numberOfReplicas update  for indices based on keyspace [{}]", ksName);
                             clusterService.submitNumberOfShardsAndReplicasUpdate("update-shard-replicas", ksName);
                         }
                     } catch(NumberFormatException e) {
-
+                        // ignore
                     }
                 }
             }
         }
     }
 
-    // TODO: drop associated indices
     @Override
     public void onDropKeyspace(String ksName) {
         logger.trace("{}", ksName);

@@ -28,7 +28,7 @@ import org.apache.cassandra.config.DatabaseDescriptor;
 import org.apache.cassandra.cql3.CQL3Type;
 import org.apache.cassandra.cql3.ColumnIdentifier;
 import org.apache.cassandra.cql3.Operator;
-import org.apache.cassandra.cql3.statements.IndexTarget;
+import org.apache.cassandra.cql3.statements.schema.IndexTarget;
 import org.apache.cassandra.db.Clustering;
 import org.apache.cassandra.db.ClusteringBound;
 import org.apache.cassandra.db.ColumnFamilyStore;
@@ -235,7 +235,7 @@ public class ElasticSecondaryIndex implements Index {
         this.baseCfs = baseCfs;
         this.indexMetadata = indexDef;
         this.index_name = baseCfs.keyspace.getName() + "." + baseCfs.name;
-        this.typeName = SchemaManager.cfNameToType(baseCfs.keyspace.getName(), ElasticSecondaryIndex.this.baseCfs.metadata.name);
+        this.typeName = SchemaManager.cfNameToType(baseCfs.keyspace.getName(), ElasticSecondaryIndex.this.baseCfs.metadata.get().name);
         this.logger = LogManager.getLogger(this.getClass().getName() + "." + baseCfs.keyspace.getName() + "." + baseCfs.name);
 
         this.clusterService = ElassandraDaemon.instance.node().injector().getInstance(ClusterService.class);
@@ -411,7 +411,7 @@ public class ElasticSecondaryIndex implements Index {
                     }
                     if (subMapper == null && cqlMapper.cqlStruct().equals(CqlStruct.MAP)) {
                         // dynamic field in top level map => update the elasticsearch mapping and add the field.
-                        ColumnMetadata cd = baseCfs.metadata.getColumn(mapper.cqlName());
+                        ColumnMetadata cd = baseCfs.metadata.get().getColumn(mapper.cqlName());
                         if (subMapper == null && cd != null && cd.type.isCollection() && cd.type instanceof MapType ) {
                             CollectionType ctype = (CollectionType) cd.type;
                             if (ctype.kind == CollectionType.Kind.MAP &&
@@ -564,7 +564,7 @@ public class ElasticSecondaryIndex implements Index {
 
         @Override
         public ParseContext createNestedContext(String fullPath) {
-            final Document doc = (baseCfs.metadata.hasStaticColumns()) ? new StaticDocument(fullPath, doc(), new Uid(docMapper.type(), id)) : new Document(fullPath, doc());
+            final Document doc = (baseCfs.metadata.get().hasStaticColumns()) ? new StaticDocument(fullPath, doc(), new Uid(docMapper.type(), id)) : new Document(fullPath, doc());
             addDoc(doc);
             return switchDoc(doc);
         }
@@ -811,7 +811,7 @@ public class ElasticSecondaryIndex implements Index {
                 int x = input.name().indexOf('.');
                 String colName = (x > 0) ? input.name().substring(0, x) : input.name();
                 int idx = indexInfo.indexOf(colName);
-                return idx < baseCfs.metadata.partitionKeyColumns().size() || indexInfo.isStaticField(idx);
+                return idx < baseCfs.metadata.get().partitionKeyColumns().size() || indexInfo.isStaticField(idx);
             }
         }
 
@@ -943,11 +943,11 @@ public class ElasticSecondaryIndex implements Index {
                     DocumentMapper docMapper = indexService.mapperService().documentMapper(typeName);
                     BooleanQuery.Builder builder = new BooleanQuery.Builder();
 
-                    int partitionKeyLen = baseCfs.metadata.partitionKeyColumns().size();
+                    int partitionKeyLen = baseCfs.metadata.get().partitionKeyColumns().size();
 
                     // build the primary key part of the delete by query
                     int i = 0;
-                    for (ColumnMetadata cd : baseCfs.metadata.primaryKeyColumns()) {
+                    for (ColumnMetadata cd : baseCfs.metadata.get().primaryKeyColumns()) {
                         if (i >= (partitionKeyLen + Math.max(start.size(), end.size())))
                             break;
 
@@ -977,7 +977,7 @@ public class ElasticSecondaryIndex implements Index {
                     Query query = builder.build();
                     if (logger.isDebugEnabled()) {
                         logger.debug("delete rangeTombstone={} from ks.cf={}.{} query={} in elasticsearch index=[{}]",
-                            tombstone.deletedSlice().toString(baseCfs.metadata), baseCfs.metadata.keyspace, baseCfs.name, query, name);
+                            tombstone.deletedSlice().toString(baseCfs.metadata.get().comparator), baseCfs.metadata.get().keyspace, baseCfs.name, query, name);
                     }
                     if (!updated)
                         updated = true;
@@ -1219,7 +1219,7 @@ public class ElasticSecondaryIndex implements Index {
             List<ImmutableIndexInfo> indexList = new ArrayList<ImmutableIndexInfo>();
 
             for (IndexMetaData indexMetaData : state.metaData()) {
-                if (!ElasticSecondaryIndex.this.baseCfs.metadata.keyspace.equals(indexMetaData.keyspace()))
+                if (!ElasticSecondaryIndex.this.baseCfs.metadata.get().keyspace.equals(indexMetaData.keyspace()))
                     continue;
 
                 if (indexMetaData.isVirtual()) {
@@ -1305,7 +1305,7 @@ public class ElasticSecondaryIndex implements Index {
 
             if (indexList.size() == 0) {
                 if (logger.isTraceEnabled())
-                    logger.trace("No active elasticsearch index for keyspace.table=[{}.{}] state={}", baseCfs.metadata.keyspace, baseCfs.name, state);
+                    logger.trace("No active elasticsearch index for keyspace.table=[{}.{}] state={}", baseCfs.metadata.get().keyspace, baseCfs.name, state);
                 this.indices = null;
                 this.indexToIdx = null;
                 this.fieldsToIdx = null;
@@ -1352,10 +1352,10 @@ public class ElasticSecondaryIndex implements Index {
 
             // order fields with pk columns first
             final String[] fields = new String[fieldsMap.size()];
-            final int pkLength = baseCfs.metadata.partitionKeyColumns().size() + baseCfs.metadata.clusteringColumns().size();
+            final int pkLength = baseCfs.metadata.get().partitionKeyColumns().size() + baseCfs.metadata.get().clusteringColumns().size();
             this.indexedPkColumns = new boolean[pkLength];
             int j = 0, l = 0;
-            for (ColumnMetadata cd : Iterables.concat(baseCfs.metadata.partitionKeyColumns(), baseCfs.metadata.clusteringColumns())) {
+            for (ColumnMetadata cd : Iterables.concat(baseCfs.metadata.get().partitionKeyColumns(), baseCfs.metadata.get().clusteringColumns())) {
                 indexedPkColumns[l] = fieldsMap.containsKey(cd.name.toString());
                 if (indexedPkColumns[l])
                     fields[j++] = cd.name.toString();
@@ -1378,11 +1378,11 @@ public class ElasticSecondaryIndex implements Index {
             for (int i = 0; i < fields.length; i++)
                 this.fieldsToIdx.put(fields[i], i);
 
-            this.staticColumns = (baseCfs.metadata.hasStaticColumns()) ? new BitSet(fields.length) : null;
+            this.staticColumns = (baseCfs.metadata.get().hasStaticColumns()) ? new BitSet(fields.length) : null;
             ColumnFilter.Builder cfb = ColumnFilter.selectionBuilder();
             for (int i = 0; i < fields.length; i++) {
                 ColumnIdentifier colId = new ColumnIdentifier(fields[i], true);
-                ColumnMetadata colDef = baseCfs.metadata.getColumn(colId);
+                ColumnMetadata colDef = baseCfs.metadata.get().getColumn(colId);
                 if (colDef != null) {
                     // colDef may be null when mapping an object with no sub-field (and no underlying column, see #144)
                     if (staticColumns != null)
@@ -1500,8 +1500,8 @@ public class ElasticSecondaryIndex implements Index {
         }
 
         class WideRowcumentIndexer extends RowcumentIndexer {
-            final NavigableSet<Clustering> clusterings = new java.util.TreeSet<Clustering>(baseCfs.metadata.comparator);
-            final Map<Clustering, WideRowcument> rowcuments = new TreeMap<Clustering, WideRowcument>(baseCfs.metadata.comparator);
+            final NavigableSet<Clustering> clusterings = new java.util.TreeSet<Clustering>(baseCfs.metadata.get().comparator);
+            final Map<Clustering, WideRowcument> rowcuments = new TreeMap<Clustering, WideRowcument>(baseCfs.metadata.get().comparator);
             List<RangeTombstone> rangeTombstones = null;
             Row inStaticRow, outStaticRow;
 
@@ -1531,11 +1531,11 @@ public class ElasticSecondaryIndex implements Index {
                         if (inRow != null)
                             logger.trace("indexer={} inRowData={} clustering={} static={} hasLiveData={}",
                                 WideRowcumentIndexer.this.hashCode(), inRow.toString(baseCfs.metadata, true, true), inRow.clustering(),
-                                inRow.isStatic(), inRow.hasLiveData(nowInSec, baseCfs.metadata.enforceStrictLiveness()));
+                                inRow.isStatic(), inRow.hasLiveData(nowInSec, baseCfs.metadata.get().enforceStrictLiveness()));
                         if (outRow != null)
                             logger.trace("indexer={} outRowData={} clustering={} static={} hasLiveData={}",
                                 WideRowcumentIndexer.this.hashCode(), outRow.toString(baseCfs.metadata, true, true), outRow.clustering(),
-                                outRow.isStatic(), outRow.hasLiveData(nowInSec, baseCfs.metadata.enforceStrictLiveness()));
+                                outRow.isStatic(), outRow.hasLiveData(nowInSec, baseCfs.metadata.get().enforceStrictLiveness()));
                     }
 
                     if (inRow != null && inRow.isStatic())
@@ -1608,11 +1608,11 @@ public class ElasticSecondaryIndex implements Index {
                     }
                     // read tombstone ranges in case of delete played out-of-time-order (if time matters)
                     if (!ImmutableMappingInfo.this.indexInsertOnly) {
-                        Slices.Builder slices = new Slices.Builder(baseCfs.metadata.comparator, rangeTombstones.size());
+                        Slices.Builder slices = new Slices.Builder(baseCfs.metadata.get().comparator, rangeTombstones.size());
                         for (RangeTombstone tombstone : rangeTombstones) {
-                            if (!tombstone.deletedSlice().isEmpty(baseCfs.metadata.comparator)) {
+                            if (!tombstone.deletedSlice().isEmpty(baseCfs.metadata.get().comparator)) {
                                 if (logger.isTraceEnabled())
-                                    logger.trace("indexer={} read partition range={}", this.hashCode(), tombstone.deletedSlice().toString(baseCfs.metadata.comparator));
+                                    logger.trace("indexer={} read partition range={}", this.hashCode(), tombstone.deletedSlice().toString(baseCfs.metadata.get().comparator));
                                 slices.add(tombstone.deletedSlice());
                             }
                         }
@@ -1651,7 +1651,7 @@ public class ElasticSecondaryIndex implements Index {
                 }
 
                 // manage static row
-                if (this.inStaticRow != null && inStaticRow.hasLiveData(nowInSec, baseCfs.metadata.enforceStrictLiveness())) {
+                if (this.inStaticRow != null && inStaticRow.hasLiveData(nowInSec, baseCfs.metadata.get().enforceStrictLiveness())) {
                     try {
                         // index live static document to ES
                         WideRowcument rowcument = new WideRowcument(inStaticRow, null);
@@ -1694,8 +1694,8 @@ public class ElasticSecondaryIndex implements Index {
                     logger.trace("deleting documents where _routing={} from index.type={}.{}", this.partitionKey, indexShard.shardId().getIndexName(), typeName);
 
                 Query termQuery;
-                if ( baseCfs.metadata.partitionKeyColumns().size() == 1 ) {
-                    String ptName = baseCfs.metadata.partitionKeyColumns().get(0).name.toString();
+                if ( baseCfs.metadata.get().partitionKeyColumns().size() == 1 ) {
+                    String ptName = baseCfs.metadata.get().partitionKeyColumns().get(0).name.toString();
                     int mapperIdx = indexInfo.indexOf(ptName);
                     FieldMapper ptMapper = (FieldMapper) indexInfo.mappers[mapperIdx];
                     termQuery = ptMapper.fieldType().termQuery(this.pkCols[0], null);
@@ -1811,7 +1811,7 @@ public class ElasticSecondaryIndex implements Index {
             final int nowInSec;
             final IndexTransaction.Type transactionType;
             final WriteContext writeContext;
-            final Object[] pkCols = new Object[baseCfs.metadata.partitionKeyColumns().size() + baseCfs.metadata.clusteringColumns().size()];
+            final Object[] pkCols = new Object[baseCfs.metadata.get().partitionKeyColumns().size() + baseCfs.metadata.get().clusteringColumns().size()];
             final String partitionKey;
             BitSet targets = null;
             DeletionTime delTime = null;
@@ -1826,7 +1826,7 @@ public class ElasticSecondaryIndex implements Index {
                 this.writeContext = writeContext;
                 this.transactionType = transactionType;
 
-                AbstractType<?> keyValidator = baseCfs.metadata.partitionKeyType;
+                AbstractType<?> keyValidator = baseCfs.metadata.get().partitionKeyType;
                 int i = 0;
                 if (keyValidator instanceof CompositeType) {
                     CompositeType composite = (CompositeType) keyValidator;
@@ -1865,7 +1865,7 @@ public class ElasticSecondaryIndex implements Index {
             public void insertRow(Row row) {
                 if (logger.isTraceEnabled())
                     logger.trace("indexer={} Insert row {}: {}", this.hashCode(), this.transactionType, row);
-                if (row.hasLiveData(nowInSec, baseCfs.metadata.enforceStrictLiveness()))
+                if (row.hasLiveData(nowInSec, baseCfs.metadata.get().enforceStrictLiveness()))
                     collect(row, null);
                 else
                     collect(null, row);
@@ -2042,23 +2042,23 @@ public class ElasticSecondaryIndex implements Index {
                     if (inRow != null) {
                         this.inRowDataSize = inRow.dataSize();
                         this.hasRowMarker = inRow.primaryKeyLivenessInfo().isLive(nowInSec);
-                        this.hasLiveData = inRow.hasLiveData(nowInSec, baseCfs.metadata.enforceStrictLiveness());
+                        this.hasLiveData = inRow.hasLiveData(nowInSec, baseCfs.metadata.get().enforceStrictLiveness());
                     }
                     Row row = inRow != null ? inRow : outRow;
 
                     // copy the indexed columns of partition key in values
                     int x = 0;
-                    for (int i = 0; i < baseCfs.metadata.partitionKeyColumns().size(); i++) {
+                    for (int i = 0; i < baseCfs.metadata.get().partitionKeyColumns().size(); i++) {
                         if (indexedPkColumns[i])
                             values[x++] = pkCols[i];
                     }
                     // copy the indexed columns of clustering key in values
                     if (!row.isStatic() && row.clustering().size() > 0) {
                         int i = 0;
-                        for (ColumnMetadata ccd : baseCfs.metadata.clusteringColumns()) {
+                        for (ColumnMetadata ccd : baseCfs.metadata.get().clusteringColumns()) {
                             Object value = Serializer.deserialize(ccd.type, row.clustering().get(i));
-                            pkCols[baseCfs.metadata.partitionKeyColumns().size() + i] = value;
-                            if (indexedPkColumns[baseCfs.metadata.partitionKeyColumns().size() + i])
+                            pkCols[baseCfs.metadata.get().partitionKeyColumns().size() + i] = value;
+                            if (indexedPkColumns[baseCfs.metadata.get().partitionKeyColumns().size() + i])
                                 values[x++] = value;
                             i++;
                         }
@@ -2169,7 +2169,7 @@ public class ElasticSecondaryIndex implements Index {
                     if (indexInfo.includeNodeId)
                         context.docMapper.hostFieldMapper().createField(context, ImmutableMappingInfo.this.nodeId);
 
-                    if ((this instanceof WideRowcument || context.docMapper.routingFieldMapper().fieldType().hasDocValues()) && baseCfs.metadata.partitionKeyColumns().size() > 1)
+                    if ((this instanceof WideRowcument || context.docMapper.routingFieldMapper().fieldType().hasDocValues()) && baseCfs.metadata.get().partitionKeyColumns().size() > 1)
                         context.docMapper.routingFieldMapper().createField(context, partitionKey);
 
                     if (!indexInfo.versionLessEngine) {
@@ -2274,7 +2274,7 @@ public class ElasticSecondaryIndex implements Index {
                                 final SourceToParse sourceToParse = SourceToParse.source(indexInfo.name, typeName, id, source, XContentType.JSON);
                                 sourceToParse.token((Long)key.getToken().getTokenValue());
 
-                                if ((this instanceof WideRowcument || docMapper.routingFieldMapper().fieldType().hasDocValues()) &&  baseCfs.metadata.partitionKeyColumns().size() > 1)
+                                if ((this instanceof WideRowcument || docMapper.routingFieldMapper().fieldType().hasDocValues()) &&  baseCfs.metadata.get().partitionKeyColumns().size() > 1)
                                     sourceToParse.routing(partitionKey);
 
                                 final ParsedDocument parsedDoc = docMapper.parse(sourceToParse);
@@ -2346,13 +2346,13 @@ public class ElasticSecondaryIndex implements Index {
                         if (result.getFailure() != null && logger.isErrorEnabled()) {
                             logger.error((Supplier<?>) () ->
                                     new ParameterizedMessage("document CF={}.{} index/type={}/{} id={} version={} created={} static={} ttl={} refresh={}",
-                                        baseCfs.metadata.keyspace, baseCfs.metadata.name,
+                                        baseCfs.metadata.get().keyspace, baseCfs.metadata.get().name,
                                         indexInfo.name, typeName,
                                         parsedDoc.id(), operation.version(), result.isCreated(), isStatic(), ttl, indexInfo.refresh),
                                 result.getFailure());
                         } else if (logger.isDebugEnabled()) {
                             logger.debug("document CF={}.{} index/type={}/{} id={} version={} created={} static={} ttl={} refresh={}",
-                                baseCfs.metadata.keyspace, baseCfs.metadata.name,
+                                baseCfs.metadata.get().keyspace, baseCfs.metadata.get().name,
                                 indexInfo.name, typeName,
                                 parsedDoc.id(), operation.version(), result.isCreated(), isStatic(), ttl, indexInfo.refresh);
                         }
@@ -2407,12 +2407,12 @@ public class ElasticSecondaryIndex implements Index {
         ImmutableMappingInfo mappingInfo = mappingInfoRef.get();
         if (mappingInfo == null) {
             if (logger.isWarnEnabled())
-                logger.warn("No Elasticsearch index ready on table {}.{}", this.baseCfs.metadata.keyspace, this.baseCfs.metadata.name);
+                logger.warn("No Elasticsearch index ready on table {}.{}", this.baseCfs.metadata.get().keyspace, this.baseCfs.metadata.get().name);
             return false;
         }
         if (mappingInfo.indices == null || mappingInfo.indices.length == 0) {
             if (logger.isWarnEnabled())
-                logger.warn("No Elasticsearch index configured on table {}.{}", this.baseCfs.metadata.keyspace, this.baseCfs.metadata.name);
+                logger.warn("No Elasticsearch index configured on table {}.{}", this.baseCfs.metadata.get().keyspace, this.baseCfs.metadata.get().name);
             return false;
         }
 
@@ -2420,7 +2420,7 @@ public class ElasticSecondaryIndex implements Index {
         if (logger.isTraceEnabled()) {
             logger.trace("indices={} shards {}/{} started for table {}.{}",
                 Arrays.toString(mappingInfo.indices), startedShards, mappingInfo.indices.length,
-                this.baseCfs.metadata.keyspace, this.baseCfs.metadata.name);
+                this.baseCfs.metadata.get().keyspace, this.baseCfs.metadata.get().name);
         }
         return startedShards > 0;
     }
@@ -2464,7 +2464,7 @@ public class ElasticSecondaryIndex implements Index {
         } else {
             for (ObjectCursor<IndexMetaData> cursor : event.state().metaData().indices().values()) {
                 IndexMetaData indexMetaData = cursor.value;
-                if (!indexMetaData.keyspace().equals(this.baseCfs.metadata.keyspace) || indexMetaData.mapping(this.typeName) == null)
+                if (!indexMetaData.keyspace().equals(this.baseCfs.metadata.get().keyspace) || indexMetaData.mapping(this.typeName) == null)
                     continue;
 
                 if (mappingInfo.indexToIdx == null ||
@@ -2555,7 +2555,7 @@ public class ElasticSecondaryIndex implements Index {
             mappingInfo.hasAllShardStarted() &&
             needBuild.compareAndSet(true, false))
         {
-            logger.info("start building secondary {}.{}.{}", baseCfs.keyspace.getName(), baseCfs.metadata.name, indexMetadata.name);
+            logger.info("start building secondary {}.{}.{}", baseCfs.keyspace.getName(), baseCfs.metadata.get().name, indexMetadata.name);
             baseCfs.indexManager.initIndex(this);
         }
     }
@@ -2681,7 +2681,7 @@ public class ElasticSecondaryIndex implements Index {
                         if (indexShard != null) {
                             DocumentMapper docMapper = indexInfo.indexService.mapperService().documentMapper(typeName);
                             if (logger.isDebugEnabled()) {
-                                logger.debug("truncating from ks.cf={}.{} in elasticsearch index=[{}]", baseCfs.metadata.keyspace, baseCfs.name, indexInfo.name);
+                                logger.debug("truncating from ks.cf={}.{} in elasticsearch index=[{}]", baseCfs.metadata.get().keyspace, baseCfs.name, indexInfo.name);
                             }
                             if (!indexInfo.updated)
                                 indexInfo.updated = true;

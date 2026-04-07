@@ -297,7 +297,7 @@ public class MapperService extends AbstractIndexComponent implements Closeable {
                 mapping.put("properties", properties);
             }
             String ksName = keyspace();
-            KeyspaceMetadata ksm = Schema.instance.getKSMetaDataSafe(ksName);
+            KeyspaceMetadata ksm = Schema.instance.getKeyspaceMetadata(ksName);
             try {
                 TableMetadata metadata = SchemaManager.getTableMetadata(ksName, cfName);
                 List<String> pkColNames = new ArrayList<String>(metadata.partitionKeyColumns().size() + metadata.clusteringColumns().size());

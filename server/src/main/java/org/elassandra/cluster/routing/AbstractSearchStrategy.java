@@ -19,7 +19,7 @@ import com.google.common.collect.ArrayListMultimap;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Multimap;
 
-import org.apache.cassandra.config.Schema;
+import org.apache.cassandra.schema.Schema;
 import org.apache.cassandra.db.Keyspace;
 import org.apache.cassandra.dht.Murmur3Partitioner.LongToken;
 import org.apache.cassandra.dht.Range;
@@ -107,7 +107,7 @@ public abstract class AbstractSearchStrategy {
             this.tokens = new ArrayList<Token>();
             this.tokens.add(TOKEN_MAX);
 
-            if (isRoutable(clusterState) && Schema.instance.getKSMetaData(ksName) != null) {
+            if (isRoutable(clusterState) && Schema.instance.getKeyspaceMetadata(ksName) != null) {
                 // only available when keyspaces are initialized and node joined
                 this.strategy = Keyspace.open(ksName).getReplicationStrategy();
                 this.metadata = StorageService.instance.getTokenMetadata().cloneOnlyTokenMap();
@@ -125,7 +125,7 @@ public abstract class AbstractSearchStrategy {
                 }
             } else {
                 // cluster or keyspace no available, initializing with one red shard on localNode.
-                if (logger.isDebugEnabled() && Schema.instance.getKSMetaData(ksName) == null)
+                if (logger.isDebugEnabled() && Schema.instance.getKeyspaceMetadata(ksName) == null)
                     logger.debug("keyspace [{}] not yet available", ksName);
                 this.strategy = null;
                 this.metadata = null;

@@ -23,7 +23,7 @@ import org.apache.cassandra.cql3.QueryOptions;
 import org.apache.cassandra.cql3.QueryProcessor;
 import org.apache.cassandra.cql3.ResultSet;
 import org.apache.cassandra.cql3.UntypedResultSet;
-import org.apache.cassandra.cql3.statements.ParsedStatement;
+import org.apache.cassandra.cql3.QueryHandler;
 import org.apache.cassandra.db.ConsistencyLevel;
 import org.apache.cassandra.service.ClientState;
 import org.apache.cassandra.service.QueryState;
@@ -464,8 +464,8 @@ public class FetchPhase implements SearchPhase {
         return fieldVisitor.requiredColumns(searchContext);
     }
 
-    protected ParsedStatement.Prepared getCqlPreparedStatement(SearchContext searchContext, IndexService indexService, FieldsVisitor fieldVisitor, String typeKey, boolean staticDocument) throws IOException {
-        ParsedStatement.Prepared cqlStatement = searchContext.getCqlPreparedStatement( typeKey );
+    protected QueryHandler.Prepared getCqlPreparedStatement(SearchContext searchContext, IndexService indexService, FieldsVisitor fieldVisitor, String typeKey, boolean staticDocument) throws IOException {
+        QueryHandler.Prepared cqlStatement = searchContext.getCqlPreparedStatement( typeKey );
         if (cqlStatement == null) {
             // fetch from requested stored_fields.
             NavigableSet<String> requiredColumns = requiredColumns(searchContext, fieldVisitor);
@@ -533,7 +533,7 @@ public class FetchPhase implements SearchPhase {
             if (docPk.isStaticDocument)
                 typeKey += "_static";
 
-            ParsedStatement.Prepared cqlStatement = getCqlPreparedStatement(searchContext, indexService, fieldVisitor, typeKey, docPk.isStaticDocument);
+            QueryHandler.Prepared cqlStatement = getCqlPreparedStatement(searchContext, indexService, fieldVisitor, typeKey, docPk.isStaticDocument);
             if (cqlStatement != null) {
                 ResultMessage result = cqlStatement.statement.executeInternal(new QueryState(ClientState.forInternalCalls()), QueryOptions.forInternalCalls(ConsistencyLevel.ONE, docPk.serialize(cqlStatement)));
                 if (result instanceof ResultMessage.Rows) {

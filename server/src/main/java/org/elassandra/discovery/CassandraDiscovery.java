@@ -31,7 +31,8 @@ import org.apache.cassandra.exceptions.ConfigurationException;
 import org.apache.cassandra.exceptions.UnavailableException;
 import org.apache.cassandra.exceptions.WriteTimeoutException;
 import org.apache.cassandra.gms.*;
-import org.apache.cassandra.service.MigrationManager;
+import org.apache.cassandra.locator.InetAddressAndPort;
+import org.apache.cassandra.schema.MigrationManager;
 import org.apache.cassandra.service.StorageService;
 import org.apache.cassandra.transport.Event;
 import org.apache.cassandra.utils.FBUtilities;
@@ -131,7 +132,7 @@ public class CassandraDiscovery extends AbstractLifecycleComponent implements Di
 
     private final GossipCluster gossipCluster;
 
-    private final InetAddress localAddress;
+    private final InetAddressAndPort localAddress;
     private final String localDc;
 
     private final RoutingTableUpdateTaskExecutor routingTableUpdateTaskExecutor;
@@ -178,8 +179,8 @@ public class CassandraDiscovery extends AbstractLifecycleComponent implements Di
         this.masterService.setClusterStateSupplier(() -> committedState.get());
         this.masterService.setClusterStatePublisher(this::publish);
 
-        this.localAddress = FBUtilities.getBroadcastAddress();
-        this.localDc = DatabaseDescriptor.getEndpointSnitch().getDatacenter(FBUtilities.getBroadcastAddress());
+        this.localAddress = FBUtilities.getBroadcastAddressAndPort();
+        this.localDc = DatabaseDescriptor.getEndpointSnitch().getDatacenter(this.localAddress);
 
         this.gossipCluster = new GossipCluster();
         this.pendingStatesQueue = new PendingClusterStatesQueue(logger, MAX_PENDING_CLUSTER_STATES_SETTING.get(settings));
@@ -354,7 +355,7 @@ public class CassandraDiscovery extends AbstractLifecycleComponent implements Di
                     // new node
                     ImmutableMap.Builder<String, String> attrs =  ImmutableMap.builder();
                     attrs.put("dc", localDc);
-                    attrs.put("rack", DatabaseDescriptor.getEndpointSnitch().getRack(endpoint));
+                    attrs.put("rack", DatabaseDescriptor.getEndpointSnitch().getRack(InetAddressAndPort.getByAddress(endpoint)));
                     logger.debug("Add node NEW host_id={} endpoint={} internal_ip={}, rpc_address={}, status={}",
                         hostId, NetworkAddress.format(endpoint),
                         internalIp == null ? null : NetworkAddress.format(internalIp),
@@ -379,7 +380,7 @@ public class CassandraDiscovery extends AbstractLifecycleComponent implements Di
 
                         if (!status.isAlive()) {
                             // node probably down, notify metaDataVersionAckListener..
-                            notifyHandler(Gossiper.instance.getEndpointStateForEndpoint(endpoint));
+                            notifyHandler(Gossiper.instance.getEndpointStateForEndpoint(InetAddressAndPort.getByAddress(endpoint)));
                         }
                     }
 
@@ -452,22 +453,22 @@ public class CassandraDiscovery extends AbstractLifecycleComponent implements Di
             logger.info("localNode name={} id={} localAddress={} publish_host={}", localNode().getName(), localNode().getId(), localAddress, localNode().getAddress());
 
             // initialize cluster from cassandra local token map
-            for(InetAddress endpoint : StorageService.instance.getTokenMetadata().getAllEndpoints()) {
+            for(InetAddressAndPort endpoint : StorageService.instance.getTokenMetadata().getAllEndpoints()) {
                 if (!this.localAddress.equals(endpoint) && this.localDc.equals(DatabaseDescriptor.getEndpointSnitch().getDatacenter(endpoint))) {
                     String hostId = StorageService.instance.getHostId(endpoint).toString();
-                    UntypedResultSet rs = executeInternal("SELECT preferred_ip, rpc_address from system." + SystemKeyspace.PEERS +"  WHERE peer = ?", endpoint);
+                    UntypedResultSet rs = executeInternal("SELECT preferred_ip, rpc_address from system." + SystemKeyspace.LEGACY_PEERS +"  WHERE peer = ?", endpoint.address);
                     if (!rs.isEmpty()) {
                         UntypedResultSet.Row row = rs.one();
                         EndpointState epState = Gossiper.instance.getEndpointStateForEndpoint(endpoint);
-                        gossipCluster.update(endpoint, epState, "discovery-init", false);
+                        gossipCluster.update(endpoint.address, epState, "discovery-init", false);
                     }
                 }
             }
 
             // walk the gossip states
-            for (Entry<InetAddress, EndpointState> entry : Gossiper.instance.getEndpointStates()) {
+            for (Entry<InetAddressAndPort, EndpointState> entry : Gossiper.instance.getEndpointStateMap().entrySet()) {
                 EndpointState epState = entry.getValue();
-                InetAddress   endpoint = entry.getKey();
+                InetAddressAndPort endpoint = entry.getKey();
 
                 if (!epState.getStatus().equals(VersionedValue.STATUS_NORMAL) && !epState.getStatus().equals(VersionedValue.SHUTDOWN)) {
                     logger.info("Ignoring node state={}", epState);
@@ -479,7 +480,7 @@ public class CassandraDiscovery extends AbstractLifecycleComponent implements Di
                     if (vv != null) {
                         String hostId = vv.value;
                         if (!this.localNode().getId().equals(hostId)) {
-                            gossipCluster.update(endpoint, epState, "discovery-init-gossip", false);
+                            gossipCluster.update(endpoint.address, epState, "discovery-init-gossip", false);
                         }
                     }
                 }
@@ -622,11 +623,11 @@ public class CassandraDiscovery extends AbstractLifecycleComponent implements Di
         }
     }
 
-    private boolean isLocal(InetAddress endpoint) {
+    private boolean isLocal(InetAddressAndPort endpoint) {
         return DatabaseDescriptor.getEndpointSnitch().getDatacenter(endpoint).equals(localDc);
     }
 
-    private boolean isMember(InetAddress endpoint) {
+    private boolean isMember(InetAddressAndPort endpoint) {
         return !this.localAddress.equals(endpoint) && DatabaseDescriptor.getEndpointSnitch().getDatacenter(endpoint).equals(localDc);
     }
 
@@ -636,7 +637,7 @@ public class CassandraDiscovery extends AbstractLifecycleComponent implements Di
      */
     public boolean isNormal(DiscoveryNode node) {
         // endpoint address = C* broadcast address = Elasticsearch node name (transport may be bound to C* internal or C* RPC broadcast)
-        EndpointState state = Gossiper.instance.getEndpointStateForEndpoint(InetAddresses.forString(node.getName()));
+        EndpointState state = Gossiper.instance.getEndpointStateForEndpoint(InetAddressAndPort.getByName(node.getName()));
         if (state == null) {
             logger.warn("Node endpoint address=[{}] name=[{}] state not found", node.getInetAddress(), node.getName());
             return false;
@@ -659,21 +660,21 @@ public class CassandraDiscovery extends AbstractLifecycleComponent implements Di
     }
 
     @Override
-    public void beforeChange(InetAddress endpoint, EndpointState state, ApplicationState appState, VersionedValue value) {
+    public void beforeChange(InetAddressAndPort endpoint, EndpointState state, ApplicationState appState, VersionedValue value) {
         //logger.debug("beforeChange Endpoint={} EndpointState={}  ApplicationState={} value={}", endpoint, state, appState, value);
     }
 
     @Override
-    public void onChange(InetAddress endpoint, ApplicationState state, VersionedValue versionValue) {
+    public void onChange(InetAddressAndPort endpoint, ApplicationState state, VersionedValue versionValue) {
         EndpointState epState = Gossiper.instance.getEndpointStateForEndpoint(endpoint);
-        traceEpState(endpoint, epState);
+        traceEpState(endpoint.address, epState);
 
         String hostId = epState.getApplicationState(ApplicationState.HOST_ID).value;
         if (hostId != null && isMember(endpoint)) {
             if (logger.isTraceEnabled())
                 logger.trace("Endpoint={} ApplicationState={} value={}", endpoint, state, versionValue);
 
-            gossipCluster.update(endpoint, epState, "onChange-" + endpoint, true);
+            gossipCluster.update(endpoint.address, epState, "onChange-" + endpoint, true);
         }
 
         // self status update.
@@ -727,41 +728,41 @@ public class CassandraDiscovery extends AbstractLifecycleComponent implements Di
     }
 
     @Override
-    public void onAlive(InetAddress endpoint, EndpointState epState) {
+    public void onAlive(InetAddressAndPort endpoint, EndpointState epState) {
         if (isMember(endpoint)) {
-            traceEpState(endpoint, epState);
+            traceEpState(endpoint.address, epState);
             logger.debug("Endpoint={} isAlive={} => update node + connecting", endpoint, epState.isAlive());
-            gossipCluster.update(endpoint, epState, "onAlive-" + endpoint, true);
+            gossipCluster.update(endpoint.address, epState, "onAlive-" + endpoint, true);
         }
     }
 
     @Override
-    public void onDead(InetAddress endpoint, EndpointState epState) {
+    public void onDead(InetAddressAndPort endpoint, EndpointState epState) {
         if (isMember(endpoint)) {
-            traceEpState(endpoint, epState);
+            traceEpState(endpoint.address, epState);
             logger.warn("Endpoint={} isAlive={} => update node + disconnecting", endpoint, epState.isAlive());
-            gossipCluster.update(endpoint, epState, "onDead-" + endpoint, true);
+            gossipCluster.update(endpoint.address, epState, "onDead-" + endpoint, true);
         }
     }
 
     @Override
-    public void onRestart(InetAddress endpoint, EndpointState epState) {
+    public void onRestart(InetAddressAndPort endpoint, EndpointState epState) {
         if (isMember(endpoint)) {
-            traceEpState(endpoint, epState);
-            gossipCluster.update(endpoint, epState, "onAlive-" + endpoint, true);
+            traceEpState(endpoint.address, epState);
+            gossipCluster.update(endpoint.address, epState, "onAlive-" + endpoint, true);
         }
     }
 
     @Override
-    public void onJoin(InetAddress endpoint, EndpointState epState) {
+    public void onJoin(InetAddressAndPort endpoint, EndpointState epState) {
         if (isLocal(endpoint)) {
-            traceEpState(endpoint, epState);
-            gossipCluster.update(endpoint, epState, "onAlive-" + endpoint, true);
+            traceEpState(endpoint.address, epState);
+            gossipCluster.update(endpoint.address, epState, "onAlive-" + endpoint, true);
         }
     }
 
     @Override
-    public void onRemove(InetAddress endpoint) {
+    public void onRemove(InetAddressAndPort endpoint) {
         if (this.localAddress.equals(endpoint)) {
             try {
                 setSearchEnabled(false);
@@ -777,7 +778,7 @@ public class CassandraDiscovery extends AbstractLifecycleComponent implements Di
                     if (!localNode().getId().equals(hostId) && gossipCluster.contains(hostUuid)) {
                         logger.warn("Removing node ip={} node={}  => disconnecting", endpoint, hostId);
                         notifyHandler(Gossiper.instance.getEndpointStateForEndpoint(endpoint));
-                        gossipCluster.remove(hostUuid, "onRemove-" + endpoint.getHostAddress());
+                        gossipCluster.remove(hostUuid, "onRemove-" + endpoint.address.getHostAddress());
                     }
                 }
             }
@@ -1055,9 +1056,7 @@ public class CassandraDiscovery extends AbstractLifecycleComponent implements Di
                         clusterChangedEvent.source(), clusterChangedEvent.schemaUpdate(), mutations);
 
                 // unless update is UPDATE_ASYNCHRONOUS, block until schema is applied.
-                Future<?> future = MigrationManager.announce(mutations, this.clusterService.getSchemaManager().getInhibitedSchemaListeners());
-                if (!SchemaUpdate.UPDATE_ASYNCHRONOUS.equals(clusterChangedEvent.schemaUpdate()))
-                    FBUtilities.waitOnFuture(future);
+                MigrationManager.announce(mutations, this.clusterService.getSchemaManager().getInhibitedSchemaListeners());
 
                 // build routing table when keyspaces are created locally
                 newClusterState = ClusterState.builder(newClusterState)
