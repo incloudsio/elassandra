@@ -38,6 +38,8 @@ jobs:
           echo "JAVA11_HOME=${{ steps.jdk11.outputs.path }}" >> $GITHUB_ENV
           echo "JAVA12_HOME=${{ steps.jdk11.outputs.path }}" >> $GITHUB_ENV
           echo "JAVA_HOME=${{ steps.jdk11.outputs.path }}" >> $GITHUB_ENV
+          # server/cassandra Ant validate-build-conf (Ant JVM = Gradle JVM = JDK 11 here)
+          echo "CASSANDRA_USE_JDK11=true" >> $GITHUB_ENV
       - name: Check Cassandra version vs submodule
         run: ./scripts/check-cassandra-submodule.sh
       - name: Assemble
