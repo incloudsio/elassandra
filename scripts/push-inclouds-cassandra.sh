@@ -18,7 +18,7 @@ INCLOUDS="${INCLOUDS_REMOTE:-https://github.com/incloudsio/cassandra.git}"
 
 echo "==> 3.11 line (elassandra server/cassandra submodule)"
 SUB="$ROOT/server/cassandra"
-if [[ ! -d "$SUB/.git" ]]; then
+if [[ ! -d "$SUB" ]] || ! git -C "$SUB" rev-parse --git-dir &>/dev/null; then
   echo "error: $SUB is not a git checkout (run: git submodule update --init server/cassandra)" >&2
   exit 1
 fi
@@ -32,7 +32,7 @@ fi
 
 echo "==> 4.0 port (separate clone; set CASSANDRA_40_DIR if not default)"
 C40="${CASSANDRA_40_DIR:-$ROOT/../cassandra-4.0-elassandra}"
-if [[ -d "$C40/.git" ]]; then
+if [[ -d "$C40" ]] && git -C "$C40" rev-parse --git-dir &>/dev/null; then
   (
     cd "$C40"
     git remote get-url inclouds &>/dev/null || git remote add inclouds "$INCLOUDS"
