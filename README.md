@@ -1,4 +1,4 @@
-# Elassandra [![Build](https://github.com/incloudsio/elassandra/actions/workflows/build.yml/badge.svg)](https://github.com/incloudsio/elassandra/actions/workflows/build.yml) [![Documentation Status](https://readthedocs.org/projects/elassandra/badge/?version=latest)](https://elassandra.readthedocs.io/en/latest/?badge=latest) [![GitHub release](https://img.shields.io/github/v/release/incloudsio/elassandra.svg)](https://github.com/incloudsio/elassandra/releases/latest)
+# Elassandra [![Build](https://github.com/incloudsio/elassandra/actions/workflows/build.yml/badge.svg)](https://github.com/incloudsio/elassandra/actions/workflows/build.yml) [![Documentation](https://img.shields.io/badge/docs-elassandra.org-latest-informational)](https://elassandra.org/en/latest/?badge=latest) [![GitHub release](https://img.shields.io/github/v/release/incloudsio/elassandra.svg)](https://github.com/incloudsio/elassandra/releases/latest)
 
 ![Elassandra Logo](elassandra-logo.png)
 
@@ -8,7 +8,11 @@ This repository is a **fork** of [Strapdata Elassandra](https://github.com/strap
 
 ## Roadmap: Cassandra 4.0.x + OpenSearch 1.3.x
 
-This branch currently ships **Elasticsearch 6.8.4** embedded with **Cassandra 3.11.9** ([incloudsio/cassandra](https://github.com/incloudsio/cassandra) in `server/cassandra`). The active modernization program targets **Apache Cassandra 4.0.x** and **OpenSearch 1.3.x** (Elasticsearch 7.10 lineage). See [CONTRIBUTING.md](CONTRIBUTING.md), [RELEASING.md](RELEASING.md), and the docs under `docs/elassandra/source/` (`migration.rst`, `developer/cassandra_fork_inventory.rst`, `developer/cassandra_40_rebase.rst`, `developer/cassandra_40_jvm_port.rst`, `developer/opensearch_porting_guide.rst`). **Scripts:** `scripts/export-cassandra-elassandra-patches.sh`, `scripts/bootstrap-cassandra-40-worktree.sh`, `scripts/check-cassandra-submodule.sh`, `scripts/use-cassandra-40-submodule.sh`, `scripts/clone-opensearch-upstream.sh`, `scripts/opensearch-port-bootstrap.sh`.
+The **`modernization/cassandra4-opensearch13`** branch embeds **Elasticsearch 6.8.4** on **Apache Cassandra 4.0.x** via the [incloudsio/cassandra](https://github.com/incloudsio/cassandra) fork checked out under `server/cassandra` (branch **`cassandra-4.0.x-elassandra`**). That line includes a full JVM port of the Elassandra bridge to Cassandra 4.0 APIs (`InetAddressAndPort`, `org.apache.cassandra.schema.*`, CQL `QueryHandler`, secondary index lifecycle, packaging, and test fixes). **CI** builds with **GitHub Actions** (`.github/workflows/build.yml`), **Java 11** (`JAVA11_HOME`) for Gradle and the Cassandra Ant build, and **Python 3** for installing `cqlsh` libraries into `.deb` / `.rpm` packages (Python 2 is no longer required on the build host).
+
+**Next major target:** **OpenSearch 1.3.x** (Elasticsearch 7.10 lineage) as the embedded search engine, with the same Cassandra 4.0 base. Older release branches may still ship **Cassandra 3.11.x**; see submodule pointers and [CONTRIBUTING.md](CONTRIBUTING.md).
+
+Developer references: [RELEASING.md](RELEASING.md) and `docs/elassandra/source/` (`migration.rst`, `developer/cassandra_fork_inventory.rst`, `developer/cassandra_40_rebase.rst`, `developer/cassandra_40_jvm_port.rst`, `developer/opensearch_porting_guide.rst`). **Scripts:** `scripts/export-cassandra-elassandra-patches.sh`, `scripts/bootstrap-cassandra-40-worktree.sh`, `scripts/check-cassandra-submodule.sh`, `scripts/use-cassandra-40-submodule.sh`, `scripts/clone-opensearch-upstream.sh`, `scripts/opensearch-port-bootstrap.sh`.
 
 ## What Elassandra is (today)
 
@@ -21,7 +25,7 @@ Elasticsearch code runs inside Cassandra JVMs to index and query Cassandra data;
 
 Elassandra supports Cassandra vnodes and scales horizontally by adding more nodes without the need to reshard indices.
 
-Documentation: build from [docs/elassandra](docs/elassandra) or read [Read the Docs](https://elassandra.readthedocs.io/en/latest/). The canonical entry point is [elassandra.org](https://elassandra.org/).
+Documentation: browse **[elassandra.org](https://elassandra.org/en/latest/?badge=latest)** (same Sphinx content as the historical Read the Docs mirror). You can also build from [docs/elassandra](docs/elassandra) locally.
 
 ## Benefits of Elassandra
 
@@ -49,7 +53,7 @@ For Elasticsearch users, elassandra provides useful features :
 
 ## Quick start
 
-* [Quick Start](https://elassandra.readthedocs.io/en/latest/quickstart.html) for a single-node Docker example (image tags may still reference legacy registries until new releases are published).
+* [Quick Start](https://elassandra.org/en/quickstart.html) for a single-node Docker example (image tags may still reference legacy registries until new releases are published).
 * [Deploy Elassandra by launching a Google Kubernetes Engine](./docs/google-kubernetes-tutorial.md):
 
   [![Open in Cloud Shell](https://gstatic.com/cloudssh/images/open-btn.png)](https://console.cloud.google.com/cloudshell/open?git_repo=https://github.com/strapdata/elassandra-google-k8s-marketplace&tutorial=docs/google-kubernetes-tutorial.md)
@@ -111,7 +115,7 @@ docker run -it --rm strapdata/cqlsh:0.1 node.example.com
 
 ## Installation
 
-For **releases from this branch**, use **Java 8** for Cassandra and **Java 12** for the Elasticsearch/Gradle build (see [CONTRIBUTING.md](CONTRIBUTING.md)). The **Cassandra 4 + OpenSearch 1.3** line will standardize on **Java 11+**.
+For **`modernization/cassandra4-opensearch13`**, use **Java 11** for Gradle and the Cassandra Ant build (`JAVA11_HOME`; see [CONTRIBUTING.md](CONTRIBUTING.md) and CI). Older release branches may still use **Java 8** / **Java 12** as documented there. The **OpenSearch 1.3** search-engine line will stay on **Java 11+** with Cassandra 4.0.
 
 * [Download](https://github.com/incloudsio/elassandra/releases) and extract the distribution tarball
 * Define the CASSANDRA_HOME environment variable : `export CASSANDRA_HOME=<extracted_directory>`
