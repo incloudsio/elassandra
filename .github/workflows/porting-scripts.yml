@@ -11,7 +11,15 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
+          fetch-depth: 0
           submodules: true
+      - name: Unshallow Cassandra submodule (merge-base with Apache tag)
+        run: |
+          cd server/cassandra
+          if [ "$(git rev-parse --is-shallow-repository 2>/dev/null)" = true ]; then
+            echo "Unshallowing server/cassandra for merge-base with Apache tags..."
+            git fetch --unshallow origin 2>/dev/null || git fetch origin --depth=100000
+          fi
       - name: Export patches (validates script + submodule + fetch)
         run: ./scripts/export-cassandra-elassandra-patches.sh
       - name: List patch count
