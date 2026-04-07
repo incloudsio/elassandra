@@ -6,8 +6,11 @@ TAG="${OPENSEARCH_TAG:-1.3.20}"
 DEST="${OPENSEARCH_CLONE_DIR:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)/../opensearch-upstream}"
 
 if [[ -d "$DEST/.git" ]]; then
-  echo "Directory already exists: $DEST"
-  echo "  cd \"$DEST\" && git fetch --tags origin && git checkout \"$TAG\""
+  echo "Updating existing clone: $DEST"
+  git -C "$DEST" remote get-url origin &>/dev/null || \
+    git -C "$DEST" remote add origin https://github.com/opensearch-project/OpenSearch.git
+  git -C "$DEST" fetch --tags origin
+  echo "Ready. Example: cd \"$DEST\" && git checkout -B elassandra-os-1.3 \"$TAG\""
   exit 0
 fi
 

@@ -25,3 +25,5 @@ Primary touchpoints in this repo
 * Tests under ``server/src/test/java/org/elassandra/``
 
 After the port compiles, run ``./scripts/check-cassandra-submodule.sh`` and ``./gradlew :server:compileJava`` (JDK **8** for C* / legacy ES tree on this branch, unless you have already rebased the search engine to OpenSearch and raised the minimum Java version).
+
+**Progress in-tree:** ``ElasticSecondaryIndex`` / ``ExtendedElasticSecondaryIndex`` are updated for Cassandra **4.0** index APIs (``TableMetadata``, ``ColumnMetadata``, ``RegularAndStaticColumns``, ``WriteContext``). Remaining modules still reference ``CFMetaData`` / ``ColumnDefinition`` and must be ported using ``Schema.instance.getTableMetadata`` / ``KeyspaceMetadata`` helpers from the 4.0 sources — notably ``org.elassandra.cluster.SchemaManager``, ``QueryManager``, ``ColumnDescriptor``, ``SchemaListener``, and Elasticsearch bridge classes under ``org.elasticsearch.cluster`` / ``org.elasticsearch.index.mapper`` that import Cassandra schema types.

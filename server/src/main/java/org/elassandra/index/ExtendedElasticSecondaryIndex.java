@@ -23,14 +23,14 @@ import java.util.Optional;
 import java.util.concurrent.Callable;
 import java.util.function.BiFunction;
 
-import org.apache.cassandra.config.CFMetaData;
-import org.apache.cassandra.config.ColumnDefinition;
 import org.apache.cassandra.cql3.Operator;
 import org.apache.cassandra.db.ColumnFamilyStore;
 import org.apache.cassandra.db.DecoratedKey;
-import org.apache.cassandra.db.PartitionColumns;
 import org.apache.cassandra.db.ReadCommand;
+import org.apache.cassandra.db.ReadExecutionController;
+import org.apache.cassandra.db.RegularAndStaticColumns;
 import org.apache.cassandra.db.SystemKeyspace;
+import org.apache.cassandra.db.WriteContext;
 import org.apache.cassandra.db.filter.RowFilter;
 import org.apache.cassandra.db.marshal.AbstractType;
 import org.apache.cassandra.db.partitions.PartitionIterator;
@@ -39,8 +39,9 @@ import org.apache.cassandra.exceptions.InvalidRequestException;
 import org.apache.cassandra.index.Index;
 import org.apache.cassandra.index.IndexRegistry;
 import org.apache.cassandra.index.transactions.IndexTransaction.Type;
+import org.apache.cassandra.schema.ColumnMetadata;
 import org.apache.cassandra.schema.IndexMetadata;
-import org.apache.cassandra.utils.concurrent.OpOrder.Group;
+import org.apache.cassandra.schema.TableMetadata;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -75,8 +76,8 @@ public class ExtendedElasticSecondaryIndex implements Index {
         return new DummySecondaryIndex();
     }
 
-    public static Map<String, String> validateOptions(Map<String, String> options, CFMetaData cfm) {
-        return Collections.EMPTY_MAP;
+    public static Map<String, String> validateOptions(Map<String, String> options, TableMetadata metadata) {
+        return Collections.emptyMap();
     }
 
     @Override
@@ -135,12 +136,12 @@ public class ExtendedElasticSecondaryIndex implements Index {
     }
 
     @Override
-    public boolean dependsOn(ColumnDefinition column) {
+    public boolean dependsOn(ColumnMetadata column) {
         return elasticSecondaryIndex.dependsOn(column);
     }
 
     @Override
-    public boolean supportsExpression(ColumnDefinition column, Operator operator) {
+    public boolean supportsExpression(ColumnMetadata column, Operator operator) {
         return elasticSecondaryIndex.supportsExpression(column, operator);
     }
 
@@ -165,8 +166,8 @@ public class ExtendedElasticSecondaryIndex implements Index {
     }
 
     @Override
-    public Indexer indexerFor(DecoratedKey key, PartitionColumns columns, int nowInSec, Group opGroup, Type transactionType) {
-        return elasticSecondaryIndex.indexerFor(key, columns, nowInSec, opGroup, transactionType);
+    public Indexer indexerFor(DecoratedKey key, RegularAndStaticColumns columns, int nowInSec, WriteContext writeContext, Type transactionType) {
+        return elasticSecondaryIndex.indexerFor(key, columns, nowInSec, writeContext, transactionType);
     }
 
 
@@ -217,7 +218,7 @@ public class ExtendedElasticSecondaryIndex implements Index {
 
         @Override
         public Optional<ColumnFamilyStore> getBackingTable() {
-            return null;
+            return Optional.empty();
         }
 
         @Override
@@ -246,12 +247,12 @@ public class ExtendedElasticSecondaryIndex implements Index {
         }
 
         @Override
-        public boolean dependsOn(ColumnDefinition column) {
+        public boolean dependsOn(ColumnMetadata column) {
             return false;
         }
 
         @Override
-        public boolean supportsExpression(ColumnDefinition column, Operator operator) {
+        public boolean supportsExpression(ColumnMetadata column, Operator operator) {
             return false;
         }
 
@@ -276,7 +277,7 @@ public class ExtendedElasticSecondaryIndex implements Index {
         }
 
         @Override
-        public Indexer indexerFor(DecoratedKey key, PartitionColumns columns, int nowInSec, Group opGroup,
+        public Indexer indexerFor(DecoratedKey key, RegularAndStaticColumns columns, int nowInSec, WriteContext writeContext,
                 Type transactionType) {
             return null;
         }
@@ -288,7 +289,9 @@ public class ExtendedElasticSecondaryIndex implements Index {
 
         @Override
         public Searcher searcherFor(ReadCommand command) {
-            return null;
+            return (ReadExecutionController executionController) -> {
+                throw new IllegalStateException("CQL query not supported.");
+            };
         }
     }
 }
