@@ -45,6 +45,8 @@ build/
 
 # needed in case docs build is run...maybe we can configure doc build to generate files under build?
 html_docs
+# Local Python venv for ad-hoc Sphinx/docs checks (not part of the repo)
+.venv-docs-test/
 
 # random old stuff that we should look at the necessity of...
 /tmp/
