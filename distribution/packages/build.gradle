@@ -342,7 +342,7 @@ Closure commonDebConfig() {
     requires 'libc6'
     requires 'adduser'
 
-    requires('python', '2.7', GREATER | EQUAL)
+    requires('python3')
     requires('openjdk-8-jre-headless').or("java8-runtime")
     recommends('ntp')
     conflicts('cassandra')
@@ -351,11 +351,12 @@ Closure commonDebConfig() {
       from('src/deb/lintian/cassandra')
     }
 
-    into('/usr/lib/python2.7/dist-packages') {
-      from "build/packaging/pylib/usr/lib/python2.7/dist-packages"
+    into('/usr/lib') {
+      from("build/packaging/pylib/usr/lib") {
+        include 'python3/dist-packages/cqlshlib/**'
+      }
       fileMode 0664
     }
-    directory("/usr/lib/python2.7/dist-packages/cqlshlib", 0755)
   }
 }
 
@@ -372,7 +373,7 @@ Closure commonRpmConfig() {
 
     packageGroup 'Application/Internet'
     requires '/bin/bash'
-    requires('python', '2.7', GREATER | EQUAL)
+    requires('python3')
     requires('jre', "1.8.0", GREATER | EQUAL)
     recommends('ntp')
     conflicts('cassandra')

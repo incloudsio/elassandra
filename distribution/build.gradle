@@ -179,37 +179,43 @@ configure(subprojects.findAll { ['packages'].contains(it.name) }) {
 
   task setupPylibDeb(type: Exec) {
     dependsOn fillTmpPylibDir
-    workingDir "${packagingFiles}/pylib"
-    commandLine "python2", "setup.py", "install", "--no-compile",
-            "--root", "${workingDir}", "--install-lib", "usr/lib/python2.7/dist-packages"
-    outputs.dir "${workingDir}/usr/lib/python2.7/dist-packages"
+    def pylibRoot = file("${packagingFiles}/pylib")
+    workingDir pylibRoot
+    commandLine "python3", "setup.py", "install", "--no-compile",
+            "--root", pylibRoot.absolutePath, "--install-lib", "usr/lib/python3/dist-packages"
+    outputs.dir file("${pylibRoot}/usr/lib/python3/dist-packages")
   }
 
   task setupPylibRpm(type: Exec) {
     dependsOn fillTmpPylibDir
-    workingDir "${packagingFiles}/pylib"
-    commandLine "python2", "setup.py", "install", "--no-compile",
-            "--root", "${workingDir}", "--install-lib", "usr/lib/python2.7/site-packages"
-    outputs.dir "${workingDir}/usr/lib/python2.7/site-packages"
+    def pylibRoot = file("${packagingFiles}/pylib")
+    workingDir pylibRoot
+    executable "bash"
+    args "-c", "PYLIB=\$(python3 -c 'import sys; print(\"usr/lib/python%d.%d/site-packages\" % sys.version_info[:2])') && " +
+            "python3 setup.py install --no-compile --root \"${pylibRoot.absolutePath}\" --install-lib \"\$PYLIB\""
+    outputs.dir file("${pylibRoot}/usr/lib")
   }
 
   apply plugin: 'nebula.ospackage-base'
   ospackage {
     println("COPYING pyfiles ################################ ")
     if (project.name.toLowerCase().contains('rpm')) {
-      into('/usr/lib/python2.7/site-packages') {
-        from "${packagingFiles}/pylib/usr/lib/python2.7/site-packages"
+      // Preserve pythonX.Y/site-packages/cqlshlib/... (install path depends on build host Python)
+      into('/usr/lib') {
+        from("${packagingFiles}/pylib/usr/lib") {
+          include 'python*/site-packages/cqlshlib/**'
+        }
         fileMode 0664
       }
-      directory("/usr/lib/python2.7/site-packages/cqlshlib", 0755)
     }
     else if (project.name.toLowerCase().contains('deb')) {
       println("COPYING DEB")
-      into('/usr/lib/python2.7/dist-packages') {
-        from "${packagingFiles}/pylib/usr/lib/python2.7/dist-packages"
+      into('/usr/lib') {
+        from("${packagingFiles}/pylib/usr/lib") {
+          include 'python3/dist-packages/cqlshlib/**'
+        }
         fileMode 0664
       }
-      directory("/usr/lib/python2.7/dist-packages/cqlshlib", 0755)
     }
   }
 }
