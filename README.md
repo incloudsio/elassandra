@@ -1,4 +1,4 @@
-# Elassandra [![Build](https://github.com/incloudsio/elassandra/actions/workflows/build.yml/badge.svg)](https://github.com/incloudsio/elassandra/actions/workflows/build.yml) [![Documentation](https://img.shields.io/badge/docs-elassandra.org-latest-informational)](https://elassandra.org/en/latest/?badge=latest) [![GitHub release](https://img.shields.io/github/v/release/incloudsio/elassandra.svg)](https://github.com/incloudsio/elassandra/releases/latest)
+# Elassandra [![Build](https://github.com/incloudsio/elassandra/actions/workflows/build.yml/badge.svg)](https://github.com/incloudsio/elassandra/actions/workflows/build.yml) [![Documentation Status](https://readthedocs.org/projects/elassandra-ng/badge/?version=latest)](https://elassandra-ng.readthedocs.io/en/latest/?badge=latest) [![GitHub release](https://img.shields.io/github/v/release/incloudsio/elassandra.svg)](https://github.com/incloudsio/elassandra/releases/latest)
 
 ![Elassandra Logo](elassandra-logo.png)
 
@@ -25,7 +25,7 @@ Elasticsearch code runs inside Cassandra JVMs to index and query Cassandra data;
 
 Elassandra supports Cassandra vnodes and scales horizontally by adding more nodes without the need to reshard indices.
 
-Documentation: browse **[elassandra.org](https://elassandra.org/en/latest/?badge=latest)** (same Sphinx content as the historical Read the Docs mirror). You can also build from [docs/elassandra](docs/elassandra) locally.
+Documentation: **[elassandra.org](https://elassandra.org/en/latest/)** (project site) and **[Read the Docs — elassandra-ng](https://elassandra-ng.readthedocs.io/en/latest/?badge=latest)** (hosted Sphinx build). You can also build from [docs/elassandra](docs/elassandra) locally.
 
 ## Benefits of Elassandra
 
