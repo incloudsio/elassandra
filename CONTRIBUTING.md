@@ -69,8 +69,10 @@ Then, to build from sources:
       
       export JAVA8_HOME=/path/to/jdk-8
       export JAVA9_HOME=/path/to/jdk-9
-      export JAVA12_HOME=/path/to/jdk-12
-      export JAVA_HOME=/path/to/jdk-12
+      export JAVA11_HOME=/path/to/jdk-11
+      # Optional legacy alias if you do not set JAVA11_HOME:
+      # export JAVA12_HOME=/path/to/jdk-11
+      export JAVA_HOME=/path/to/jdk-11
       export CASSANDRA_JAVA_HOME=/path/to/jdk-8
       ./gradlew clean assemble -Dbuild.snapshot=false
       

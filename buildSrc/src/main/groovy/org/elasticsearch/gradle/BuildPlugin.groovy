@@ -374,7 +374,11 @@ class BuildPlugin implements Plugin<Project> {
     }
 
     private static String findCompilerJavaHome() {
-        String compilerJavaHome = System.getenv('JAVA12_HOME')
+        // Prefer JAVA11_HOME (Temurin and other distributions often no longer ship JDK 12); keep JAVA12_HOME for older setups.
+        String compilerJavaHome = System.getenv('JAVA11_HOME')
+        if (compilerJavaHome == null) {
+            compilerJavaHome = System.getenv('JAVA12_HOME')
+        }
         final String compilerJavaProperty = System.getProperty('compiler.java')
         if (compilerJavaProperty != null) {
             compilerJavaHome = findJavaHome(compilerJavaProperty)
