@@ -1,10 +1,10 @@
-# Elassandra [![Build](https://github.com/maxts/elassandra/actions/workflows/build.yml/badge.svg)](https://github.com/maxts/elassandra/actions/workflows/build.yml) [![Documentation Status](https://readthedocs.org/projects/elassandra/badge/?version=latest)](https://elassandra.readthedocs.io/en/latest/?badge=latest) [![GitHub release](https://img.shields.io/github/v/release/maxts/elassandra.svg)](https://github.com/maxts/elassandra/releases/latest)
+# Elassandra [![Build](https://github.com/incloudsio/elassandra/actions/workflows/build.yml/badge.svg)](https://github.com/incloudsio/elassandra/actions/workflows/build.yml) [![Documentation Status](https://readthedocs.org/projects/elassandra/badge/?version=latest)](https://elassandra.readthedocs.io/en/latest/?badge=latest) [![GitHub release](https://img.shields.io/github/v/release/incloudsio/elassandra.svg)](https://github.com/incloudsio/elassandra/releases/latest)
 
 ![Elassandra Logo](elassandra-logo.png)
 
 **Site:** [https://elassandra.org/](https://elassandra.org/)
 
-This repository is a **fork** of [Strapdata Elassandra](https://github.com/strapdata/elassandra). It is maintained for the community under **Elassandra.org**, with **inClouds** and **Maxim Tsarenko (maxts)** among the active maintainers. Original Strapdata history and copyright remain with Strapdata and other contributors; see [License](#license) and [NOTICE.txt](NOTICE.txt).
+This repository is a **fork** of [Strapdata Elassandra](https://github.com/strapdata/elassandra). The maintained community home is **[github.com/incloudsio/elassandra](https://github.com/incloudsio/elassandra)** under **Elassandra.org**, with **inClouds** and **Maxim Tsarenko (maxts)** among the active maintainers. Original Strapdata history and copyright remain with Strapdata and other contributors; see [License](#license) and [NOTICE.txt](NOTICE.txt).
 
 ## Roadmap: Cassandra 4.0.x + OpenSearch 1.3.x
 
@@ -113,7 +113,7 @@ docker run -it --rm strapdata/cqlsh:0.1 node.example.com
 
 For **releases from this branch**, use **Java 8** for Cassandra and **Java 12** for the Elasticsearch/Gradle build (see [CONTRIBUTING.md](CONTRIBUTING.md)). The **Cassandra 4 + OpenSearch 1.3** line will standardize on **Java 11+**.
 
-* [Download](https://github.com/maxts/elassandra/releases) and extract the distribution tarball
+* [Download](https://github.com/incloudsio/elassandra/releases) and extract the distribution tarball
 * Define the CASSANDRA_HOME environment variable : `export CASSANDRA_HOME=<extracted_directory>`
 * Run `bin/cassandra -e`
 * Run `bin/nodetool status`
@@ -222,7 +222,7 @@ And here is a sample response :
 
 ## Support
 
-* Issues and PRs: [github.com/maxts/elassandra](https://github.com/maxts/elassandra) (adjust if the canonical org moves under Elassandra.org).
+* Issues and PRs: [github.com/incloudsio/elassandra](https://github.com/incloudsio/elassandra).
 * **Elassandra.org** — project site and coordination.
 * **inClouds** — active maintenance and engineering for this fork.
 * Historical upstream: [Strapdata](http://www.strapdata.com/), [elassandra Google group](https://groups.google.com/forum/#!forum/elassandra), [github.com/strapdata/elassandra](https://github.com/strapdata/elassandra).

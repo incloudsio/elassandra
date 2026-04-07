@@ -69,9 +69,9 @@ version = u'6.8.4.16'
 # The full version, including alpha/beta/rc tags.
 release = u'6.8.4.16'
 
-tgz_url = "https://github.com/maxts/elassandra/releases/download/v{0}/elassandra-{0}.tar.gz".format(release)
-deb_url = "https://github.com/maxts/elassandra/releases/download/v{0}/elassandra-{0}.deb".format(release)
-rpm_url = "https://github.com/maxts/elassandra/releases/download/v{0}/elassandra-{0}.rpm".format(release)
+tgz_url = "https://github.com/incloudsio/elassandra/releases/download/v{0}/elassandra-{0}.tar.gz".format(release)
+deb_url = "https://github.com/incloudsio/elassandra/releases/download/v{0}/elassandra-{0}.deb".format(release)
+rpm_url = "https://github.com/incloudsio/elassandra/releases/download/v{0}/elassandra-{0}.rpm".format(release)
 
 
 # RST subsitutions.

@@ -26,7 +26,7 @@ Elassandra depends on the Cassandra fork published as **`org.elasticsearch.cassa
 * Elassandra version 6+ **buildSrc/version.properties** includes the Gradle dependency.
 * The **server/cassandra** git submodule points at [incloudsio/cassandra](https://github.com/incloudsio/cassandra) (branch **`cassandra-3.11.9-elassandra`** for the current line).
 
-Contributors may open issues or pull requests on **[Elassandra](https://github.com/maxts/elassandra)** and, for Cassandra-fork–specific changes, on **[incloudsio/cassandra](https://github.com/incloudsio/cassandra)**.
+Contributors may open issues or pull requests on **[Elassandra](https://github.com/incloudsio/elassandra)** and, for Cassandra-fork–specific changes, on **[incloudsio/cassandra](https://github.com/incloudsio/cassandra)**.
 
 ## Bug reports
 
@@ -40,7 +40,7 @@ It is very helpful if you can provide a test case to reproduce the bug and the a
 
 ## Feature requests
 
-You're welcome to open an issue on https://github.com/maxts/elassandra for new features, describing why and how it should work.
+You're welcome to open an issue on https://github.com/incloudsio/elassandra for new features, describing why and how it should work.
 
 ## Contributing code and documentation changes
 
@@ -48,7 +48,7 @@ Contributors can clone repositories and follow guidelines from Elasticsearch and
 * [Contributing to the elasticsearch codebase](https://github.com/elastic/elasticsearch/blob/2.4/CONTRIBUTING.md#contributing-to-the-elasticsearch-codebase)
 * [Cassandra How To Contribute](https://wiki.apache.org/cassandra/HowToContribute)
 
-When cloning Elassandra, use **git clone --recurse-submodules https://github.com/maxts/elassandra** to fetch the **server/cassandra** submodule ([incloudsio/cassandra](https://github.com/incloudsio/cassandra)) and ensure the submodule commit matches **buildSrc/version.properties** (`cassandra=`) and `./scripts/check-cassandra-submodule.sh`. You may use your own Cassandra branch if it includes the Elassandra-required changes; see the [Cassandra fork inventory](docs/elassandra/source/developer/cassandra_fork_inventory.rst).
+When cloning Elassandra, use **git clone --recurse-submodules https://github.com/incloudsio/elassandra** to fetch the **server/cassandra** submodule ([incloudsio/cassandra](https://github.com/incloudsio/cassandra)) and ensure the submodule commit matches **buildSrc/version.properties** (`cassandra=`) and `./scripts/check-cassandra-submodule.sh`. You may use your own Cassandra branch if it includes the Elassandra-required changes; see the [Cassandra fork inventory](docs/elassandra/source/developer/cassandra_fork_inventory.rst).
 
 If you cloned without **--recurse-submodules**, run **git submodule update --init** and check out the branch recorded by this repository (e.g. **cassandra-3.11.9-elassandra**).
 

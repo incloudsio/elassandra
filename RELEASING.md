@@ -1,5 +1,7 @@
 # Releasing Elassandra
 
+**Canonical GitHub repository:** [https://github.com/incloudsio/elassandra](https://github.com/incloudsio/elassandra) (publish releases and tags here).
+
 ## Documentation builds
 
 - **Read the Docs:** [.readthedocs.yaml](.readthedocs.yaml) at the repo root points Sphinx at [docs/elassandra/source/conf.py](docs/elassandra/source/conf.py) and [docs/elassandra/requirements.txt](docs/elassandra/requirements.txt). Point the RTD project at this file after you change the GitHub remote.

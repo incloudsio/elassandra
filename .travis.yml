@@ -98,7 +98,7 @@ deploy:
     on:
       tags: true
       branch: v6.8.4-strapdata
-      repo: maxts/elassandra
+      repo: incloudsio/elassandra
 
   # build, test and push docker hub images
   - provider: script
@@ -107,7 +107,7 @@ deploy:
     on:
       tags: true
       branch: v6.8.4-strapdata
-      repo: maxts/elassandra
+      repo: incloudsio/elassandra
 
   # bump and push to gke marketplace repo, build gke images, push to gcr.io
   # - provider: script
