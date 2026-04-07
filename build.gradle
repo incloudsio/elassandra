@@ -29,6 +29,7 @@ import org.gradle.util.DistributionLocator
 import org.gradle.plugins.ide.eclipse.model.SourceFolder
 import com.github.jk1.license.render.*;
 import com.github.jk1.license.filter.*;
+import org.gradle.api.JavaVersion
 
 plugins {
     id "org.sonarqube" version "3.0"
@@ -655,6 +656,12 @@ gradle.projectsEvaluated {
   // Match buildSrc version.properties cassandra pin (e.g. 4.0.20) so the Ant-built jar path matches
   // Gradle dependencies (io.inclouds.cassandra:cassandra-all is not published to Maven Central).
   ant.setProperty('release', 'true')
+
+  // Ant uses Gradle's JVM (ant.java.version). validate-build-conf requires use.jdk11 when that is not 1.8
+  // (CI often sets JAVA_HOME to JDK 11 while CASSANDRA_JAVA_HOME is JDK 8 for javac).
+  if (JavaVersion.current().compareTo(JavaVersion.VERSION_1_8) > 0) {
+    ant.setProperty('use.jdk11', 'true')
+  }
 
   // import ant tasks from cassandra
   ant.importBuild('server/cassandra/build.xml') { antTargetName ->
