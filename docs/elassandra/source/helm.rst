@@ -1,4 +1,7 @@
 
+.. note::
+   The Helm repo and chart names below are **legacy (Strapdata)**. Plan migration to charts published by `Elassandra.org <https://elassandra.org/>`_ / inClouds when available.
+
 Helm Tiller must be initialised on the target kubernetes cluster.
 
 Add our helm repository::

@@ -1,4 +1,7 @@
 
+.. note::
+   The Docker Hub paths below are **legacy (Strapdata)**. Current development and the Cassandra fork are under `Elassandra.org <https://elassandra.org/>`_ and `incloudsio/cassandra <https://github.com/incloudsio/cassandra>`_; publish updated images under your registry when ready.
+
 We provide an `image on docker hub <https://hub.docker.com/r/strapdata/elassandra/>`_::
 
   docker pull strapdata/elassandra
