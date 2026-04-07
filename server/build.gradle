@@ -145,21 +145,8 @@ dependencies {
   testCompile 'com.google.jimfs:jimfs:1.1'
   compile 'com.google.guava:guava:19.0'
 
-  // Elassandra add-ons
-  runtime("io.inclouds.cassandra:cassandra-all:${versions.cassandra}") {
-    exclude group:'net.java.dev.jna', module:'jna'
-    exclude group:'org.ow2.asm', module:'asm'
-    exclude group:'org.apache.commons', module:'commons-lang3'
-    exclude group:'org.slf4j', module:'slf4j-api'
-    exclude group:'org.yaml', module:'snakeyaml'
-    exclude group:'io.netty', module:'netty-all'
-    exclude group:'joda-time', module:'joda-time'
-    exclude group:'commons-codec', module:'commons-codec'
-    // use the elasticsearch version rather than version 2.9.10
-    exclude group:'com.fasterxml.jackson.core', module:'jackson-core'
-    exclude group:'com.fasterxml.jackson.core', module:'jackson-databind'
-    exclude group:'com.fasterxml.jackson.core', module:'jackson-annotations'
-  }
+  // Elassandra add-ons — cassandra-all is built by Ant (:cassandra-jar), not published to Maven Central
+  compile files("${rootProject.projectDir}/server/cassandra/build/elassandra-cassandra-${versions.cassandra}.jar")
 
   compile group: 'org.antlr', name: 'antlr', version: '3.5.2'
   compile group: 'org.antlr', name: 'antlr-runtime', version: '3.5.2'
@@ -206,6 +193,9 @@ dependencies {
   compile "org.javassist:javassist:3.20.0-GA"
   compile 'net.sf.jopt-simple:jopt-simple:5.0.2'
 }
+
+compileJava.dependsOn(':cassandra-jar')
+jar.dependsOn(':cassandra-jar')
 
 compileJava.options.compilerArgs << "-Xlint:-cast,-deprecation,-rawtypes,-try,-unchecked"
 compileTestJava.options.compilerArgs << "-Xlint:-cast,-deprecation,-rawtypes,-try,-unchecked"

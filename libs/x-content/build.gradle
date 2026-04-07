@@ -40,16 +40,8 @@ dependencies {
     compile "com.fasterxml.jackson.dataformat:jackson-dataformat-yaml:${versions.jackson}"
     compile "com.fasterxml.jackson.dataformat:jackson-dataformat-cbor:${versions.jackson}"
 
-    compile("io.inclouds.cassandra:cassandra-all:${versions.cassandra}") {
-        exclude group:'net.java.dev.jna', module:'jna'
-        exclude group:'org.ow2.asm', module:'asm'
-        exclude group:'org.apache.commons', module:'commons-lang3'
-        exclude group:'org.slf4j', module:'slf4j-api'
-        exclude group:'org.yaml', module:'snakeyaml'
-        exclude group:'io.netty', module:'netty-all'
-        exclude group:'joda-time', module:'joda-time'
-        exclude group:'commons-codec', module:'commons-codec'
-    }
+    // Built by Ant :cassandra-jar; not published to Maven Central
+    compile files("${rootProject.projectDir}/server/cassandra/build/elassandra-cassandra-${versions.cassandra}.jar")
 
     testCompile "com.carrotsearch.randomizedtesting:randomizedtesting-runner:${versions.randomizedrunner}"
     testCompile "junit:junit:${versions.junit}"
@@ -58,19 +50,10 @@ dependencies {
     testCompile(project(":test:framework")) {
         exclude group: 'org.elasticsearch', module: 'elasticsearch-x-content'
     }
-    
-    compile("io.inclouds.cassandra:cassandra-all:${versions.cassandra}") {
-        exclude group:'net.java.dev.jna', module:'jna'
-        exclude group:'org.ow2.asm', module:'asm'
-        exclude group:'org.apache.commons', module:'commons-lang3'
-        exclude group:'org.slf4j', module:'slf4j-api'
-        exclude group:'org.yaml', module:'snakeyaml'
-        exclude group:'io.netty', module:'netty-all'
-        exclude group:'joda-time', module:'joda-time'
-        exclude group:'commons-codec', module:'commons-codec'
-    }
 
 }
+
+compileJava.dependsOn(':cassandra-jar')
 
 forbiddenApisMain {
     // x-content does not depend on server

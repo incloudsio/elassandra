@@ -652,6 +652,10 @@ allprojects {
 }
 
 gradle.projectsEvaluated {
+  // Match buildSrc version.properties cassandra pin (e.g. 4.0.20) so the Ant-built jar path matches
+  // Gradle dependencies (io.inclouds.cassandra:cassandra-all is not published to Maven Central).
+  ant.setProperty('release', 'true')
+
   // import ant tasks from cassandra
   ant.importBuild('server/cassandra/build.xml') { antTargetName ->
     'cassandra-' + antTargetName
