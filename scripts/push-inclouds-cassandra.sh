@@ -1,6 +1,17 @@
 #!/usr/bin/env bash
-# One-time (or when updating): push Elassandra Cassandra forks to https://github.com/incloudsio/cassandra
-# Requires: git + GitHub auth (gh auth login, or SSH key for git@github.com:incloudsio/cassandra.git).
+# Push only the two Elassandra branches to https://github.com/incloudsio/cassandra
+#   - cassandra-3.11.9-elassandra  (from server/cassandra submodule)
+#   - cassandra-4.0.x-elassandra   (from cassandra-4.0-elassandra clone)
+#
+# This does NOT mirror Strapdata’s other branch names to GitHub. Each push still
+# uploads ancestor commits (Apache/Strapdata history) because that is how Git works;
+# only these ref names appear on the remote.
+#
+# Optional: after a one-time unshallow, remove local noise with:
+#   cd server/cassandra && git remote remove strapdata
+# (objects stay; you lose strapdata/* remote-tracking refs only.)
+#
+# Requires: git + GitHub auth (gh auth login, or SSH: set INCLOUDS_REMOTE=git@github.com:incloudsio/cassandra.git).
 set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 INCLOUDS="${INCLOUDS_REMOTE:-https://github.com/incloudsio/cassandra.git}"
