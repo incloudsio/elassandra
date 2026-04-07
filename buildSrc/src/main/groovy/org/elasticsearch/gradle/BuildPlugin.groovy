@@ -887,7 +887,8 @@ class BuildPlugin implements Plugin<Project> {
     }
 
     static void configureCassandraStress(Project project) {
-      project.assemble.dependsOn(':cassandra-stress-jar')
+      // Cassandra 4.x builds tools/stress.jar inside the main `jar` target (no separate stress-jar).
+      project.assemble.dependsOn(':cassandra-jar')
     }
 
     /** Adds additional manifest info to jars */
