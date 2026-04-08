@@ -39,6 +39,12 @@ if [[ -f "$TPL/HostFieldMapper.java" ]]; then
   echo "Overlay HostFieldMapper (OpenSearch API) → $DEST"
 fi
 
+if [[ -f "$TPL/ParentFieldMapper.java" ]]; then
+  mkdir -p "$DEST/server/src/main/java/org/opensearch/index/mapper"
+  cp "$TPL/ParentFieldMapper.java" "$DEST/server/src/main/java/org/opensearch/index/mapper/ParentFieldMapper.java"
+  echo "Overlay ParentFieldMapper stub → $DEST"
+fi
+
 EAM_SRC="$ROOT/server/src/main/java/org/elasticsearch/index/mapper/EnabledAttributeMapper.java"
 EAM_DST="$DEST/server/src/main/java/org/opensearch/index/mapper/EnabledAttributeMapper.java"
 if [[ -f "$EAM_SRC" ]]; then
@@ -51,6 +57,12 @@ NM="$DEST/server/src/main/java/org/opensearch/index/mapper/NumberFieldMapper.jav
 if [[ -f "$NM" ]] && grep -q 'context\.doc()\.addAll(' "$NM"; then
   perl -i -0777 -pe 's/context\.doc\(\)\.addAll\(([^;]+)\);/for (org.apache.lucene.document.Field f : $1) { context.doc().add(f); }/s' "$NM"
   echo "Patched NumberFieldMapper doc().addAll → for-loop: $NM"
+fi
+
+RFM="$DEST/server/src/main/java/org/opensearch/index/mapper/RangeFieldMapper.java"
+if [[ -f "$RFM" ]] && grep -q 'context\.doc()\.addAll(' "$RFM"; then
+  perl -i -0777 -pe 's/context\.doc\(\)\.addAll\(([^;]+)\);/for (org.apache.lucene.document.Field f : $1) { context.doc().add(f); }/s' "$RFM"
+  echo "Patched RangeFieldMapper doc().addAll → for-loop: $RFM"
 fi
 
 CS="$DEST/server/src/main/java/org/opensearch/cluster/service/ClusterService.java"
