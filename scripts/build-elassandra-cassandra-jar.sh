@@ -21,6 +21,6 @@ fi
 export CASSANDRA_USE_JDK11="${CASSANDRA_USE_JDK11:-true}"
 echo "Running :cassandra-jar (this can take several minutes)..." >&2
 cd "$ROOT"
-# Skip S3 Minio test fixture (elasticsearch.test.fixtures + JDK 11 + Gradle 5.4); not needed for the Ant jar.
+# Minio fixture is skipped by default in plugins/repository-s3; explicit flag keeps behaviour if defaults change.
 ./gradlew :cassandra-jar -Delassandra.skipS3TestFixture=true --no-daemon >&2
 echo "$(cd "$(dirname "$JAR")" && pwd)/$(basename "$JAR")"

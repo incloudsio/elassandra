@@ -421,7 +421,8 @@ public class ElasticSecondaryIndex implements Index {
                     }
                     if (subMapper == null && cqlMapper.cqlStruct().equals(CqlStruct.MAP)) {
                         // dynamic field in top level map => update the elasticsearch mapping and add the field.
-                        ColumnMetadata cd = baseCfs.metadata.get().getColumn(cqlMapper.cqlName());
+                        ColumnMetadata cd = baseCfs.metadata.get()
+                            .getColumn(new ColumnIdentifier(ByteBufferUtil.string(cqlMapper.cqlName()), true));
                         if (subMapper == null && cd != null && cd.type.isCollection() && cd.type instanceof MapType ) {
                             CollectionType ctype = (CollectionType) cd.type;
                             if (ctype.kind == CollectionType.Kind.MAP &&
@@ -815,7 +816,7 @@ public class ElasticSecondaryIndex implements Index {
 
             @Override
             public boolean apply(IndexableField input) {
-                if (indexInfo.indexService.mapperService().isMetadataField(input.name())) {
+                if (MapperService.isMetadataField(input.name())) {
                     return true;
                 }
                 int x = input.name().indexOf('.');

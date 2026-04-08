@@ -160,7 +160,7 @@ public final class ElassandraSecondaryIndexCompat {
             Class<?> qsc = Class.forName("org.opensearch.index.query.QueryShardContext");
             Method m = fieldType.getClass().getMethod("termQuery", Object.class, qsc);
             return (Query) m.invoke(fieldType, value, null);
-        } catch (ReflectiveOperationException | ClassNotFoundException e) {
+        } catch (ReflectiveOperationException e) {
             throw new ElasticsearchException("IpFieldType.termQuery compatibility", e);
         }
     }
@@ -184,7 +184,7 @@ public final class ElassandraSecondaryIndexCompat {
             Class<?> qsc = Class.forName("org.opensearch.index.query.QueryShardContext");
             Method m = fieldType.getClass().getMethod("rangeQuery", Object.class, Object.class, boolean.class, boolean.class, qsc);
             return (Query) m.invoke(fieldType, lowerTerm, upperTerm, includeLower, includeUpper, null);
-        } catch (ReflectiveOperationException | ClassNotFoundException e) {
+        } catch (ReflectiveOperationException e) {
             throw new ElasticsearchException("IpFieldType.rangeQuery compatibility", e);
         }
     }
@@ -208,7 +208,7 @@ public final class ElassandraSecondaryIndexCompat {
             Class<?> qsc = Class.forName("org.opensearch.index.query.QueryShardContext");
             Method m = fieldType.getClass().getMethod("rangeQuery", Object.class, Object.class, boolean.class, boolean.class, qsc);
             return (Query) m.invoke(fieldType, lowerTerm, upperTerm, includeLower, includeUpper, null);
-        } catch (ReflectiveOperationException | ClassNotFoundException e) {
+        } catch (ReflectiveOperationException e) {
             throw new ElasticsearchException("BooleanFieldType.rangeQuery compatibility", e);
         }
     }

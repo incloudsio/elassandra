@@ -42,7 +42,13 @@ public class DocPrimaryKey {
         for (int i = 0; i < values.length; i++) {
             Object v = values[i];
             AbstractType<?> type = prepared.statement.getBindVariables().get(i).type;
-            boundValues.add(v instanceof ByteBuffer || v == null ? (ByteBuffer) v : type.decompose(v));
+            if (v instanceof ByteBuffer || v == null) {
+                boundValues.add((ByteBuffer) v);
+            } else {
+                @SuppressWarnings("unchecked")
+                AbstractType<Object> ot = (AbstractType<Object>) type;
+                boundValues.add(ot.decompose(v));
+            }
         }
         return boundValues;
     }

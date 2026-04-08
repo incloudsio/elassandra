@@ -2,6 +2,8 @@ package org.elasticsearch.index.mapper;
 
 import org.apache.cassandra.cql3.CQL3Type;
 
+import java.nio.ByteBuffer;
+
 /**
  * CQL mapping metadata carried by forked mappers. Default methods allow stock {@code ObjectMapper} /
  * {@code FieldMapper} (OpenSearch side-car) to implement this interface for compilation; the Elassandra
@@ -58,10 +60,8 @@ public interface CqlMapper {
         return null;
     }
 
-    /** Cassandra column name backing this mapper; fork overrides when it differs from {@link Mapper#name()}. */
-    default String cqlName() {
-        return ((Mapper) this).name();
-    }
+    /** Cassandra column name as bytes; implemented by {@link Mapper#cqlName()}. */
+    ByteBuffer cqlName();
 
     default CQL3Type.Raw collection(CQL3Type.Raw rawType) {
         switch (cqlCollection()) {

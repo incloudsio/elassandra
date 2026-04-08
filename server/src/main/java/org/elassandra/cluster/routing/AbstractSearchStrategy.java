@@ -97,6 +97,7 @@ public abstract class AbstractSearchStrategy {
 
         protected final TokenMetadata metadata;
         protected final AbstractReplicationStrategy strategy;
+        protected final ClusterState clusterState;
 
         public Router(final Index index, final String ksName, BiFunction<Index, UUID, ShardRoutingState> shardsFunc, final ClusterState clusterState, boolean includeReplica)
         {

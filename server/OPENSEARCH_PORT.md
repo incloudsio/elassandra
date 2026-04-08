@@ -32,7 +32,7 @@ Optional: `OPENSEARCH_SYNC_DRY_RUN=1` on the sync script.
 ./scripts/build-elassandra-cassandra-jar.sh
 ```
 
-That runs `./gradlew :cassandra-jar -Delassandra.skipS3TestFixture=true` (skips the S3 Minio test fixture, which can break configuration on **JDK 11** + Gradle 5.4).
+That runs `./gradlew :cassandra-jar` (the Minio S3 test fixture is **skipped by default**; pass `-Delassandra.skipS3TestFixture=false` only if you need it—older Gradle + Docker Compose could fail configuration on **JDK 11**).
 
 Then run the full side-car compile attempt (sync, rewrite imports, attach jar, `:server:compileJava`):
 

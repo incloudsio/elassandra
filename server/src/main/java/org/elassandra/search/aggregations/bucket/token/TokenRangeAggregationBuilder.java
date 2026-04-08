@@ -24,7 +24,6 @@ import org.elasticsearch.search.DocValueFormat;
 import org.elasticsearch.search.aggregations.AggregationBuilder;
 import org.elasticsearch.search.aggregations.AggregatorFactories.Builder;
 import org.elasticsearch.search.aggregations.AggregatorFactory;
-import org.elasticsearch.search.aggregations.bucket.range.InternalRange;
 import org.elasticsearch.search.aggregations.bucket.range.RangeAggregationBuilder;
 import org.elasticsearch.search.aggregations.bucket.range.RangeAggregator;
 import org.elasticsearch.search.aggregations.bucket.range.RangeAggregator.Range;
@@ -113,20 +112,20 @@ public class TokenRangeAggregationBuilder extends RangeAggregationBuilder {
         Range[] ranges = processRanges(range -> {
             DocValueFormat parser = config.format();
             assert parser != null;
-            Double from = range.from;
-            Double to = range.to;
-            if (range.fromAsStr != null) {
-                from = parser.parseDouble(range.fromAsStr, false, context.getQueryShardContext()::nowInMillis);
+            Double from = range.getFrom();
+            Double to = range.getTo();
+            if (range.getFromAsString() != null) {
+                from = parser.parseDouble(range.getFromAsString(), false, context.getQueryShardContext()::nowInMillis);
             }
-            if (range.toAsStr != null) {
-                to = parser.parseDouble(range.toAsStr, false, context.getQueryShardContext()::nowInMillis);
+            if (range.getToAsString() != null) {
+                to = parser.parseDouble(range.getToAsString(), false, context.getQueryShardContext()::nowInMillis);
             }
-            return new Range(range.key, from, range.fromAsStr, to, range.toAsStr);
+            return new Range(range.getKey(), from, range.getFromAsString(), to, range.getToAsString());
         });
         if (ranges.length == 0) {
             throw new IllegalArgumentException("No [ranges] specified for the [" + this.getName() + "] aggregation");
         }
-        return new TokenRangeAggregatorFactory(name, config, ranges, keyed, InternalRange.FACTORY, context, parent,
+        return new TokenRangeAggregatorFactory(name, config, ranges, keyed, rangeFactory, context, parent,
                 subFactoriesBuilder, metaData);
     }
 

@@ -147,8 +147,10 @@ buildscript {
   }
 }
 
-// JDK 11 + Gradle 5.4: elasticsearch.test.fixtures can fail during configuration; allow skipping the Minio fixture.
-if (Boolean.parseBoolean(System.getProperty('elassandra.skipS3TestFixture', 'false'))) {
+// JDK 11 + Gradle 5.4: elasticsearch.test.fixtures (Docker Compose plugin) can fail during configuration
+// (e.g. NoClassDefFoundError: IndyInterface). Skip the Minio fixture by default; enable with
+// -Delassandra.skipS3TestFixture=false when AWS env vars are unset but you need the internal fixture.
+if (Boolean.parseBoolean(System.getProperty('elassandra.skipS3TestFixture', 'true'))) {
   useFixture = false
 }
 

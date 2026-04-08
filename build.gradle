@@ -657,15 +657,15 @@ gradle.projectsEvaluated {
   // Gradle dependencies (io.inclouds.cassandra:cassandra-all is not published to Maven Central).
   ant.setProperty('release', 'true')
 
+  // Must run before importBuild: build.xml defines build.java.11 from ${use.jdk11} at parse time; setting
+  // use.jdk11 after import leaves validate-build-conf failing on JDK 11 unless CASSANDRA_USE_JDK11 is set.
+  if (JavaVersion.current().compareTo(JavaVersion.VERSION_1_8) > 0) {
+    ant.setProperty('use.jdk11', 'true')
+  }
+
   // import ant tasks from cassandra
   ant.importBuild('server/cassandra/build.xml') { antTargetName ->
     'cassandra-' + antTargetName
-  }
-
-  // Ant uses Gradle's JVM (ant.java.version). validate-build-conf requires use.jdk11 or CASSANDRA_USE_JDK11
-  // when that JVM is not 1.8. Properties set before importBuild are not reliably visible to imported targets.
-  if (JavaVersion.current().compareTo(JavaVersion.VERSION_1_8) > 0) {
-    ant.setProperty('use.jdk11', 'true')
   }
 
   ant.setProperty("javac.executable", project.cassandraJavaHome + "/bin/javac")
