@@ -47,6 +47,7 @@ fi
 "$ROOT/scripts/patch-opensearch-elassandra-primary-first-strategy-node-id.sh" "$DEST"
 "$ROOT/scripts/patch-opensearch-metadata-elassandra-extensions.sh" "$DEST"
 "$ROOT/scripts/patch-opensearch-cluster-service-elassandra-stubs.sh" "$DEST"
+"$ROOT/scripts/patch-opensearch-cluster-service-elassandra-index-settings-keys.sh" "$DEST"
 "$ROOT/scripts/patch-opensearch-cluster-service-elassandra-schema-stubs.sh" "$DEST"
 "$ROOT/scripts/patch-opensearch-mappers-elassandra-cql-compat.sh" "$DEST"
 "$ROOT/scripts/overlay-elassandra-parsecontext-to-opensearch-sidecar.sh" "$DEST"

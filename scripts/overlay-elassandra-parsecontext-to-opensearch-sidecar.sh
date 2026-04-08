@@ -39,4 +39,16 @@ if not re.search(r"\bVersion\.", t):
 p.write_text(t, encoding="utf-8")
 PY
 
+# Stock OpenSearch AllFieldMapper has no public enabled() — javadoc @link breaks javac -Xdoclint.
+python3 - "$DST" <<'PY'
+from pathlib import Path
+import sys
+p = Path(sys.argv[1])
+t = p.read_text(encoding="utf-8")
+old = "{@link org.opensearch.index.mapper.AllFieldMapper#enabled()}"
+if old in t:
+    t = t.replace(old, "AllFieldMapper enabled state", 1)
+    p.write_text(t, encoding="utf-8")
+PY
+
 echo "Overlay Elassandra ParseContext → $DST"

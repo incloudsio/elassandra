@@ -15,6 +15,8 @@ public class ParentFieldMapper extends MetadataFieldMapper {
 
     public static final String NAME = "_parent";
     public static final String CONTENT_TYPE = "_parent";
+    /** Elassandra CQL mapping key for parent PK columns (fork parity). */
+    public static final String CQL_PARENT_PK = "cql_parent_pk";
 
     public static final TypeParser PARSER = new FixedTypeParser(c -> new ParentFieldMapper());
 
@@ -46,6 +48,11 @@ public class ParentFieldMapper extends MetadataFieldMapper {
 
     public String type() {
         return "";
+    }
+
+    /** Elassandra: comma-separated CQL PK column names for parent routing (stub returns null). */
+    public String pkColumns() {
+        return null;
     }
 
     @Override

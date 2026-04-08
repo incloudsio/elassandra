@@ -13,7 +13,6 @@ import org.opensearch.search.aggregations.AggregationBuilder;
 import org.opensearch.search.aggregations.AggregatorFactories;
 import org.opensearch.search.aggregations.AggregatorFactory;
 import org.opensearch.search.aggregations.support.ValuesSourceAggregationBuilder;
-import org.opensearch.search.aggregations.bucket.range.InternalRange;
 import org.opensearch.search.aggregations.bucket.range.RangeAggregationBuilder;
 import org.opensearch.search.aggregations.bucket.range.RangeAggregator;
 import org.opensearch.search.aggregations.bucket.range.RangeAggregator.Range;
@@ -101,15 +100,15 @@ public class TokenRangeAggregationBuilder extends RangeAggregationBuilder {
         Range[] ranges = processRanges(range -> {
             DocValueFormat parser = config.format();
             assert parser != null;
-            Double from = range.from;
-            Double to = range.to;
-            if (range.fromAsStr != null) {
-                from = parser.parseDouble(range.fromAsStr, false, queryShardContext::nowInMillis);
+            Double from = range.getFrom();
+            Double to = range.getTo();
+            if (range.getFromAsString() != null) {
+                from = parser.parseDouble(range.getFromAsString(), false, queryShardContext::nowInMillis);
             }
-            if (range.toAsStr != null) {
-                to = parser.parseDouble(range.toAsStr, false, queryShardContext::nowInMillis);
+            if (range.getToAsString() != null) {
+                to = parser.parseDouble(range.getToAsString(), false, queryShardContext::nowInMillis);
             }
-            return new Range(range.key, from, range.fromAsStr, to, range.toAsStr);
+            return new Range(range.getKey(), from, range.getFromAsString(), to, range.getToAsString());
         });
         if (ranges.length == 0) {
             throw new IllegalArgumentException("No [ranges] specified for the [" + this.getName() + "] aggregation");
@@ -119,7 +118,7 @@ public class TokenRangeAggregationBuilder extends RangeAggregationBuilder {
             config,
             ranges,
             keyed,
-            InternalRange.FACTORY,
+            rangeFactory,
             queryShardContext,
             parent,
             subFactoriesBuilder,

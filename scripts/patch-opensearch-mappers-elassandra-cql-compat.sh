@@ -43,7 +43,45 @@ if M.exists():
             print("Mapper.java: anchor not found", file=sys.stderr)
             sys.exit(1)
         t = t.replace(needle, repl, 1)
+    # ParametrizedFieldMapper extends Mapper (not FieldMapper): Mapper must implement CqlMapper + cqlName().
+    if "implements CqlMapper" not in t.split("{", 1)[0]:
+        t = t.replace(
+            "public abstract class Mapper implements ToXContentFragment, Iterable<Mapper> {",
+            "public abstract class Mapper implements ToXContentFragment, Iterable<Mapper>, CqlMapper {",
+            1,
+        )
+    if "ByteBuffer cqlName()" not in t:
+        needle2 = """    public boolean hasField() {
+        return true;
+    }
+}"""
+        repl2 = """    public boolean hasField() {
+        return true;
+    }
+
+    /** Elassandra: Cassandra column name bytes (fork parity). */
+    @Override
+    public java.nio.ByteBuffer cqlName() {
+        return org.apache.cassandra.utils.ByteBufferUtil.bytes(simpleName());
+    }
+}"""
+        if needle2 not in t:
+            print("Mapper.java: hasField tail anchor not found (for cqlName)", file=sys.stderr)
+            sys.exit(1)
+        t = t.replace(needle2, repl2, 1)
     write_if_changed(M, t)
+
+TP = root / "server/src/main/java/org/opensearch/index/mapper/TypeParsers.java"
+if TP.exists():
+    t = TP.read_text(encoding="utf-8")
+    if "CQL_MANDATORY" not in t:
+        needle = '    public static final String INDEX_OPTIONS_OFFSETS = "offsets";\n'
+        repl = needle + "\n    /** Elassandra mapping extension. */\n    public static final String CQL_MANDATORY = \"cql_mandatory\";\n"
+        if needle not in t:
+            print("TypeParsers.java: OFFSETS anchor not found", file=sys.stderr)
+            sys.exit(1)
+        t = t.replace(needle, repl, 1)
+    write_if_changed(TP, t)
 
 OM = root / "server/src/main/java/org/opensearch/index/mapper/ObjectMapper.java"
 if OM.exists():
