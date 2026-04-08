@@ -117,7 +117,7 @@ public class HostFieldMapper extends MetadataFieldMapper {
     @Override
     public void createField(ParseContext context, Object object, Optional<String> keyName) throws IOException {
         String host = (String) object;
-        if (host != null && fieldType().indexOptions() != IndexOptions.NONE) {
+        if (host != null && fieldType().isSearchable()) {
             context.doc().add(new Field(fieldType().name(), host, Defaults.FIELD_TYPE));
             createFieldNamesField(context);
         }
