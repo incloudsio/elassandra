@@ -51,7 +51,13 @@ export GRADLE_OPTS="-Delassandra.cassandra.jar=/absolute/path/to/elassandra-cass
 
 After import rewrite, it runs `scripts/patch-org-elassandra-opensearch-no-schema-update.sh`, which drops `ClusterStateUpdateTask#schemaUpdate()` / `SchemaUpdate` imports that do not exist in OpenSearch 1.3 (Elasticsearch 6.8–only API).
 
-`gradle/opensearch-sidecar-elassandra.init.gradle` adds **commons-lang3** and **slf4j-api** for code paths that compile against the Cassandra jar but not the full OpenSearch dependency graph in isolation.
+`gradle/opensearch-sidecar-elassandra.init.gradle` adds **commons-lang3** and **slf4j-api** for code paths that compile against the Cassandra jar but not the full OpenSearch dependency graph in isolation. **httpclient** / **httpcore** versions are read from the clone’s `buildSrc/version.properties` so they stay aligned with the rest of the Gradle build (avoids resolution conflicts when running `:server:compileTestJava`).
+
+To rewrite **`server/src/test/java/org/elassandra`** imports after the **test framework** is ported (`ESSingleNodeTestCase` → `OpenSearchSingleNodeTestCase` with CQL helpers, `MockCassandraDiscovery`, etc.), use:
+
+```bash
+./scripts/rewrite-elassandra-opensearch-tests.sh "${OPENSEARCH_CLONE_DIR:-../incloudsio-opensearch}"
+```
 
 In this tree, disambiguate **Cassandra** `org.apache.cassandra.schema.IndexMetadata` from cluster **`IndexMetadata`** by using the fully qualified Cassandra type where a secondary index definition is meant (`ElasticSecondaryIndex`, `SchemaManager` secondary-index helpers, `ExtendedElasticSecondaryIndex`). That avoids a name clash after `IndexMetaData` → `IndexMetadata` rewrites.
 

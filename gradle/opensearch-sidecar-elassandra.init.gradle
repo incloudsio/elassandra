@@ -19,11 +19,21 @@ gradle.projectsEvaluated {
     }
     def vfile = new File(rootProject.projectDir, 'buildSrc/version.properties')
     def jacksonDatabind = '2.14.2'
+    def httpclient = '4.5.13'
+    def httpcore = '4.4.12'
     if (vfile.isFile()) {
         vfile.eachLine { line ->
             def m = (line =~ /^\s*jackson_databind\s*=\s*(\S+)/)
             if (m.find()) {
                 jacksonDatabind = m.group(1)
+            }
+            m = (line =~ /^\s*httpclient\s*=\s*(\S+)/)
+            if (m.find()) {
+                httpclient = m.group(1)
+            }
+            m = (line =~ /^\s*httpcore\s*=\s*(\S+)/)
+            if (m.find()) {
+                httpcore = m.group(1)
             }
         }
     }
@@ -38,8 +48,8 @@ gradle.projectsEvaluated {
         api "com.fasterxml.jackson.core:jackson-annotations:${jacksonDatabind}"
         api 'org.apache.commons:commons-lang3:3.12.0'
         api 'org.slf4j:slf4j-api:1.7.36'
-        api 'org.apache.httpcomponents:httpclient:4.5.14'
-        api 'org.apache.httpcomponents:httpcore:4.4.16'
+        api "org.apache.httpcomponents:httpclient:${httpclient}"
+        api "org.apache.httpcomponents:httpcore:${httpcore}"
     }
-    logger.lifecycle("[opensearch-sidecar-elassandra] :server + Cassandra jar + jsr305 + guava/antlr/jackson (${jacksonDatabind})")
+    logger.lifecycle("[opensearch-sidecar-elassandra] :server + Cassandra jar + jsr305 + guava/antlr/jackson (${jacksonDatabind}) httpclient ${httpclient}")
 }
