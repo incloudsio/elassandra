@@ -36,7 +36,6 @@ import org.elasticsearch.gateway.TransportNodesListGatewayMetaState;
 import org.elasticsearch.indices.IndicesService;
 import org.elasticsearch.rest.RestStatus;
 import org.elasticsearch.threadpool.ThreadPool;
-import java.io.IOException;
 
 import java.util.EnumSet;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -93,7 +92,7 @@ public class CassandraGatewayService extends GatewayService {
                 logger.info("cassandra ring block released");
                 try {
                     clusterService.publishX1();
-                } catch (IOException e) {
+                } catch (Exception e) {
                     logger.error("unexpected failure on X1 publishing during [{}]", source, e);
                 }
             }

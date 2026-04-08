@@ -388,14 +388,14 @@ public class ElasticSecondaryIndex implements Index {
             geoPointFieldMapper.parse(context.createExternalValueContext(geoPoint));
         } else if (mapper instanceof FieldMapper) {
             ElassandraSecondaryIndexCompat.fieldMapperCreate((FieldMapper) mapper, context, value, keyName);
-            DocumentParserCompat.createCopyFields(context, ((FieldMapper) mapper).copyTo().copyToFields(), value);
+            DocumentParser.createCopyFields(context, ((FieldMapper) mapper).copyTo().copyToFields(), value);
         } else if (mapper instanceof ObjectMapper) {
             final ObjectMapper objectMapper = (ObjectMapper) mapper;
             final ObjectMapper.Nested nested = objectMapper.nested();
             // see https://www.elastic.co/guide/en/elasticsearch/guide/current/nested-objects.html
             // code from DocumentParser.parseObject()
             if (nested.isNested()) {
-                context = DocumentParserCompat.nestedContext(context, objectMapper);
+                context = DocumentParser.nestedContext(context, objectMapper);
             }
 
             //ContentPath.Type origPathType = path().pathType();
@@ -427,7 +427,7 @@ public class ElasticSecondaryIndex implements Index {
                             CollectionType ctype = (CollectionType) cd.type;
                             if (ctype.kind == CollectionType.Kind.MAP &&
                                 ((MapType) ctype).getKeysType().asCQL3Type().toString().equals("text") &&
-                                (DocumentParserCompat.dynamicOrDefault(objectMapper, ctx) == ObjectMapper.Dynamic.TRUE)) {
+                                (DocumentParser.dynamicOrDefault(objectMapper, ctx) == ObjectMapper.Dynamic.TRUE)) {
                                 logger.debug("Updating mapping for field={} type={} value={} ", entry.getKey(), cd.type.toString(), value);
                                 // upgrade to write lock
                                 indexInfo.dynamicMappingUpdateLock.readLock().unlock();
@@ -521,7 +521,7 @@ public class ElasticSecondaryIndex implements Index {
 
             // restore the enable path flag
             if (nested.isNested()) {
-                DocumentParserCompat.nested(context, nested);
+                DocumentParser.nested(context, nested);
             }
         }
     }
@@ -2307,7 +2307,6 @@ public class ElasticSecondaryIndex implements Index {
                                     (isStatic()) ? partitionKey : id,
                                     context.type(),
                                     partitionKey,
-                                    ((Long) key.getToken().getTokenValue()).longValue(),
                                     context.docs(),
                                     context.source(), // source
                                     XContentType.JSON,
