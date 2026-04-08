@@ -40,7 +40,6 @@ import org.apache.cassandra.index.Index;
 import org.apache.cassandra.index.IndexRegistry;
 import org.apache.cassandra.index.transactions.IndexTransaction.Type;
 import org.apache.cassandra.schema.ColumnMetadata;
-import org.apache.cassandra.schema.IndexMetadata;
 import org.apache.cassandra.schema.TableMetadata;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -55,18 +54,18 @@ public class ExtendedElasticSecondaryIndex implements Index {
     private static final Logger logger = LoggerFactory.getLogger(SystemKeyspace.class);
 
     final Index elasticSecondaryIndex;
-    final IndexMetadata indexDef;
+    final org.apache.cassandra.schema.IndexMetadata indexDef;
 
-    public ExtendedElasticSecondaryIndex(ColumnFamilyStore baseCfs, IndexMetadata indexDef) {
+    public ExtendedElasticSecondaryIndex(ColumnFamilyStore baseCfs, org.apache.cassandra.schema.IndexMetadata indexDef) {
         this.indexDef = indexDef;
         this.elasticSecondaryIndex = newIndex(baseCfs, indexDef);
     }
 
-    private Index newIndex(ColumnFamilyStore baseCfs, IndexMetadata indexDef) {
+    private Index newIndex(ColumnFamilyStore baseCfs, org.apache.cassandra.schema.IndexMetadata indexDef) {
         try {
             // use reflexion to support vanilla cassandra on some datacenters.
             Class indexClass = Class.forName("org.elassandra.index.ElasticSecondaryIndex");
-            Method method = indexClass.getMethod("newElasticSecondaryIndex", ColumnFamilyStore.class, IndexMetadata.class);
+            Method method = indexClass.getMethod("newElasticSecondaryIndex", ColumnFamilyStore.class, org.apache.cassandra.schema.IndexMetadata.class);
             return (Index) method.invoke(null, baseCfs, indexDef);
         } catch (ClassNotFoundException e) {
             logger.warn("Class org.elassandra.index.ElasticSecondaryIndex not found, using a dummy secondary index.");
@@ -91,12 +90,12 @@ public class ExtendedElasticSecondaryIndex implements Index {
     }
 
     @Override
-    public IndexMetadata getIndexMetadata() {
+    public org.apache.cassandra.schema.IndexMetadata getIndexMetadata() {
         return this.indexDef;
     }
 
     @Override
-    public Callable<?> getMetadataReloadTask(IndexMetadata indexMetadata) {
+    public Callable<?> getMetadataReloadTask(org.apache.cassandra.schema.IndexMetadata indexMetadata) {
         return elasticSecondaryIndex.getMetadataReloadTask(indexMetadata);
     }
 
@@ -202,12 +201,12 @@ public class ExtendedElasticSecondaryIndex implements Index {
         }
 
         @Override
-        public IndexMetadata getIndexMetadata() {
+        public org.apache.cassandra.schema.IndexMetadata getIndexMetadata() {
             return null;
         }
 
         @Override
-        public Callable<?> getMetadataReloadTask(IndexMetadata indexMetadata) {
+        public Callable<?> getMetadataReloadTask(org.apache.cassandra.schema.IndexMetadata indexMetadata) {
             return null;
         }
 

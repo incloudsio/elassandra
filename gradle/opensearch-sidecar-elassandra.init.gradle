@@ -1,0 +1,45 @@
+// Init script: Elassandra Cassandra jar + deps for org.elassandra.* on OpenSearch :server.
+// Jar path via GRADLE_OPTS: -Delassandra.cassandra.jar=/abs/path/to/elassandra-cassandra-x.y.z.jar
+// Guava is normally forbidden on OpenSearch compileClasspath; run scripts/patch-opensearch-forbidden-deps-for-elassandra.sh on the clone first.
+
+def jarProp = System.getProperty('elassandra.cassandra.jar')
+if (jarProp == null || jarProp.trim().isEmpty()) {
+    return
+}
+def jarFile = new File(jarProp)
+if (!jarFile.isFile()) {
+    logger.lifecycle("[opensearch-sidecar-elassandra] Skip: jar not found: ${jarFile.absolutePath}")
+    return
+}
+
+gradle.projectsEvaluated {
+    Project server = rootProject.findProject(':server')
+    if (server == null) {
+        return
+    }
+    def vfile = new File(rootProject.projectDir, 'buildSrc/version.properties')
+    def jacksonDatabind = '2.14.2'
+    if (vfile.isFile()) {
+        vfile.eachLine { line ->
+            def m = (line =~ /^\s*jackson_databind\s*=\s*(\S+)/)
+            if (m.find()) {
+                jacksonDatabind = m.group(1)
+            }
+        }
+    }
+    server.dependencies {
+        api files(jarFile)
+        compileOnly 'com.google.code.findbugs:jsr305:3.0.2'
+        api 'com.google.guava:guava:19.0'
+        api 'org.antlr:antlr:3.5.2'
+        api 'org.antlr:antlr-runtime:3.5.2'
+        api "com.fasterxml.jackson.core:jackson-databind:${jacksonDatabind}"
+        api "com.fasterxml.jackson.core:jackson-core:${jacksonDatabind}"
+        api "com.fasterxml.jackson.core:jackson-annotations:${jacksonDatabind}"
+        api 'org.apache.commons:commons-lang3:3.12.0'
+        api 'org.slf4j:slf4j-api:1.7.36'
+        api 'org.apache.httpcomponents:httpclient:4.5.14'
+        api 'org.apache.httpcomponents:httpcore:4.4.16'
+    }
+    logger.lifecycle("[opensearch-sidecar-elassandra] :server + Cassandra jar + jsr305 + guava/antlr/jackson (${jacksonDatabind})")
+}

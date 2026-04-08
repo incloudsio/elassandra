@@ -37,7 +37,6 @@ import org.apache.logging.log4j.Logger;
 import org.elassandra.gateway.CassandraGatewayService;
 import org.elasticsearch.cluster.ClusterState;
 import org.elasticsearch.cluster.node.DiscoveryNode;
-import org.elasticsearch.cluster.node.DiscoveryNode.DiscoveryNodeStatus;
 import org.elasticsearch.cluster.routing.IndexRoutingTable;
 import org.elasticsearch.cluster.routing.IndexShardRoutingTable;
 import org.elasticsearch.cluster.routing.ShardRouting;
@@ -101,6 +100,7 @@ public abstract class AbstractSearchStrategy {
 
         public Router(final Index index, final String ksName, BiFunction<Index, UUID, ShardRoutingState> shardsFunc, final ClusterState clusterState, boolean includeReplica)
         {
+            this.clusterState = clusterState;
             this.index = index;
             this.ksName = ksName;
             this.version = clusterState.version();
@@ -157,7 +157,7 @@ public abstract class AbstractSearchStrategy {
                     UUID uuid = StorageService.instance.getHostIdForEndpoint(endpoint);
                     assert uuid != null : "host_id not found for endpoint "+endpoint;
                     DiscoveryNode node =  (localNode.uuid().equals(uuid)) ? localNode : clusterState.nodes().get(uuid.toString());
-                    if (node != null && node.status() == DiscoveryNode.DiscoveryNodeStatus.ALIVE) {
+                    if (node != null && clusterState.nodes().nodeExists(node)) {
                         ShardRoutingState state = shardsFunc.apply(this.index, node.uuid());
                         if (ShardRoutingState.STARTED.equals(state) || ShardRoutingState.INITIALIZING.equals(state)) {
                             greenShards.computeIfAbsent(node, n -> new BitSet(tokens.size() - 1)).set(i);
@@ -229,7 +229,7 @@ public abstract class AbstractSearchStrategy {
         }
 
         private UnassignedInfo unassignedInfo(DiscoveryNode node, ShardRoutingState state) {
-            if (node.status() != DiscoveryNodeStatus.ALIVE)
+            if (clusterState.nodes().nodeExists(node) == false)
                 return IndexRoutingTable.UNASSIGNED_INFO_NODE_LEFT;
             if (state == ShardRoutingState.INITIALIZING)
                 return IndexRoutingTable.UNASSIGNED_INFO_INDEX_CREATED;

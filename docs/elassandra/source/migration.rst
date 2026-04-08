@@ -86,4 +86,11 @@ Further reading
 * :ref:`cassandra_40_rebase` — step-by-step patch export, 4.0 clone, and ``git am`` workflow.
 * :ref:`cassandra_40_jvm_port` — Elassandra Java integration points for Cassandra 4.0.
 * :ref:`opensearch_porting_guide` — developer map for rebasing onto OpenSearch 1.3.x.
-* Repository scripts: ``scripts/check-cassandra-submodule.sh`` (version alignment), ``scripts/use-cassandra-40-submodule.sh`` (move submodule to Cassandra 4.0), ``scripts/clone-opensearch-upstream.sh`` / ``scripts/opensearch-port-bootstrap.sh`` (OpenSearch **1.3.20** port branch).
+* Repository scripts: ``scripts/check-cassandra-submodule.sh`` (version alignment), ``scripts/use-cassandra-40-submodule.sh`` (move submodule to Cassandra 4.0), ``scripts/clone-opensearch-upstream.sh`` / ``scripts/opensearch-port-bootstrap.sh`` (OpenSearch **1.3.20** port branch), ``scripts/sync-elassandra-to-opensearch-sidecar.sh`` / ``scripts/rewrite-elassandra-imports-for-opensearch.sh`` (copy ``org.elassandra.*`` into the side-car), ``scripts/build-elassandra-cassandra-jar.sh`` (Ant Cassandra jar for the side-car classpath), ``scripts/sync-elassandra-fork-minimal-to-opensearch-sidecar.sh`` (minimal ``org.opensearch`` fork stubs), ``scripts/patch-opensearch-forbidden-deps-for-elassandra.sh`` (temporarily allow Guava in the side-car tree), ``scripts/opensearch-sidecar-compile-try.sh`` (compile probe; uses ``gradle/opensearch-sidecar-elassandra.init.gradle`` and ``GRADLE_OPTS``), ``scripts/export-elassandra-mapper-fork-for-opensearch-merge.sh`` (export forked ``index/mapper`` for merge), ``scripts/list-elasticsearch-fork-touchpoints.sh`` (engine fork inventory), ``scripts/print-opensearch-port-pins.sh`` (target pins).
+
+Packaging (when the OpenSearch port ships)
+------------------------------------------
+
+* Revisit tarball/deb/rpm naming and any process branding if you move from “Elasticsearch” to “OpenSearch” in user-visible strings.
+* Rebuild container images from the merged tree; re-check JVM flags for Cassandra **4.0** plus the embedded search engine.
+* Pins: ``./scripts/print-opensearch-port-pins.sh`` prints ``opensearch_port`` / ``lucene_opensearch`` from ``buildSrc/version.properties``; full artifact convergence is tracked in :ref:`opensearch_porting_guide`.

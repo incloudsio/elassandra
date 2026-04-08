@@ -2,40 +2,73 @@ package org.elasticsearch.index.mapper;
 
 import org.apache.cassandra.cql3.CQL3Type;
 
+/**
+ * CQL mapping metadata carried by forked mappers. Default methods allow stock {@code ObjectMapper} /
+ * {@code FieldMapper} (OpenSearch side-car) to implement this interface for compilation; the Elassandra
+ * fork overrides with real behaviour.
+ */
 public interface CqlMapper {
 
-    public static enum CqlCollection {
+    enum CqlCollection {
         LIST, SET, SINGLETON, NONE
     }
 
-    public static enum CqlStruct {
+    enum CqlStruct {
         UDT, MAP, OPAQUE_MAP, TUPLE
     }
 
-    public CqlCollection cqlCollection();
+    default CqlCollection cqlCollection() {
+        return CqlCollection.NONE;
+    }
 
-    public String cqlCollectionTag();
+    default String cqlCollectionTag() {
+        return "";
+    }
 
-    public CqlStruct cqlStruct();
+    default CqlStruct cqlStruct() {
+        return CqlStruct.UDT;
+    }
 
-    public boolean cqlPartialUpdate();
+    default boolean cqlPartialUpdate() {
+        return false;
+    }
 
-    public boolean cqlPartitionKey();
+    default boolean cqlPartitionKey() {
+        return false;
+    }
 
-    public boolean cqlStaticColumn();
+    default boolean cqlStaticColumn() {
+        return false;
+    }
 
-    public int cqlPrimaryKeyOrder();
+    default int cqlPrimaryKeyOrder() {
+        return -1;
+    }
 
-    public boolean cqlClusteringKeyDesc();
+    default boolean cqlClusteringKeyDesc() {
+        return false;
+    }
 
-    public CQL3Type CQL3Type();
+    default CQL3Type CQL3Type() {
+        return CQL3Type.Native.TEXT;
+    }
 
-    public default CQL3Type.Raw collection(CQL3Type.Raw rawType) {
-        switch(cqlCollection()) {
+    /** UDT name override from mapping; forked {@code ObjectMapper} supplies this. */
+    default String cqlUdtName() {
+        return null;
+    }
+
+    /** Cassandra column name backing this mapper; fork overrides when it differs from {@link Mapper#name()}. */
+    default String cqlName() {
+        return ((Mapper) this).name();
+    }
+
+    default CQL3Type.Raw collection(CQL3Type.Raw rawType) {
+        switch (cqlCollection()) {
             case LIST:
-                return CQL3Type.Raw.list( rawType );
+                return CQL3Type.Raw.list(rawType);
             case SET:
-                return CQL3Type.Raw.set( rawType );
+                return CQL3Type.Raw.set(rawType);
             default:
                 return rawType;
         }

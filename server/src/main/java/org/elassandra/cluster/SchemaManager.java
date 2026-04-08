@@ -45,7 +45,6 @@ import org.apache.cassandra.exceptions.RequestExecutionException;
 import org.apache.cassandra.exceptions.RequestValidationException;
 import org.apache.cassandra.locator.NetworkTopologyStrategy;
 import org.apache.cassandra.schema.ColumnMetadata;
-import org.apache.cassandra.schema.IndexMetadata;
 import org.apache.cassandra.schema.KeyspaceMetadata;
 import org.apache.cassandra.schema.KeyspaceParams;
 import org.apache.cassandra.schema.SchemaConstants;
@@ -66,13 +65,13 @@ import org.elasticsearch.action.ActionRequestValidationException;
 import org.elasticsearch.cluster.metadata.IndexMetaData;
 import org.elasticsearch.cluster.metadata.MappingMetaData;
 import org.elasticsearch.cluster.service.ClusterService;
-import org.elasticsearch.common.component.AbstractComponent;
 import org.elasticsearch.common.settings.Settings;
 import org.elasticsearch.common.settings.SettingsException;
 import org.elasticsearch.index.Index;
 import org.elasticsearch.index.mapper.*;
 import org.elasticsearch.index.mapper.CqlMapper.CqlCollection;
 import org.elasticsearch.index.mapper.CqlMapper.CqlStruct;
+import static org.elasticsearch.index.mapper.CqlMapper.CqlStruct.*;
 import com.google.common.collect.ImmutableMap;
 
 import java.io.IOException;
@@ -135,6 +134,44 @@ public class SchemaManager {
     public static final String PERCOLATOR_TABLE = "_percolator";
 
     public static final String ELASTIC_ID_COLUMN_NAME = "_id";
+
+    /** Same as forked {@code IndexMetaData#keyspace()} (OpenSearch {@code IndexMetadata} has no helper). */
+    private static String keyspaceForIndex(IndexMetaData indexMetaData) {
+        String ks = indexMetaData.getSettings().get("index.keyspace");
+        if (ks != null) {
+            return ks;
+        }
+        return ClusterService.indexToKsName(indexMetaData.getIndex().getName());
+    }
+
+    private static boolean hasVirtualIndex(IndexMetaData indexMetaData) {
+        return indexMetaData.getSettings().get("index.virtual_index") != null;
+    }
+
+    private static boolean isOpaqueStorage(org.elasticsearch.index.IndexSettings indexSettings) {
+        // Same keys as IndexMetaData.SETTING_INDEX_OPAQUE_STORAGE / ClusterService.SETTING_SYSTEM_INDEX_OPAQUE_STORAGE
+        return indexSettings.getSettings().getAsBoolean("index.index_opaque_storage", Boolean.getBoolean("es.index_opaque_storage"));
+    }
+
+    private static String tableOptionsFromMapperService(MapperService mapperService) {
+        return mapperService.getIndexSettings().getSettings().get("index.table_options");
+    }
+
+    /** ES 6 parent/child mapper; OpenSearch uses join fields — reflection keeps both builds compiling. */
+    private static boolean needsParentColumn(DocumentMapper docMapper) {
+        try {
+            Object pfm = docMapper.getClass().getMethod("parentFieldMapper").invoke(docMapper);
+            if (pfm == null) {
+                return false;
+            }
+            if (!((Boolean) pfm.getClass().getMethod("active").invoke(pfm))) {
+                return false;
+            }
+            return pfm.getClass().getMethod("pkColumns").invoke(pfm) == null;
+        } catch (ReflectiveOperationException e) {
+            return false;
+        }
+    }
 
     public static Map<String, String> cqlMapping = new ImmutableMap.Builder<String,String>()
             .put("text", "keyword")
@@ -574,7 +611,7 @@ public class SchemaManager {
             extensions.putAll(cfm.params.extensions);
 
         for(IndexMetaData imd : siblings) {
-            assert ksm.name.equals(imd.keyspace()) : "Keyspace metadata="+ksm.name+" does not match indexMetadata.keyspace="+imd.keyspace();
+            assert ksm.name.equals(keyspaceForIndex(imd)) : "Keyspace metadata="+ksm.name+" does not match indexMetadata.keyspace="+keyspaceForIndex(imd);
             clusterService.putIndexMetaDataExtension(imd, extensions);
         }
 
@@ -602,7 +639,7 @@ public class SchemaManager {
         Map<String, Object> mappingMap = mappingMd.sourceAsMap();
 
         Set<String> columns = new HashSet();
-        if (mapperService.getIndexSettings().getIndexMetaData().isOpaqueStorage()) {
+        if (isOpaqueStorage(mapperService.getIndexSettings())) {
             columns.add(SourceFieldMapper.NAME);
         } else {
             if (docMapper.sourceMapper().enabled())
@@ -737,7 +774,7 @@ public class SchemaManager {
         }
 
         // add _parent column if necessary. Parent and child documents should have the same partition key.
-        if (docMapper.parentFieldMapper().active() && docMapper.parentFieldMapper().pkColumns() == null)
+        if (needsParentColumn(docMapper))
             columnsMap.putIfAbsent("_parent", new ColumnDescriptor("_parent", CQL3Type.Raw.from(CQL3Type.Native.TEXT)));
 
         logger.debug("columnsMap={}", columnsMap);
@@ -771,7 +808,7 @@ public class SchemaManager {
             Map<String, ColumnDescriptor> columnsMap = new HashMap<>();
             for(Pair<IndexMetaData, MapperService> pair : indiceMap.values()) {
                 IndexMetaData indexMetaData = pair.left;
-                if (indexMetaData.hasVirtualIndex())
+                if (hasVirtualIndex(indexMetaData))
                     continue;
                 mapperService = pair.right;
                 ksm = buildColumns(ksm, cfm, type, indexMetaData, mapperService, columnsMap, mutations, events);
@@ -787,7 +824,7 @@ public class SchemaManager {
                 }
                 if (!hasPartitionKey)
                     columnsMap.putIfAbsent(ELASTIC_ID_COLUMN_NAME, new ColumnDescriptor(ELASTIC_ID_COLUMN_NAME, CQL3Type.Raw.from(CQL3Type.Native.TEXT), ColumnMetadata.Kind.PARTITION_KEY, 0));
-                ksm = createTable(ksm, cfName, columnsMap, mapperService.tableOptions(), indiceMap.values().stream().map(p->p.left).collect(Collectors.toList()), mutations, events);
+                ksm = createTable(ksm, cfName, columnsMap, tableOptionsFromMapperService(mapperService), indiceMap.values().stream().map(p->p.left).collect(Collectors.toList()), mutations, events);
             } else {
                 // check column properties matches existing ones, or add it to columnsDefinitions
                 for(ColumnDescriptor cd : columnsMap.values())
@@ -833,13 +870,15 @@ public class SchemaManager {
         logger.debug("Create secondary index on table {}.{}", ksm.name, tableName);
         Map<String, String> options = new HashMap<>();
         options.put(IndexTarget.CUSTOM_INDEX_OPTION_NAME, className);
-        IndexMetadata indexMetadata = IndexMetadata.fromIndexTargets(Collections.emptyList(), idxName, IndexMetadata.Kind.CUSTOM, options);
-        indexMetadata.validate(cfm0);
-        TableMetadata cfm = cfm0.withSwapped(cfm0.indexes.with(indexMetadata));
+        org.apache.cassandra.schema.IndexMetadata cassandraIndex =
+            org.apache.cassandra.schema.IndexMetadata.fromIndexTargets(
+                Collections.emptyList(), idxName, org.apache.cassandra.schema.IndexMetadata.Kind.CUSTOM, options);
+        cassandraIndex.validate(cfm0);
+        TableMetadata cfm = cfm0.withSwapped(cfm0.indexes.with(cassandraIndex));
         ksm2 = ksm.withSwapped(ksm.tables.without(cfm0.name).with(cfm));
 
         Mutation.SimpleBuilder builder = ElassandraSchemaBridge.makeCreateKeyspaceMutation(ksm.name, ksm.params, FBUtilities.timestampMicros());
-        SchemaKeyspace.addUpdatedIndexToSchemaMutation(cfm, indexMetadata, builder);
+        SchemaKeyspace.addUpdatedIndexToSchemaMutation(cfm, cassandraIndex, builder);
         mutations.add(builder.build());
 
         events.add(new Event.SchemaChange(Event.SchemaChange.Change.UPDATED, Event.SchemaChange.Target.TABLE, ksm.name, tableName));
@@ -871,7 +910,7 @@ public class SchemaManager {
 
     public void dropSecondaryIndices(final IndexMetaData indexMetaData, final Collection<Mutation> mutations, final Collection<Event.SchemaChange> events)
             throws RequestExecutionException {
-        String ksName = indexMetaData.keyspace();
+        String ksName = keyspaceForIndex(indexMetaData);
         KeyspaceMetadata ksm = Schema.instance.getKeyspaceMetadata(ksName);
         for (TableMetadata cfm : ksm.tablesAndViews()) {
             if (org.apache.cassandra.schema.TableMetadata.Flag.isCQLTable(cfm.flags))
@@ -888,7 +927,7 @@ public class SchemaManager {
 
     public KeyspaceMetadata dropTables(KeyspaceMetadata ksm, final IndexMetaData indexMetaData, final Collection<Mutation> mutations, final Collection<Event.SchemaChange> events)
             throws RequestExecutionException {
-        String ksName = indexMetaData.keyspace();
+        String ksName = keyspaceForIndex(indexMetaData);
         for(ObjectCursor<String> cursor : indexMetaData.getMappings().keys()) {
             TableMetadata cfm = Schema.instance.getTableMetadata(ksName, cursor.value);
             ksm = dropTable(ksm, cfm, mutations, events);

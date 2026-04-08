@@ -290,39 +290,6 @@ public class ClusterService extends BaseClusterService {
     public static final Setting<Boolean> CLUSTER_TOKEN_RANGES_BITSET_CACHE_SETTING =
             Setting.boolSetting(SETTING_CLUSTER_TOKEN_RANGES_BITSET_CACHE, Boolean.getBoolean(SYSTEM_PREFIX+TOKEN_RANGES_BITSET_CACHE), Property.NodeScope, Property.Dynamic);
 
-    public static class DocPrimaryKey {
-        public String[] names;
-        public Object[] values;
-        public boolean isStaticDocument; // pk = partition key and pk has clustering key.
-
-        public DocPrimaryKey(String[] names, Object[] values, boolean isStaticDocument) {
-            this.names = names;
-            this.values = values;
-            this.isStaticDocument = isStaticDocument;
-        }
-
-        public DocPrimaryKey(String[] names, Object[] values) {
-            this.names = names;
-            this.values = values;
-            this.isStaticDocument = false;
-        }
-
-        public List<ByteBuffer> serialize(QueryHandler.Prepared prepared) {
-            List<ByteBuffer> boundValues = new ArrayList<ByteBuffer>(values.length);
-            for (int i = 0; i < values.length; i++) {
-                Object v = values[i];
-                AbstractType type = prepared.statement.getBindVariables().get(i).type;
-                boundValues.add(v instanceof ByteBuffer || v == null ? (ByteBuffer) v : type.decompose(v));
-            }
-            return boundValues;
-        }
-
-        @Override
-        public String toString() {
-            return Serializer.stringify(values, values.length);
-        }
-    }
-
     private MetaStateService metaStateService;
     private IndicesService indicesService;
     private CassandraDiscovery discovery;

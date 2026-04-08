@@ -188,7 +188,8 @@ public class AggregatorFactories {
 
     // hack to avoid token_ranges filtering when aggregating on token range.
     public boolean hasTokenRangeAggregation() {
-        return factories.length > 0 && (factories[0] instanceof org.elassandra.search.aggregations.bucket.token.RangeAggregatorFactory);
+        return factories.length > 0
+            && (factories[0] instanceof org.elasticsearch.search.aggregations.bucket.range.TokenRangeAggregatorFactory);
     }
 
     /**

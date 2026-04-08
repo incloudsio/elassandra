@@ -47,14 +47,12 @@ import org.elasticsearch.Version;
 import org.elasticsearch.action.ActionListener;
 import org.elasticsearch.client.transport.NoNodeAvailableException;
 import org.elasticsearch.cluster.*;
-import org.elasticsearch.cluster.ClusterStateTaskConfig.SchemaUpdate;
 import org.elasticsearch.cluster.block.ClusterBlockException;
 import org.elasticsearch.cluster.block.ClusterBlockLevel;
 import org.elasticsearch.cluster.block.ClusterBlocks;
 import org.elasticsearch.cluster.metadata.IndexMetaData;
 import org.elasticsearch.cluster.metadata.MetaData;
 import org.elasticsearch.cluster.node.DiscoveryNode;
-import org.elasticsearch.cluster.node.DiscoveryNode.DiscoveryNodeStatus;
 import org.elasticsearch.cluster.node.DiscoveryNode.Role;
 import org.elasticsearch.cluster.node.DiscoveryNodes;
 import org.elasticsearch.cluster.routing.RoutingTable;
@@ -111,7 +109,7 @@ import static org.elasticsearch.gateway.GatewayService.STATE_NOT_RECOVERED_BLOCK
 public class CassandraDiscovery extends AbstractLifecycleComponent implements Discovery, IEndpointStateChangeSubscriber, AppliedClusterStateAction.AppliedClusterStateListener {
     final Logger logger = LogManager.getLogger(CassandraDiscovery.class);
 
-    private static final ImmutableSet CASSANDRA_ROLES = ImmutableSet.of(Role.MASTER,Role.DATA);
+    private static final ImmutableSet<Role> CASSANDRA_ROLES = ImmutableSet.of(Role.MASTER, Role.DATA);
     private final TransportService transportService;
 
     private final Settings settings;
@@ -145,12 +143,25 @@ public class CassandraDiscovery extends AbstractLifecycleComponent implements Di
     /**
      * Compress the gossip application state X1
      */
-    private final boolean gzip = Boolean.parseBoolean(System.getProperty(ClusterService.SETTING_SYSTEM_COMPRESS_INDEXES_IN_GOSSIP, "false"));
+    private static final String COMPRESS_X1_SYSTEM_PROP = "es.compress_x1";
+
+    private final boolean gzip = Boolean.parseBoolean(System.getProperty(COMPRESS_X1_SYSTEM_PROP, "false"));
 
     /**
      * If autoEnableSearch=true, search is automatically enabled when the node becomes ready to operate, otherwise, searchEnabled should be manually set to true.
      */
     private final AtomicBoolean autoEnableSearch = new AtomicBoolean(System.getProperty("es.auto_enable_search") == null || Boolean.getBoolean("es.auto_enable_search"));
+
+    /**
+     * Same logic as Elassandra's {@code IndexMetaData#keyspace()}; stock {@code IndexMetadata} has no such helper.
+     */
+    private static String keyspaceForIndex(IndexMetaData indexMetaData) {
+        String ks = indexMetaData.getSettings().get("index.keyspace");
+        if (ks != null) {
+            return ks;
+        }
+        return ClusterService.indexToKsName(indexMetaData.getIndex().getName());
+    }
 
     public static final Setting<Integer> MAX_PENDING_CLUSTER_STATES_SETTING =
             Setting.intSetting("discovery.cassandra.publish.max_pending_cluster_states", 1024, 1, Property.NodeScope);
@@ -192,14 +203,21 @@ public class CassandraDiscovery extends AbstractLifecycleComponent implements Di
         boolean removed = false;
         DiscoveryNode discoveryNode;
         Map<String,ShardRoutingState> shardRoutingStateMap;
+        /** Gossip-derived status; kept here so {@link DiscoveryNode} can stay stock (e.g. OpenSearch side-car). */
+        ElassandraGossipNodeStatus gossipStatus;
 
-        public GossipNode(DiscoveryNode discoveryNode, Map<String,ShardRoutingState> shardRoutingStateMap) {
+        public GossipNode(DiscoveryNode discoveryNode, Map<String,ShardRoutingState> shardRoutingStateMap, ElassandraGossipNodeStatus gossipStatus) {
             this.discoveryNode = discoveryNode;
             this.shardRoutingStateMap = shardRoutingStateMap;
+            this.gossipStatus = gossipStatus;
+        }
+
+        public GossipNode(DiscoveryNode discoveryNode, Map<String,ShardRoutingState> shardRoutingStateMap) {
+            this(discoveryNode, shardRoutingStateMap, ElassandraGossipNodeStatus.UNKNOWN);
         }
 
         public GossipNode(DiscoveryNode discoveryNode) {
-            this(discoveryNode, new HashMap<>());
+            this(discoveryNode, new HashMap<>(), ElassandraGossipNodeStatus.UNKNOWN);
         }
 
         @Override
@@ -215,12 +233,13 @@ public class CassandraDiscovery extends AbstractLifecycleComponent implements Di
             GossipNode other = (GossipNode) obj;
             return Objects.equals(removed, other.removed) &&
                 Objects.equals(discoveryNode, other.discoveryNode) &&
-                Objects.equals(this.shardRoutingStateMap, other.shardRoutingStateMap);
+                Objects.equals(this.shardRoutingStateMap, other.shardRoutingStateMap) &&
+                Objects.equals(this.gossipStatus, other.gossipStatus);
         }
 
         @Override
         public int hashCode() {
-            return Objects.hash(removed, discoveryNode, shardRoutingStateMap);
+            return Objects.hash(removed, discoveryNode, shardRoutingStateMap, gossipStatus);
         }
     }
 
@@ -258,7 +277,7 @@ public class CassandraDiscovery extends AbstractLifecycleComponent implements Di
         }
 
         public ShardRoutingState getShardRoutingState(UUID nodeUuid, org.elasticsearch.index.Index index) {
-            if (localNode().uuid().equals(nodeUuid)) {
+            if (UUID.fromString(localNode().getId()).equals(nodeUuid)) {
                 if (isSearchEnabled()) {
                     try {
                         IndexShard localIndexShard = clusterService.indexServiceSafe(index).getShardOrNull(0);
@@ -324,11 +343,11 @@ public class CassandraDiscovery extends AbstractLifecycleComponent implements Di
                                  final InetAddress endpoint,
                                  final InetAddress internalIp,
                                  final InetAddress rpcAddress,
-                                 final DiscoveryNodeStatus status,
+                                 final ElassandraGossipNodeStatus status,
                                  final String x1,
                                  boolean allowClusterStateUpdate
         ) {
-            if (localNode().getId().equals(hostId)) {
+            if (localNode().getId().equals(hostId.toString())) {
                 // ignore GOSSIP update related to our self node.
                 logger.debug("Ignoring GOSSIP update for node id={} ip={} because it's mine", hostId, endpoint);
                 return;
@@ -361,20 +380,20 @@ public class CassandraDiscovery extends AbstractLifecycleComponent implements Di
                         internalIp == null ? null : NetworkAddress.format(internalIp),
                         rpcAddress == null ? null : NetworkAddress.format(rpcAddress),
                         status);
-                    gn = new GossipNode(new DiscoveryNode(buildNodeName(endpoint), hostId.toString(), addr, attrs.build(), CASSANDRA_ROLES, Version.CURRENT, status), x1Map);
+                    gn = new GossipNode(new DiscoveryNode(buildNodeName(endpoint), hostId.toString(), addr, attrs.build(), CASSANDRA_ROLES, Version.CURRENT), x1Map, status);
                     nodeUpdate = true;
                     routingUpdate = status.isAlive();
                 } else {
                     DiscoveryNode dn = gn.discoveryNode;
 
                     // status changed
-                    if (!dn.getStatus().equals(status)) {
+                    if (!gn.gossipStatus.equals(status)) {
                         logger.debug("Update node STATUS host_id={} endpoint={} internal_ip={} rpc_address={}, status={}",
                             hostId, NetworkAddress.format(endpoint),
                             internalIp == null ? null : NetworkAddress.format(internalIp),
                             rpcAddress == null ? null : NetworkAddress.format(rpcAddress),
                             status);
-                        dn.status(status);
+                        gn.gossipStatus = status;
                         nodeUpdate = true;
                         routingUpdate = true;
 
@@ -385,15 +404,15 @@ public class CassandraDiscovery extends AbstractLifecycleComponent implements Di
                     }
 
                     // Node name or IP changed
-                    if (!dn.getName().equals(buildNodeName(endpoint)) || !dn.getInetAddress().equals(addr)) {
+                    if (!dn.getName().equals(buildNodeName(endpoint)) || !dn.getAddress().equals(addr)) {
                         // update DiscoveryNode IP if endpoint is ALIVE
-                        if (status.equals(DiscoveryNodeStatus.ALIVE)) {
+                        if (status.equals(ElassandraGossipNodeStatus.ALIVE)) {
                             logger.debug("Update node IP host_id={} endpoint={} internal_ip={}, rpc_address={}, status={}",
                                 hostId, NetworkAddress.format(endpoint),
                                 internalIp == null ? null : NetworkAddress.format(internalIp),
                                 rpcAddress == null ? null : NetworkAddress.format(rpcAddress),
                                 status);
-                            gn = new GossipNode(new DiscoveryNode(buildNodeName(endpoint), hostId.toString(), addr, dn.getAttributes(), CASSANDRA_ROLES, Version.CURRENT, status), gn.shardRoutingStateMap);
+                            gn = new GossipNode(new DiscoveryNode(buildNodeName(endpoint), hostId.toString(), addr, dn.getAttributes(), CASSANDRA_ROLES, Version.CURRENT), gn.shardRoutingStateMap, status);
                             nodeUpdate = true;
                         } else {
                             logger.debug("Ignoring node DEAD host_id={} endpoint={} internal_ip={}, rpc_address={}, status={}",
@@ -502,7 +521,7 @@ public class CassandraDiscovery extends AbstractLifecycleComponent implements Di
     }
 
     public ClusterState initClusterState(DiscoveryNode localNode) {
-        ClusterState.Builder builder = clusterApplier.newClusterStateBuilder();
+        ClusterState.Builder builder = ClusterState.builder(clusterName);
         ClusterState clusterState = builder.nodes(DiscoveryNodes.builder().add(localNode)
                 .localNodeId(localNode.getId())
                 .masterNodeId(localNode.getId())
@@ -564,7 +583,7 @@ public class CassandraDiscovery extends AbstractLifecycleComponent implements Di
                     IndexMetaData indexMetaData = it.next();
                     IndexMetaData.Builder indexMetaDataBuilder = IndexMetaData.builder(indexMetaData);
                     indexMetaDataBuilder.numberOfShards(discoverNodes.getSize());
-                    int rf = ClusterService.replicationFactor(indexMetaData.keyspace());
+                    int rf = ClusterService.replicationFactor(keyspaceForIndex(indexMetaData));
                     indexMetaDataBuilder.numberOfReplicas( Math.max(0, rf - 1) );
                     metaDataBuilder.put(indexMetaDataBuilder.build(), false);
                 }
@@ -572,7 +591,7 @@ public class CassandraDiscovery extends AbstractLifecycleComponent implements Di
                 ClusterState workingClusterState = clusterStateBuilder.build();
                 RoutingTable routingTable = RoutingTable.build(clusterService, workingClusterState);
                 ClusterState resultingState = ClusterState.builder(workingClusterState).routingTable(routingTable).build();
-                return ClusterTasksResult.builder().successes((List)tasks).build(resultingState);
+                return ClusterTasksResult.<RoutingTableUpdateTask>builder().successes(tasks).build(resultingState);
             }
 
             // only update routing table for some indices
@@ -580,7 +599,7 @@ public class CassandraDiscovery extends AbstractLifecycleComponent implements Di
                     RoutingTable.build(clusterService, clusterStateBuilder.build()) :
                     RoutingTable.build(clusterService, clusterStateBuilder.build(), indices);
             ClusterState resultingState = ClusterState.builder(currentState).routingTable(routingTable).build();
-            return ClusterTasksResult.builder().successes((List)tasks).build(resultingState);
+            return ClusterTasksResult.<RoutingTableUpdateTask>builder().successes(tasks).build(resultingState);
         }
 
         @Override
@@ -647,7 +666,10 @@ public class CassandraDiscovery extends AbstractLifecycleComponent implements Di
         }
         EndpointState state = Gossiper.instance.getEndpointStateForEndpoint(endpoint);
         if (state == null) {
-            logger.warn("Node endpoint address=[{}] name=[{}] state not found", node.getInetAddress(), node.getName());
+            logger.warn(
+                "Node endpoint address=[{}] name=[{}] state not found",
+                node.getAddress().address().getAddress(),
+                node.getName());
             return false;
         }
         return state.isAlive() && state.getStatus().equals(VersionedValue.STATUS_NORMAL);
@@ -952,20 +974,20 @@ public class CassandraDiscovery extends AbstractLifecycleComponent implements Di
         return this.gossipCluster.nodes();
     }
 
-    public DiscoveryNodeStatus discoveryNodeStatus(final EndpointState epState) {
+    public ElassandraGossipNodeStatus discoveryNodeStatus(final EndpointState epState) {
         if (epState == null || !epState.isAlive()) {
-            return DiscoveryNodeStatus.DEAD;
+            return ElassandraGossipNodeStatus.DEAD;
         }
         if (epState.getApplicationState(ApplicationState.X2) == null) {
-            return DiscoveryNodeStatus.DISABLED;
+            return ElassandraGossipNodeStatus.DISABLED;
         }
         if (VersionedValue.STATUS_NORMAL.equals(epState.getStatus()) ||
             VersionedValue.STATUS_LEAVING.equals(epState.getStatus())  ||
             VersionedValue.STATUS_MOVING.equals(epState.getStatus())
         ) {
-            return DiscoveryNodeStatus.ALIVE;
+            return ElassandraGossipNodeStatus.ALIVE;
         }
-        return DiscoveryNodeStatus.DEAD;
+        return ElassandraGossipNodeStatus.DEAD;
     }
 
     @Override
@@ -1051,7 +1073,7 @@ public class CassandraDiscovery extends AbstractLifecycleComponent implements Di
             long publishingStartInNanos = System.nanoTime();
             Set<DiscoveryNode> nodesToPublishTo = new HashSet<>(nodes.getSize());
             for (final DiscoveryNode node : nodes) {
-                if (node.status() == DiscoveryNodeStatus.ALIVE && isNormal(node))
+                if (isNormal(node))
                     nodesToPublishTo.add(node);
             }
             logger.trace("New coordinator handler for nodes={}", nodesToPublishTo);
@@ -1407,11 +1429,6 @@ public class CassandraDiscovery extends AbstractLifecycleComponent implements Di
     @Override
     public DiscoveryStats stats() {
         return null;
-    }
-
-    @Override
-    public DiscoverySettings getDiscoverySettings() {
-        return this.discoverySettings;
     }
 
 }

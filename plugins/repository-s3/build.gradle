@@ -147,6 +147,11 @@ buildscript {
   }
 }
 
+// JDK 11 + Gradle 5.4: elasticsearch.test.fixtures can fail during configuration; allow skipping the Minio fixture.
+if (Boolean.parseBoolean(System.getProperty('elassandra.skipS3TestFixture', 'false'))) {
+  useFixture = false
+}
+
 if (useFixture) {
 
   apply plugin: 'elasticsearch.test.fixtures'

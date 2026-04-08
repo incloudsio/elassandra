@@ -28,7 +28,7 @@ import java.io.IOException;
 @Deprecated
 public class DeleteByQueryFailedEngineException extends EngineException {
 
-    public DeleteByQueryFailedEngineException(ShardId shardId, Engine.DeleteByQuery deleteByQuery, Throwable cause) {
+    public DeleteByQueryFailedEngineException(ShardId shardId, DeleteByQuery deleteByQuery, Throwable cause) {
         super(shardId, "Delete by query failed for [" + deleteByQuery.query() + "]", cause);
     }
 

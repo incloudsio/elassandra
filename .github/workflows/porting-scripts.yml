@@ -24,3 +24,33 @@ jobs:
         run: ./scripts/export-cassandra-elassandra-patches.sh
       - name: List patch count
         run: ls -1 build/cassandra-elassandra-patches/*.patch 2>/dev/null | wc -l
+      - name: OpenSearch port scripts (bash -n)
+        run: |
+          bash -n scripts/opensearch-port-bootstrap.sh
+          bash -n scripts/clone-opensearch-upstream.sh
+          bash -n scripts/sync-elassandra-to-opensearch-sidecar.sh
+          bash -n scripts/rewrite-elassandra-imports-for-opensearch.sh
+          bash -n scripts/opensearch-sidecar-compile-try.sh
+          bash -n scripts/build-elassandra-cassandra-jar.sh
+          bash -n scripts/sync-elassandra-fork-minimal-to-opensearch-sidecar.sh
+          bash -n scripts/patch-opensearch-forbidden-deps-for-elassandra.sh
+          bash -n scripts/export-elassandra-mapper-fork-for-opensearch-merge.sh
+          bash -n scripts/rewrite-engine-java-for-opensearch.sh
+          bash -n scripts/stage-elassandra-mapper-fork-as-opensearch.sh
+          bash -n scripts/prioritize-mapper-fork-merge.sh
+          bash -n scripts/patch-org-elassandra-opensearch-no-schema-update.sh
+          bash -n scripts/sync-elassandra-fork-overlay-to-opensearch-sidecar.sh
+          bash -n scripts/patch-opensearch-engine-delete-by-query.sh
+          bash -n scripts/install-elassandra-cluster-changed-event-opensearch.sh
+          bash -n scripts/patch-opensearch-master-service-taskinputs-public.sh
+          bash -n scripts/patch-cassandra-discovery-for-opensearch.sh
+          bash -n scripts/patch-opensearch-metadata-elassandra-extensions.sh
+          bash -n scripts/sync-elassandra-routing-overlay-to-opensearch-sidecar.sh
+          bash -n scripts/patch-opensearch-cluster-service-elassandra-stubs.sh
+          bash -n scripts/patch-opensearch-cluster-service-elassandra-schema-stubs.sh
+          bash -n scripts/patch-opensearch-mappers-elassandra-cql-compat.sh
+          bash -n scripts/overlay-elassandra-parsecontext-to-opensearch-sidecar.sh
+          bash -n scripts/patch-org-elassandra-opensearch-elastic-secondary.sh
+          bash -n scripts/list-elasticsearch-fork-touchpoints.sh
+          bash -n scripts/print-opensearch-port-pins.sh
+          ./scripts/print-opensearch-port-pins.sh

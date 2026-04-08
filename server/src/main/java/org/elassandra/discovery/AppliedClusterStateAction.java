@@ -19,11 +19,12 @@
 
 package org.elassandra.discovery;
 
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 import org.apache.logging.log4j.message.ParameterizedMessage;
 import org.elasticsearch.action.ActionListener;
 import org.elasticsearch.cluster.ClusterState;
 import org.elasticsearch.cluster.node.DiscoveryNode;
-import org.elasticsearch.common.component.AbstractComponent;
 import org.elasticsearch.common.io.stream.NamedWriteableRegistry;
 import org.elasticsearch.common.io.stream.StreamInput;
 import org.elasticsearch.common.io.stream.StreamOutput;
@@ -41,7 +42,9 @@ import org.elasticsearch.transport.TransportService;
 
 import java.io.IOException;
 
-public class AppliedClusterStateAction extends AbstractComponent {
+public class AppliedClusterStateAction {
+
+    private static final Logger logger = LogManager.getLogger(AppliedClusterStateAction.class);
 
     public static final String APPLIED_ACTION_NAME = "internal:discovery/cassandra/publish/applied";
 
@@ -61,7 +64,6 @@ public class AppliedClusterStateAction extends AbstractComponent {
             TransportService transportService,
             AppliedClusterStateListener incomingClusterStateListener,
             DiscoverySettings discoverySettings) {
-        super();
         this.transportService = transportService;
         this.appliedClusterStateListener = incomingClusterStateListener;
         this.discoverySettings = discoverySettings;

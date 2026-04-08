@@ -68,7 +68,6 @@ import org.apache.cassandra.index.IndexRegistry;
 import org.apache.cassandra.index.transactions.IndexTransaction;
 import org.apache.cassandra.index.transactions.IndexTransaction.Type;
 import org.apache.cassandra.io.util.FileUtils;
-import org.apache.cassandra.schema.IndexMetadata;
 import org.apache.cassandra.serializers.SimpleDateSerializer;
 import org.apache.cassandra.service.ElassandraDaemon;
 import org.apache.cassandra.utils.ByteBufferUtil;
@@ -104,6 +103,7 @@ import org.apache.lucene.search.Weight;
 import org.apache.lucene.search.join.BitSetProducer;
 import org.apache.lucene.util.BytesRef;
 import org.apache.lucene.util.CloseableThreadLocal;
+import org.elassandra.cluster.ElassandraIndexSettings;
 import org.elassandra.cluster.SchemaManager;
 import org.elassandra.cluster.Serializer;
 import org.elassandra.index.ElasticSecondaryIndex.ImmutableMappingInfo.WideRowcumentIndexer.WideRowcument;
@@ -137,7 +137,7 @@ import org.elasticsearch.index.IndexService;
 import org.elasticsearch.index.IndexSettings;
 import org.elasticsearch.index.VersionType;
 import org.elasticsearch.index.engine.Engine;
-import org.elasticsearch.index.engine.Engine.DeleteByQuery;
+import org.elasticsearch.index.engine.DeleteByQuery;
 import org.elasticsearch.index.engine.Engine.IndexResult;
 import org.elasticsearch.index.engine.Engine.Operation;
 import org.elasticsearch.index.engine.EngineException;
@@ -226,12 +226,12 @@ public class ElasticSecondaryIndex implements Index {
     protected final ClusterService clusterService;
 
     protected final ColumnFamilyStore baseCfs;
-    protected final IndexMetadata indexMetadata;
+    protected final org.apache.cassandra.schema.IndexMetadata indexMetadata;
     protected String typeName;
     protected Object[] readBeforeWriteLocks;
     protected AtomicBoolean needBuild;
 
-    ElasticSecondaryIndex(ColumnFamilyStore baseCfs, IndexMetadata indexDef) {
+    ElasticSecondaryIndex(ColumnFamilyStore baseCfs, org.apache.cassandra.schema.IndexMetadata indexDef) {
         this.baseCfs = baseCfs;
         this.indexMetadata = indexDef;
         this.index_name = baseCfs.keyspace.getName() + "." + baseCfs.name;
@@ -248,13 +248,13 @@ public class ElasticSecondaryIndex implements Index {
         this.needBuild = new AtomicBoolean(!isBuilt());
     }
 
-    public static ElasticSecondaryIndex newElasticSecondaryIndex(ColumnFamilyStore baseCfs, IndexMetadata indexDef) {
+    public static ElasticSecondaryIndex newElasticSecondaryIndex(ColumnFamilyStore baseCfs, org.apache.cassandra.schema.IndexMetadata indexDef) {
         ElasticSecondaryIndex esi = elasticSecondayIndices.computeIfAbsent(baseCfs.keyspace.getName() + "." + baseCfs.name, K -> new ElasticSecondaryIndex(baseCfs, indexDef));
         return esi;
     }
 
     // Public because it's also used to convert index metadata into a thrift-compatible format
-    public static Pair<ColumnMetadata, IndexTarget.Type> parseTarget(TableMetadata cfm, IndexMetadata indexDef) {
+    public static Pair<ColumnMetadata, IndexTarget.Type> parseTarget(TableMetadata cfm, org.apache.cassandra.schema.IndexMetadata indexDef) {
         String target = indexDef.options.get("target");
         assert target != null : String.format(Locale.ROOT, "No target definition found for index %s", indexDef.name);
 
@@ -297,6 +297,17 @@ public class ElasticSecondaryIndex implements Index {
     public boolean isInsertOnly() {
         ImmutableMappingInfo imf =  mappingInfoRef.get();
         return imf != null && imf.indexInsertOnly;
+    }
+
+    /** ES 6 {@code DocumentMapper#allFieldMapper()}; OpenSearch 7+ removed the global {@code _all} field. */
+    private static boolean allFieldMapperEnabledForAllEntries(DocumentMapper docMapper) {
+        try {
+            java.lang.reflect.Method m = docMapper.getClass().getMethod("allFieldMapper");
+            Object afm = m.invoke(docMapper);
+            return (Boolean) afm.getClass().getMethod("enabled").invoke(afm);
+        } catch (ReflectiveOperationException e) {
+            return true;
+        }
     }
 
     // reusable per thread context
@@ -345,7 +356,7 @@ public class ElasticSecondaryIndex implements Index {
             logger.trace("doc[{}] class={} name={} value={} keyName={}",
                     context.docs().indexOf(context.doc()), mapper.getClass().getSimpleName(), mapper.name(), value, keyName);
 
-        if (value == null && (!(mapper instanceof FieldMapper) || ((FieldMapper) mapper).fieldType().nullValue() == null))
+        if (value == null && (!(mapper instanceof FieldMapper) || ElassandraSecondaryIndexCompat.nullValueUnset((FieldMapper) mapper)))
             return;
 
         if (value instanceof Collection) {
@@ -369,23 +380,22 @@ public class ElasticSecondaryIndex implements Index {
             if (value instanceof String) {
                 // geo_point stored as geohash text
                 geoPoint = new GeoPoint((String) value);
-                geoPointFieldMapper.parse(context, geoPoint);
             } else {
                 // geo_point stored in UDT.
                 Map<String, Double> geo_point = (Map<String, Double>) value;
                 geoPoint = new GeoPoint(geo_point.get(org.elasticsearch.common.geo.GeoUtils.LATITUDE), geo_point.get(org.elasticsearch.common.geo.GeoUtils.LONGITUDE));
-                geoPointFieldMapper.parse(context, geoPoint);
             }
+            geoPointFieldMapper.parse(context.createExternalValueContext(geoPoint));
         } else if (mapper instanceof FieldMapper) {
-            ((FieldMapper) mapper).createField(context, value, keyName);
-            DocumentParser.createCopyFields(context, ((FieldMapper)mapper).copyTo().copyToFields(), value);
+            ElassandraSecondaryIndexCompat.fieldMapperCreate((FieldMapper) mapper, context, value, keyName);
+            DocumentParserCompat.createCopyFields(context, ((FieldMapper) mapper).copyTo().copyToFields(), value);
         } else if (mapper instanceof ObjectMapper) {
             final ObjectMapper objectMapper = (ObjectMapper) mapper;
             final ObjectMapper.Nested nested = objectMapper.nested();
             // see https://www.elastic.co/guide/en/elasticsearch/guide/current/nested-objects.html
             // code from DocumentParser.parseObject()
             if (nested.isNested()) {
-                context = DocumentParser.nestedContext(context, objectMapper);
+                context = DocumentParserCompat.nestedContext(context, objectMapper);
             }
 
             //ContentPath.Type origPathType = path().pathType();
@@ -399,7 +409,7 @@ public class ElasticSecondaryIndex implements Index {
                         indexInfo.dynamicMappingUpdateLock.readLock().lock();
 
                     String subMapperName = cqlMapper.cqlStruct().equals(CqlStruct.OPAQUE_MAP) ?
-                            ObjectMapper.DEFAULT_KEY :
+                            "_key" :
                             entry.getKey();
                     Mapper subMapper = objectMapper.getMapper(subMapperName);
 
@@ -411,12 +421,12 @@ public class ElasticSecondaryIndex implements Index {
                     }
                     if (subMapper == null && cqlMapper.cqlStruct().equals(CqlStruct.MAP)) {
                         // dynamic field in top level map => update the elasticsearch mapping and add the field.
-                        ColumnMetadata cd = baseCfs.metadata.get().getColumn(mapper.cqlName());
+                        ColumnMetadata cd = baseCfs.metadata.get().getColumn(cqlMapper.cqlName());
                         if (subMapper == null && cd != null && cd.type.isCollection() && cd.type instanceof MapType ) {
                             CollectionType ctype = (CollectionType) cd.type;
                             if (ctype.kind == CollectionType.Kind.MAP &&
                                 ((MapType) ctype).getKeysType().asCQL3Type().toString().equals("text") &&
-                                (DocumentParser.dynamicOrDefault(objectMapper, ctx) == ObjectMapper.Dynamic.TRUE)) {
+                                (DocumentParserCompat.dynamicOrDefault(objectMapper, ctx) == ObjectMapper.Dynamic.TRUE)) {
                                 logger.debug("Updating mapping for field={} type={} value={} ", entry.getKey(), cd.type.toString(), value);
                                 // upgrade to write lock
                                 indexInfo.dynamicMappingUpdateLock.readLock().unlock();
@@ -426,7 +436,7 @@ public class ElasticSecondaryIndex implements Index {
                                     if ((subMapper = objectMapper.getMapper(entry.getKey())) == null) {
                                         final String esType = ((MapType) ctype).getValuesType().asCQL3Type().toString();
                                         final Map<String, Object> esMapping = new HashMap<>();
-                                        indexInfo.indexService.mapperService().buildNativeOrUdtMapping(esMapping, ((MapType) ctype).getValuesType());
+                                        ElassandraSecondaryIndexCompat.mapperServiceBuildNativeOrUdtMapping(indexInfo.indexService.mapperService(), esMapping, ((MapType) ctype).getValuesType());
 
                                         final DynamicTemplate dynamicTemplate = context.docMapper().root().findTemplate(context.path(), objectMapper.name() + "." + entry.getKey(), null);
 
@@ -510,7 +520,7 @@ public class ElasticSecondaryIndex implements Index {
 
             // restore the enable path flag
             if (nested.isNested()) {
-                DocumentParser.nested(context, nested);
+                DocumentParserCompat.nested(context, nested);
             }
         }
     }
@@ -554,8 +564,8 @@ public class ElasticSecondaryIndex implements Index {
             this.documents.clear();
             this.documents.add(this.document);
             this.id = uid.id();
-            this.uid = new Field(UidFieldMapper.NAME, uid.toBytesRef(), UidFieldMapper.Defaults.FIELD_TYPE);
-            this.allEntries = (this.docMapper.allFieldMapper().enabled()) ? new AllEntries() : null;
+            this.uid = new Field(UidFieldMapper.NAME, Uid.createUidAsBytes(uid.type(), uid.id()), UidFieldMapper.Defaults.FIELD_TYPE);
+            this.allEntries = allFieldMapperEnabledForAllEntries(this.docMapper) ? new AllEntries() : null;
             this.docBoost = 1.0f;
             this.dynamicMappers = null;
             this.parent = null;
@@ -588,7 +598,7 @@ public class ElasticSecondaryIndex implements Index {
         public void finishHim() {
             if (!finished) {
                 docsReversed = true;
-                if (this.indexInfo.indexService.getIndexSettings().getIndexVersionCreated().onOrAfter(Version.V_6_5_0)) {
+                if (ElassandraSecondaryIndexCompat.indexVersionOnOrAfter65(this.indexInfo.indexService.getIndexSettings())) {
                     /**
                      * For indices created on or after {@link Version#V_6_5_0} we preserve the order
                      * of the children while ensuring that parents appear after them.
@@ -805,7 +815,7 @@ public class ElasticSecondaryIndex implements Index {
 
             @Override
             public boolean apply(IndexableField input) {
-                if (MapperService.isMetadataField(input.name())) {
+                if (indexInfo.indexService.mapperService().isMetadataField(input.name())) {
                     return true;
                 }
                 int x = input.name().indexOf('.');
@@ -854,19 +864,19 @@ public class ElasticSecondaryIndex implements Index {
                 Map<String, Object> mappingMap = mappingMetaData.getSourceAsMap();
                 Map<String, Object> metaMap = (mappingMap == null) ? null : (Map<String, Object>) mappingMap.get("_meta");
 
-                this.version = indexService.getMetaData().getVersion();
-                this.refresh = getMetaSettings(metadata.settings(), metaMap, IndexMetaData.INDEX_SYNCHRONOUS_REFRESH_SETTING) || synchronousRefreshPattern.matcher(name).matches();
-                logger.debug("index.type=[{}.{}] {}=[{}]", name, this.type, IndexMetaData.INDEX_SYNCHRONOUS_REFRESH_SETTING.getKey(), refresh);
+                this.version = ElassandraSecondaryIndexCompat.indexMetadataVersion(indexService);
+                this.refresh = getMetaSettings(metadata.settings(), metaMap, ElassandraIndexSettings.INDEX_SYNCHRONOUS_REFRESH_SETTING) || synchronousRefreshPattern.matcher(name).matches();
+                logger.debug("index.type=[{}.{}] {}=[{}]", name, this.type, ElassandraIndexSettings.INDEX_SYNCHRONOUS_REFRESH_SETTING.getKey(), refresh);
 
-                this.snapshot = getMetaSettings(metadata.settings(), metaMap, IndexMetaData.INDEX_SNAPSHOT_WITH_SSTABLE_SETTING);
-                this.includeNodeId = getMetaSettings(metadata.settings(), metaMap, IndexMetaData.INDEX_INCLUDE_HOST_ID_SETTING);
+                this.snapshot = getMetaSettings(metadata.settings(), metaMap, ElassandraIndexSettings.INDEX_SNAPSHOT_WITH_SSTABLE_SETTING);
+                this.includeNodeId = getMetaSettings(metadata.settings(), metaMap, ElassandraIndexSettings.INDEX_INCLUDE_HOST_ID_SETTING);
 
-                this.index_on_compaction = getMetaSettings(metadata.settings(), metaMap, IndexMetaData.INDEX_INDEX_ON_COMPACTION_SETTING);
-                this.index_static_columns = getMetaSettings(metadata.settings(), metaMap, IndexMetaData.INDEX_INDEX_STATIC_COLUMNS_SETTING);
-                this.index_static_only = getMetaSettings(metadata.settings(), metaMap, IndexMetaData.INDEX_INDEX_STATIC_ONLY_SETTING);
-                this.index_static_document = getMetaSettings(metadata.settings(), metaMap, IndexMetaData.INDEX_INDEX_STATIC_DOCUMENT_SETTING);
-                this.insert_only = getMetaSettings(metadata.settings(), metaMap, IndexMetaData.INDEX_INDEX_INSERT_ONLY_SETTING);
-                this.opaque_storage = getMetaSettings(metadata.settings(), metaMap, IndexMetaData.INDEX_INDEX_OPAQUE_STORAGE_SETTING);
+                this.index_on_compaction = getMetaSettings(metadata.settings(), metaMap, ElassandraIndexSettings.INDEX_INDEX_ON_COMPACTION_SETTING);
+                this.index_static_columns = getMetaSettings(metadata.settings(), metaMap, ElassandraIndexSettings.INDEX_INDEX_STATIC_COLUMNS_SETTING);
+                this.index_static_only = getMetaSettings(metadata.settings(), metaMap, ElassandraIndexSettings.INDEX_INDEX_STATIC_ONLY_SETTING);
+                this.index_static_document = getMetaSettings(metadata.settings(), metaMap, ElassandraIndexSettings.INDEX_INDEX_STATIC_DOCUMENT_SETTING);
+                this.insert_only = getMetaSettings(metadata.settings(), metaMap, ElassandraIndexSettings.INDEX_INDEX_INSERT_ONLY_SETTING);
+                this.opaque_storage = getMetaSettings(metadata.settings(), metaMap, ElassandraIndexSettings.INDEX_INDEX_OPAQUE_STORAGE_SETTING);
 
                 // lazy lock array initialization if needed
                 if (!this.insert_only && readBeforeWriteLocks == null) {
@@ -888,7 +898,7 @@ public class ElasticSecondaryIndex implements Index {
             public boolean getMetaSettings(Settings metadataSettings, Map<String, Object> metaMap, Setting indexSetting) {
                 boolean value = false;
                 IndexSettings indexSettings = indexService.getIndexSettings();
-                String key = indexSetting.getKey().substring(IndexMetaData.INDEX_SETTING_PREFIX.length());
+                String key = indexSetting.getKey().substring(ElassandraIndexSettings.INDEX_SETTING_PREFIX.length());
                 if (metaMap != null && metaMap.get(key) != null) {
                     value = XContentMapValues.nodeBooleanValue(metaMap.get(key));
                     logger.debug("index.type=[{}.{}] {}=[{}] in _meta settings", name, this.type, key, value);
@@ -981,8 +991,8 @@ public class ElasticSecondaryIndex implements Index {
                     }
                     if (!updated)
                         updated = true;
-                    DeleteByQuery deleteByQuery = buildDeleteByQuery(shard.indexService(), query);
-                    shard.getEngine().delete(deleteByQuery);
+                    DeleteByQuery deleteByQuery = buildDeleteByQuery(ElassandraSecondaryIndexCompat.indexShardIndexService(shard), query);
+                    ElassandraSecondaryIndexCompat.indexShardEngine(shard).delete(deleteByQuery);
                 }
             }
 
@@ -1013,23 +1023,23 @@ public class ElasticSecondaryIndex implements Index {
                             case INT:
                                 query = start != null && end != null && ((Comparable) start).compareTo(end) == 0 ?
                                     NumberFieldMapper.NumberType.INTEGER.termQuery(mapper.name(), start) :
-                                    NumberFieldMapper.NumberType.INTEGER.rangeQuery(mapper.name(), start, end, includeLower, includeUpper, mapper.fieldType().hasDocValues());
+                                    ElassandraSecondaryIndexCompat.numberTypeRangeQuery(NumberFieldMapper.NumberType.INTEGER, mapper.name(), start, end, includeLower, includeUpper, mapper.fieldType().hasDocValues());
                                 break;
                             case SMALLINT:
                                 query = start != null && end != null && ((Comparable) start).compareTo(end) == 0 ?
                                     NumberFieldMapper.NumberType.SHORT.termQuery(mapper.name(), start) :
-                                    NumberFieldMapper.NumberType.SHORT.rangeQuery(mapper.name(), start, end, includeLower, includeUpper, mapper.fieldType().hasDocValues());
+                                    ElassandraSecondaryIndexCompat.numberTypeRangeQuery(NumberFieldMapper.NumberType.SHORT, mapper.name(), start, end, includeLower, includeUpper, mapper.fieldType().hasDocValues());
                                 break;
                             case TINYINT:
                                 query = start != null && end != null && ((Comparable) start).compareTo(end) == 0 ?
                                     NumberFieldMapper.NumberType.BYTE.termQuery(mapper.name(), start) :
-                                    NumberFieldMapper.NumberType.BYTE.rangeQuery(mapper.name(), start, end, includeLower, includeUpper, mapper.fieldType().hasDocValues());
+                                    ElassandraSecondaryIndexCompat.numberTypeRangeQuery(NumberFieldMapper.NumberType.BYTE, mapper.name(), start, end, includeLower, includeUpper, mapper.fieldType().hasDocValues());
                                 break;
                             case INET:
                                 IpFieldMapper ipMapper = (IpFieldMapper) mapper;
                                 query = start != null && end != null && ((InetAddress) start).equals(end) ?
-                                    ipMapper.fieldType().termQuery(start, null) :
-                                    ipMapper.fieldType().rangeQuery(start, end, includeLower, includeUpper, null);
+                                    ElassandraSecondaryIndexCompat.ipFieldTypeTermQuery(ipMapper.fieldType(), start) :
+                                    ElassandraSecondaryIndexCompat.ipFieldTypeRangeQuery(ipMapper.fieldType(), start, end, includeLower, includeUpper);
                                 break;
                             case DATE: {
                                 DateFieldMapper dateMapper = (DateFieldMapper) mapper;
@@ -1086,17 +1096,17 @@ public class ElasticSecondaryIndex implements Index {
                             case BIGINT:
                                 query = start != null && end != null && ((Comparable) start).compareTo(end) == 0 ?
                                     NumberFieldMapper.NumberType.LONG.termQuery(mapper.name(), start) :
-                                    NumberFieldMapper.NumberType.LONG.rangeQuery(mapper.name(), start, end, includeLower, includeUpper, mapper.fieldType().hasDocValues());
+                                    ElassandraSecondaryIndexCompat.numberTypeRangeQuery(NumberFieldMapper.NumberType.LONG, mapper.name(), start, end, includeLower, includeUpper, mapper.fieldType().hasDocValues());
                                 break;
                             case DOUBLE:
                                 query = start != null && end != null && ((Comparable) start).compareTo(end) == 0 ?
                                     NumberFieldMapper.NumberType.DOUBLE.termQuery(mapper.name(), start) :
-                                    NumberFieldMapper.NumberType.DOUBLE.rangeQuery(mapper.name(), start, end, includeLower, includeUpper, mapper.fieldType().hasDocValues());
+                                    ElassandraSecondaryIndexCompat.numberTypeRangeQuery(NumberFieldMapper.NumberType.DOUBLE, mapper.name(), start, end, includeLower, includeUpper, mapper.fieldType().hasDocValues());
                                 break;
                             case FLOAT:
                                 query = start != null && end != null && ((Comparable) start).compareTo(end) == 0 ?
                                     NumberFieldMapper.NumberType.FLOAT.termQuery(mapper.name(), start) :
-                                    NumberFieldMapper.NumberType.FLOAT.rangeQuery(mapper.name(), start, end, includeLower, includeUpper, mapper.fieldType().hasDocValues());
+                                    ElassandraSecondaryIndexCompat.numberTypeRangeQuery(NumberFieldMapper.NumberType.FLOAT, mapper.name(), start, end, includeLower, includeUpper, mapper.fieldType().hasDocValues());
                                 break;
                             case TIMEUUID:
                                 if (start != null && end != null && ((Comparable) start).compareTo(end) == 0) {
@@ -1107,7 +1117,7 @@ public class ElasticSecondaryIndex implements Index {
                                     if (mapper instanceof DateFieldMapper) {
                                         long l = (start == null) ? Long.MIN_VALUE : UUIDGen.unixTimestamp((UUID) start);
                                         long u = (end == null) ? Long.MAX_VALUE : UUIDGen.unixTimestamp((UUID) end);
-                                        query = NumberFieldMapper.NumberType.LONG.rangeQuery(mapper.name(), l, u, includeLower, includeUpper, mapper.fieldType().hasDocValues());
+                                        query = ElassandraSecondaryIndexCompat.numberTypeRangeQuery(NumberFieldMapper.NumberType.LONG, mapper.name(), l, u, includeLower, includeUpper, mapper.fieldType().hasDocValues());
                                     } else {
                                         query = new TermRangeQuery(mapper.name(), BytesRefs.toBytesRef(start), BytesRefs.toBytesRef(end), includeLower, includeUpper);
                                     }
@@ -1119,7 +1129,7 @@ public class ElasticSecondaryIndex implements Index {
                                     new TermRangeQuery(mapper.name(), BytesRefs.toBytesRef(start), BytesRefs.toBytesRef(end), includeLower, includeUpper);
                                 break;
                             case BOOLEAN:
-                                query = ((BooleanFieldMapper) mapper).fieldType().rangeQuery(start, end, includeLower, includeUpper, null);
+                                query = ElassandraSecondaryIndexCompat.booleanFieldTypeRangeQuery(((BooleanFieldMapper) mapper).fieldType(), start, end, includeLower, includeUpper);
                                 break;
                             case BLOB:
                                 throw new UnsupportedOperationException("Unsupported type [blob] in primary key");
@@ -2570,7 +2580,7 @@ public class ElasticSecondaryIndex implements Index {
     }
 
     @Override
-    public Callable<?> getMetadataReloadTask(IndexMetadata indexMetadata) {
+    public Callable<?> getMetadataReloadTask(org.apache.cassandra.schema.IndexMetadata indexMetadata) {
         return null;
     }
 
@@ -2723,7 +2733,7 @@ public class ElasticSecondaryIndex implements Index {
     }
 
     @Override
-    public IndexMetadata getIndexMetadata() {
+    public org.apache.cassandra.schema.IndexMetadata getIndexMetadata() {
         return this.indexMetadata;
     }
 

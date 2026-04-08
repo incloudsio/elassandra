@@ -22,7 +22,6 @@ package org.elasticsearch.search;
 import org.apache.lucene.search.BooleanQuery;
 import org.apache.lucene.util.SetOnce;
 import org.elassandra.index.ElasticQueryHandler;
-import org.elassandra.search.aggregations.bucket.token.InternalTokenRange;
 import org.elassandra.search.aggregations.bucket.token.TokenRangeAggregationBuilder;
 import org.elasticsearch.cluster.service.ClusterService;
 import org.elasticsearch.common.NamedRegistry;
@@ -446,7 +445,7 @@ public class SearchModule {
         registerAggregation(new AggregationSpec(IpRangeAggregationBuilder.NAME, IpRangeAggregationBuilder::new,
                 IpRangeAggregationBuilder::parse).addResultReader(InternalBinaryRange::new));
         registerAggregation(new AggregationSpec(TokenRangeAggregationBuilder.NAME, TokenRangeAggregationBuilder::new,
-                TokenRangeAggregationBuilder::parse).addResultReader(InternalTokenRange::new));
+                TokenRangeAggregationBuilder::parse).addResultReader(InternalRange::new));
         registerAggregation(new AggregationSpec(HistogramAggregationBuilder.NAME, HistogramAggregationBuilder::new,
                 HistogramAggregationBuilder::parse).addResultReader(InternalHistogram::new));
         registerAggregation(new AggregationSpec(DateHistogramAggregationBuilder.NAME, DateHistogramAggregationBuilder::new,

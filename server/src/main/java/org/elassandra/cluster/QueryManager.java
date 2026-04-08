@@ -48,10 +48,10 @@ import org.elasticsearch.action.DocWriteRequest;
 import org.elasticsearch.action.index.IndexRequest;
 import org.elasticsearch.cluster.metadata.IndexMetaData;
 import org.elasticsearch.cluster.service.ClusterService;
-import org.elasticsearch.cluster.service.ClusterService.DocPrimaryKey;
 import org.elasticsearch.common.bytes.BytesArray;
 import org.elasticsearch.common.bytes.BytesReference;
-import org.elasticsearch.common.component.AbstractComponent;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 import org.elasticsearch.common.document.DocumentField;
 import org.elasticsearch.common.logging.Loggers;
 import org.elasticsearch.common.lucene.uid.VersionsAndSeqNoResolver.DocIdAndVersion;
@@ -62,7 +62,7 @@ import org.elasticsearch.common.xcontent.XContentType;
 import org.elasticsearch.index.IndexService;
 import org.elasticsearch.index.engine.Engine;
 import org.elasticsearch.index.engine.VersionConflictEngineException;
-import org.elasticsearch.index.get.GetField;
+import org.elassandra.index.get.GetField;
 import org.elasticsearch.index.mapper.*;
 import org.elasticsearch.index.mapper.CqlMapper.CqlCollection;
 import org.elasticsearch.index.seqno.SequenceNumbers;
@@ -75,11 +75,12 @@ import java.util.Map.Entry;
 import java.util.function.Consumer;
 import java.util.function.LongConsumer;
 
-public class QueryManager extends AbstractComponent {
+public class QueryManager {
+    private static final Logger logger = LogManager.getLogger(QueryManager.class);
+
     private final ClusterService clusterService;
 
     public QueryManager(Settings settings, ClusterService clusterService) {
-        super();
         this.clusterService = clusterService;
     }
 

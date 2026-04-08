@@ -37,6 +37,7 @@ import org.apache.lucene.search.Query;
 import org.apache.lucene.search.Scorer;
 import org.apache.lucene.search.Weight;
 import org.apache.lucene.util.BitSet;
+import org.elassandra.cluster.DocPrimaryKey;
 import org.elassandra.index.mapper.internal.HostFieldMapper;
 import org.elasticsearch.ExceptionsHelper;
 import org.elasticsearch.Version;
@@ -528,7 +529,7 @@ public class FetchPhase implements SearchPhase {
         IndexService indexService = searchContext.indexShard().indexService();
         try {
             fieldVisitor.postProcess(indexService.mapperService());
-            ClusterService.DocPrimaryKey docPk = clusterService.getQueryManager().parseElasticId(searchContext.indexShard().mapperService().keyspace(), fieldVisitor.uid().type(), fieldVisitor.uid().id());
+            DocPrimaryKey docPk = clusterService.getQueryManager().parseElasticId(searchContext.indexShard().mapperService().keyspace(), fieldVisitor.uid().type(), fieldVisitor.uid().id());
             String typeKey = fieldVisitor.uid().type();
             if (docPk.isStaticDocument)
                 typeKey += "_static";

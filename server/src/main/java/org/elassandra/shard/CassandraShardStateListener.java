@@ -28,7 +28,6 @@ import org.elasticsearch.cluster.routing.ShardRoutingState;
 import org.elasticsearch.cluster.service.ClusterService;
 import org.elasticsearch.common.Nullable;
 import org.elasticsearch.common.Priority;
-import org.elasticsearch.common.component.AbstractComponent;
 import org.elasticsearch.common.inject.Inject;
 import org.elasticsearch.common.settings.Settings;
 import org.elasticsearch.common.unit.TimeValue;
@@ -39,17 +38,20 @@ import org.elasticsearch.index.shard.IndexShard;
 import org.elasticsearch.index.shard.ShardId;
 import org.elasticsearch.indices.cluster.IndicesClusterStateService.AllocatedIndices.IndexRemovalReason;
 
-/**
- * Post applied cluster state service to update gossip X1 shards state.
- */
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
+
 import java.io.IOException;
 import java.util.List;
 import java.util.stream.Collectors;
 
 /**
+ * Post applied cluster state service to update gossip X1 shards state.
  * Publish local ShardRouting state in the gossip state X1.
  */
-public class CassandraShardStateListener extends AbstractComponent implements IndexEventListener {
+public class CassandraShardStateListener implements IndexEventListener {
+
+    private static final Logger logger = LogManager.getLogger(CassandraShardStateListener.class);
 
     private final ClusterService clusterService;
     private final RoutingTableUpdateTaskExecutor routingTableUpdateTaskExecutor;

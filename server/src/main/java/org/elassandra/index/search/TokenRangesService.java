@@ -15,10 +15,8 @@ import org.apache.lucene.search.Query;
 import org.elassandra.cluster.routing.AbstractSearchStrategy;
 import org.elassandra.index.mapper.internal.TokenFieldMapper;
 import org.elasticsearch.cluster.service.ClusterService;
-import org.elasticsearch.common.component.AbstractComponent;
 import org.elasticsearch.common.inject.Inject;
 import org.elasticsearch.common.settings.Settings;
-import org.elasticsearch.common.util.concurrent.EsExecutors;
 import org.elasticsearch.index.mapper.NumberFieldMapper;
 
 import java.util.Collection;
@@ -37,7 +35,7 @@ public class TokenRangesService {
     public TokenRangesService(Settings settings) {
         this.settings = settings;
         this.tokenRangesQueryCache = CacheBuilder.newBuilder()
-            .concurrencyLevel(EsExecutors.numberOfProcessors(TokenRangesService.this.settings))
+            .concurrencyLevel(Runtime.getRuntime().availableProcessors())
             .expireAfterAccess(Integer.getInteger(ClusterService.SETTING_SYSTEM_TOKEN_RANGES_QUERY_EXPIRE, 5), TimeUnit.MINUTES)
             .removalListener(new RemovalListener<Collection<Range<Token>>, Query>() {
                 @Override

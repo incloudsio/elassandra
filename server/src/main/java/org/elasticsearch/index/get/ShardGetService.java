@@ -28,7 +28,7 @@ import org.apache.lucene.index.Term;
 import org.elassandra.cluster.SchemaManager;
 import org.elasticsearch.ElasticsearchException;
 import org.elasticsearch.cluster.service.ClusterService;
-import org.elasticsearch.cluster.service.ClusterService.DocPrimaryKey;
+import org.elassandra.cluster.DocPrimaryKey;
 import org.elasticsearch.common.Nullable;
 import org.elasticsearch.common.bytes.BytesReference;
 import org.elasticsearch.common.collect.Tuple;

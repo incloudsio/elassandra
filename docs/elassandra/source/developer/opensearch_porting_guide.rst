@@ -35,6 +35,44 @@ Then:
 
 Use **Java 11+** and the Gradle wrapper shipped in that tree. Do not expect the Elassandra **6.8** Gradle wrapper to drive the OpenSearch build.
 
+Sync ``org.elassandra.*`` and rewrite imports (side-car)
+........................................................
+
+From this repository (after bootstrap):
+
+.. code-block:: bash
+
+   ./scripts/sync-elassandra-to-opensearch-sidecar.sh
+   ./scripts/rewrite-elassandra-imports-for-opensearch.sh "${OPENSEARCH_CLONE_DIR:-../opensearch-upstream}"
+
+Build the Cassandra jar when needed (from this repo):
+
+.. code-block:: bash
+
+   ./scripts/build-elassandra-cassandra-jar.sh
+
+To run a compile attempt (expect failures until the forked ``org.opensearch`` sources are replayed):
+
+.. code-block:: bash
+
+   JAVA_HOME=/path/to/jdk-11 ./scripts/opensearch-sidecar-compile-try.sh
+
+If you drive OpenSearch ``gradlew`` manually, pass the jar path via ``GRADLE_OPTS`` (``-D`` on the CLI is not always forwarded) and ``-I`` the init script under ``gradle/opensearch-sidecar-elassandra.init.gradle``. After Cassandra resolves, remaining errors are usually fork-only types such as ``CqlMapper`` that must be merged from the Elasticsearch tree.
+
+The same ``rewrite-elassandra-imports-for-opensearch.sh`` pass flattens nested metric imports (``metrics.min.*`` → ``metrics.*``), renames ``IndexMetaData`` / ``MetaData`` to ``IndexMetadata`` / ``Metadata``, rewrites ``.metaData()`` → ``.metadata()``, and adjusts ``getTotalHits()`` for Lucene ``TotalHits`` (7.x+). Types such as ``ObjectMapper`` must still implement Elassandra’s ``CqlMapper`` in the merged fork.
+
+List ``org/elasticsearch`` sources that mention Elassandra / Strapdata (likely fork touchpoints for the rebase):
+
+.. code-block:: bash
+
+   ./scripts/list-elasticsearch-fork-touchpoints.sh
+
+Target version pins for the side-car (from ``buildSrc/version.properties``):
+
+.. code-block:: bash
+
+   ./scripts/print-opensearch-port-pins.sh
+
 Bootstrap and process model
 ---------------------------
 
@@ -68,6 +106,33 @@ Metadata and mapping
 * ``MetaDataCreateIndexService``, ``IndexMetaData``, ``IndicesModule``, ``IndexModule``,
   ``MapperService``, ``DocumentMapper`` — heavy ES 6.8 touch points; expect largest diff vs 1.3.
 
+Mapper fork (CqlMapper / CQL columns)
+.....................................
+
+Elassandra adds ``CqlMapper``, CQL-related state on ``ObjectMapper`` / ``FieldMapper`` / ``MappedFieldType``,
+and parsing hooks in ``TypeParsers``. Stock OpenSearch does not include these; you must **merge** the
+Elasticsearch 6.8 fork in ``server/src/main/java/org/elasticsearch/index/mapper/`` into the matching
+``org.opensearch.index.mapper`` types (often starting with ``ObjectMapper`` and ``FieldMapper``).
+
+Export the full forked mapper directory next to your OpenSearch clone as a **read-only reference**
+for diff and 3-way merge (does not overwrite OpenSearch sources):
+
+.. code-block:: bash
+
+   ./scripts/export-elassandra-mapper-fork-for-opensearch-merge.sh
+
+Output path: ``<OpenSearch clone>/elassandra-mapper-fork-reference/org/elasticsearch/index/mapper/``.
+
+To stage the fork inside this repo with ``package org.opensearch.index.mapper`` and the same automated
+rewrites used for the side-car (for diffing against upstream without touching the OpenSearch clone):
+
+.. code-block:: bash
+
+   ./scripts/stage-elassandra-mapper-fork-as-opensearch.sh
+   ./scripts/prioritize-mapper-fork-merge.sh
+
+Default output: ``build/elassandra-mapper-staged-opensearch/server/src/main/java/org/opensearch/index/mapper/``.
+
 Shard coordination
 ------------------
 
@@ -85,3 +150,6 @@ Modules and tests
 * ``modules/ingest-common`` Elassandra processors (e.g. timeuuid, base64).
 * ``server/src/test/java/org/elassandra`` — update test framework imports; keep
   “single node per JVM” assumptions documented in ``MockCassandraDiscovery``.
+* After the test framework is rebased onto OpenSearch, expect renames such as
+  ``ESSingleNodeTestCase`` → ``org.opensearch.test.OpenSearchSingleNodeTestCase`` and
+  ``ESTestCase`` → ``OpenSearchTestCase`` (see upstream ``test/framework`` in the OpenSearch tree).

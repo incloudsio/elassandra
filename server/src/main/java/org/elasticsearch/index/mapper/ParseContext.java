@@ -23,7 +23,6 @@ import com.carrotsearch.hppc.ObjectObjectHashMap;
 import com.carrotsearch.hppc.ObjectObjectMap;
 import com.google.common.collect.Iterators;
 import org.apache.lucene.document.Field;
-import org.apache.lucene.index.IndexOptions;
 import org.apache.lucene.index.IndexableField;
 import org.apache.lucene.util.BytesRef;
 import org.elasticsearch.Version;
@@ -656,8 +655,21 @@ public abstract class ParseContext implements Iterable<ParseContext.Document>{
 
     public abstract void seqID(SeqNoFieldMapper.SequenceIDFields seqID);
 
+    /**
+     * Elasticsearch exposes {@code DocumentMapper#allFieldMapper()}; OpenSearch 7+ removed the global {@code _all} field.
+     */
+    private boolean allFieldMapperEnabled(DocumentMapper dm) {
+        try {
+            java.lang.reflect.Method m = dm.getClass().getMethod("allFieldMapper");
+            Object afm = m.invoke(dm);
+            return (Boolean) afm.getClass().getMethod("enabled").invoke(afm);
+        } catch (ReflectiveOperationException e) {
+            return true;
+        }
+    }
+
     public final boolean includeInAll(Boolean includeInAll, FieldMapper mapper) {
-        return includeInAll(includeInAll, mapper.fieldType().indexOptions() != IndexOptions.NONE);
+        return includeInAll(includeInAll, mapper.fieldType().isSearchable());
     }
 
     /**
@@ -672,7 +684,7 @@ public abstract class ParseContext implements Iterable<ParseContext.Document>{
         if (isWithinMultiFields()) {
             return false;
         }
-        if (!docMapper().allFieldMapper().enabled()) {
+        if (!allFieldMapperEnabled(docMapper())) {
             return false;
         }
         if (includeInAll == null) {

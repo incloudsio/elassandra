@@ -19,9 +19,10 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 
-import static org.elasticsearch.cluster.metadata.MetaData.CONTEXT_CASSANDRA_PARAM;
-
 public class DecodeMetaDataCommand extends LoggingAwareCommand {
+
+    /** Same value as {@code Metadata.CONTEXT_CASSANDRA_PARAM} on the forked cluster metadata type. */
+    private static final String CONTEXT_CASSANDRA_PARAM = "cassandra_mode";
 
     private static final Logger logger = LogManager.getLogger(DecodeMetaDataCommand.class);
 
