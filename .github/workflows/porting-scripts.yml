@@ -36,6 +36,7 @@ jobs:
           bash -n scripts/patch-opensearch-forbidden-deps-for-elassandra.sh
           bash -n scripts/export-elassandra-mapper-fork-for-opensearch-merge.sh
           bash -n scripts/rewrite-engine-java-for-opensearch.sh
+          bash -n scripts/rewrite-elassandra-opensearch-tests.sh
           bash -n scripts/stage-elassandra-mapper-fork-as-opensearch.sh
           bash -n scripts/prioritize-mapper-fork-merge.sh
           bash -n scripts/patch-org-elassandra-opensearch-no-schema-update.sh
