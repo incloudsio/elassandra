@@ -2,7 +2,7 @@
 # Copy org.elassandra sources into an OpenSearch side-car checkout (see server/OPENSEARCH_PORT.md).
 set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-DEST="${OPENSEARCH_CLONE_DIR:-$ROOT/../opensearch-upstream}"
+DEST="${OPENSEARCH_CLONE_DIR:-$ROOT/../incloudsio-opensearch}"
 SRC_MAIN="$ROOT/server/src/main/java/org/elassandra"
 SRC_TEST="$ROOT/server/src/test/java/org/elassandra"
 DEST_MAIN="$DEST/server/src/main/java/org/elassandra"

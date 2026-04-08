@@ -3,7 +3,7 @@
 set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 TAG="${OPENSEARCH_TAG:-1.3.20}"
-DEST="${OPENSEARCH_CLONE_DIR:-$ROOT/../opensearch-upstream}"
+DEST="${OPENSEARCH_CLONE_DIR:-$ROOT/../incloudsio-opensearch}"
 BRANCH="${OPENSEARCH_PORT_BRANCH:-elassandra-os-1.3}"
 
 OPENSEARCH_CLONE_DIR="$DEST" OPENSEARCH_TAG="$TAG" "$ROOT/scripts/clone-opensearch-upstream.sh"

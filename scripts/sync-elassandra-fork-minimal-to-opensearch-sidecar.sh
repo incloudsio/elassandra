@@ -2,7 +2,7 @@
 # Copy minimal fork-only types into the OpenSearch side-car as org.opensearch.* (before full engine rebase).
 set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-DEST="${1:-$ROOT/../opensearch-upstream}"
+DEST="${1:-$ROOT/../incloudsio-opensearch}"
 MAPPER="$DEST/server/src/main/java/org/opensearch/index/mapper"
 AGG="$DEST/server/src/main/java/org/opensearch/search/aggregations"
 SRC_CQL="$ROOT/server/src/main/java/org/elasticsearch/index/mapper/CqlMapper.java"

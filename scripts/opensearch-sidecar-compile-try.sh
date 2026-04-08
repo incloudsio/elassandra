@@ -3,7 +3,8 @@
 # Remaining errors usually mean fork-only org.opensearch types (e.g. CqlMapper) are not merged yet.
 set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-DEST="${OPENSEARCH_CLONE_DIR:-$ROOT/../opensearch-upstream}"
+# Default side-car clone: incloudsio-opensearch (override with OPENSEARCH_CLONE_DIR).
+DEST="${OPENSEARCH_CLONE_DIR:-$ROOT/../incloudsio-opensearch}"
 INIT_GRADLE="$ROOT/gradle/opensearch-sidecar-elassandra.init.gradle"
 
 if [[ -z "${JAVA_HOME:-}" ]]; then

@@ -7,7 +7,7 @@
 #   OPENSEARCH_CLONE_DIR=/path/to/OpenSearch ./scripts/export-elassandra-mapper-fork-for-opensearch-merge.sh
 set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-DEST="${OPENSEARCH_CLONE_DIR:-$ROOT/../opensearch-upstream}"
+DEST="${OPENSEARCH_CLONE_DIR:-$ROOT/../incloudsio-opensearch}"
 SRC="$ROOT/server/src/main/java/org/elasticsearch/index/mapper"
 OUT="$DEST/elassandra-mapper-fork-reference/org/elasticsearch/index/mapper"
 
