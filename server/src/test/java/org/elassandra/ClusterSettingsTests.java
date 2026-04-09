@@ -15,14 +15,12 @@
  */
 package org.elassandra;
 
-import org.elasticsearch.action.admin.indices.create.CreateIndexRequestBuilder;
 import org.elasticsearch.cluster.service.ClusterService;
 import org.elasticsearch.common.settings.Settings;
 import org.elasticsearch.test.ESSingleNodeTestCase;
 import org.junit.Test;
 
 import static org.elasticsearch.test.hamcrest.ElasticsearchAssertions.assertAcked;
-import static org.elasticsearch.test.hamcrest.ElasticsearchAssertions.assertThrows;
 
 /**
  * Test default cluster settings.
@@ -49,10 +47,9 @@ public class ClusterSettingsTests extends ESSingleNodeTestCase {
         super.tearDown();
     }
     
-    @Test
+    @Test(expected = org.apache.cassandra.exceptions.ConfigurationException.class)
     public void testIndexBadSearchStrategy() {
-        CreateIndexRequestBuilder createIndexRequestBuilder = client().admin().indices().prepareCreate("test1");
-        assertThrows(createIndexRequestBuilder, org.apache.cassandra.exceptions.ConfigurationException.class);
+        client().admin().indices().prepareCreate("test1").get();
     }
     
 }

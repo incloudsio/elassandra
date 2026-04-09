@@ -10,7 +10,13 @@ import org.elasticsearch.cli.LoggingAwareCommand;
 import org.elasticsearch.cli.Terminal;
 import org.elasticsearch.cluster.metadata.IndexMetaData;
 import org.elasticsearch.cluster.metadata.MetaData;
-import org.elasticsearch.common.xcontent.*;
+import org.elasticsearch.common.xcontent.LoggingDeprecationHandler;
+import org.elasticsearch.common.xcontent.NamedXContentRegistry;
+import org.elasticsearch.common.xcontent.ToXContent;
+import org.elasticsearch.common.xcontent.XContentBuilder;
+import org.elasticsearch.common.xcontent.XContentFactory;
+import org.elasticsearch.common.xcontent.XContentParser;
+import org.elasticsearch.common.xcontent.XContentType;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
@@ -44,8 +50,12 @@ public class DecodeIndexMetaDataCommand extends LoggingAwareCommand {
     }
 
     public final String convertToIndexMetaData(byte[] bytes) {
-        try{
-            IndexMetaData indexMetaData = IndexMetaData.FORMAT.loadLatestState(logger, new NamedXContentRegistry(Collections.emptyList()), bytes);
+        try (XContentParser parser = XContentFactory.xContent(XContentType.SMILE).createParser(
+            new NamedXContentRegistry(Collections.emptyList()),
+            LoggingDeprecationHandler.INSTANCE,
+            bytes
+        )) {
+            IndexMetaData indexMetaData = IndexMetaData.Builder.fromXContent(parser);
 
             XContentBuilder builder = XContentFactory.contentBuilder(XContentType.JSON);
             builder.prettyPrint();

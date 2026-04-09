@@ -84,7 +84,6 @@ import org.apache.lucene.document.LongPoint;
 import org.apache.lucene.document.NumericDocValuesField;
 import org.apache.lucene.document.SortedNumericDocValuesField;
 import org.apache.lucene.document.StoredField;
-import org.apache.lucene.index.IndexOptions;
 import org.apache.lucene.index.IndexReaderContext;
 import org.apache.lucene.index.IndexableField;
 import org.apache.lucene.index.LeafReaderContext;
@@ -106,9 +105,9 @@ import org.apache.lucene.util.CloseableThreadLocal;
 import org.elassandra.cluster.ElassandraIndexSettings;
 import org.elassandra.cluster.SchemaManager;
 import org.elassandra.cluster.Serializer;
+import org.elassandra.index.search.LuceneWeights;
 import org.elassandra.index.ElasticSecondaryIndex.ImmutableMappingInfo.WideRowcumentIndexer.WideRowcument;
 import org.elasticsearch.ElasticsearchException;
-import org.elasticsearch.Version;
 import org.elasticsearch.action.admin.indices.flush.FlushRequest;
 import org.elasticsearch.cluster.ClusterChangedEvent;
 import org.elasticsearch.cluster.ClusterName;
@@ -1501,7 +1500,7 @@ public class ElasticSecondaryIndex implements Index {
                         final IndexReaderContext topLevelContext = ReaderUtil.getTopLevelContext(context);
                         final IndexSearcher searcher = new IndexSearcher(topLevelContext);
                         searcher.setQueryCache(null);
-                        final Weight weight = searcher.createNormalizedWeight(new MatchAllDocsQuery(), false);
+                        final Weight weight = LuceneWeights.create(searcher, new MatchAllDocsQuery(), topLevelContext.reader());
                         Scorer s = weight.scorer(context);
                         return (s == null) ? null : org.apache.lucene.util.BitSet.of(s.iterator(), context.reader().maxDoc());
                     }
@@ -2026,9 +2025,10 @@ public class ElasticSecondaryIndex implements Index {
 
             public Term termUid(IndexService indexService, String id) {
                 Term termUid;
-                if (indexService.getIndexSettings().getIndexVersionCreated().onOrAfter(Version.V_6_0_0_beta1)) {
+                if (ElassandraSecondaryIndexCompat.indexVersionOnOrAfter600Beta1(indexService.getIndexSettings())) {
                     termUid = new Term(IdFieldMapper.NAME, Uid.encodeId(id));
-                } else if (indexService.mapperService().documentMapper(typeName).idFieldMapper().fieldType().indexOptions() != IndexOptions.NONE) {
+                } else if (ElassandraSecondaryIndexCompat.mappedFieldTypeIsSearchable(
+                    indexService.mapperService().documentMapper(typeName).idFieldMapper().fieldType())) {
                     termUid = new Term(IdFieldMapper.NAME, id);
                 } else {
                     termUid = new Term(UidFieldMapper.NAME, Uid.createUidAsBytes(typeName, id));

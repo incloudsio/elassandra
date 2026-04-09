@@ -70,14 +70,19 @@ public class IndexSearcherWrapper {
 EOF
 echo "Wrote stub $ISW"
 
-# CQL fetch phase (forked from Elasticsearch in Elassandra)
-CFP_SRC="$ROOT/server/src/main/java/org/elasticsearch/search/fetch/CqlFetchPhase.java"
+# CQL fetch phase: OpenSearch 1.3 FetchPhase API differs; ship a compile stub (see templates).
+# Set ELASSANDRA_OVERLAY_OPENSEARCH_CQL_FETCH_FULL=1 to copy+rewrite the ES 6.8 fork (expect compile errors until ported).
 CFP_DST="$DEST/server/src/main/java/org/opensearch/search/fetch/CqlFetchPhase.java"
-if [[ -f "$CFP_SRC" ]]; then
-  mkdir -p "$(dirname "$CFP_DST")"
+CFP_STUB="$ROOT/scripts/templates/opensearch-sidecar/CqlFetchPhase.java"
+CFP_SRC="$ROOT/server/src/main/java/org/elasticsearch/search/fetch/CqlFetchPhase.java"
+mkdir -p "$(dirname "$CFP_DST")"
+if [[ "${ELASSANDRA_OVERLAY_OPENSEARCH_CQL_FETCH_FULL:-}" == "1" && -f "$CFP_SRC" ]]; then
   cp "$CFP_SRC" "$CFP_DST"
   "$SCRIPT_DIR/rewrite-engine-java-for-opensearch.sh" --file "$CFP_DST"
-  echo "Wrote $CFP_DST"
+  echo "Wrote full CqlFetchPhase (rewritten) → $CFP_DST"
+elif [[ -f "$CFP_STUB" ]]; then
+  cp "$CFP_STUB" "$CFP_DST"
+  echo "Wrote CqlFetchPhase compile stub → $CFP_DST"
 fi
 
 STUB_DAEMON="$ROOT/scripts/templates/ElassandraDaemon-opensearch-sidecar-stub.java"
@@ -86,6 +91,15 @@ if [[ -f "$STUB_DAEMON" ]]; then
   mkdir -p "$(dirname "$DAEMON_DST")"
   cp "$STUB_DAEMON" "$DAEMON_DST"
   echo "Installed compile-only ElassandraDaemon stub → $DAEMON_DST"
+fi
+
+# CassandraGatewayService: OpenSearch GatewayService API (Discovery ctor, no gateway()); stock template uses org.elasticsearch.* — rewrite pass converts to org.opensearch.*
+CGW_TEMPLATE="$ROOT/scripts/templates/opensearch-sidecar/CassandraGatewayService.java"
+CGW_DST="$DEST/server/src/main/java/org/elassandra/gateway/CassandraGatewayService.java"
+if [[ -f "$CGW_TEMPLATE" ]]; then
+  mkdir -p "$(dirname "$CGW_DST")"
+  cp "$CGW_TEMPLATE" "$CGW_DST"
+  echo "Overlay CassandraGatewayService (OpenSearch-side ctor) → $CGW_DST"
 fi
 
 # Optional: full ElassandraDaemon + CQL helpers (expects Elasticsearch 6.8 APIs; use only when porting the bootstrap).

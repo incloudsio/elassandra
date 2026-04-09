@@ -1683,6 +1683,13 @@ public abstract class Engine implements Closeable {
             this(true, docIdAndVersion.version, docIdAndVersion, searcher);
         }
 
+        /**
+         * Elassandra: synthetic get when a CQL row fetch succeeded without opening a Lucene {@link Searcher}.
+         */
+        public static GetResult elassandraRowExists() {
+            return new GetResult(true, 1L, null, null);
+        }
+
         public boolean exists() {
             return exists;
         }

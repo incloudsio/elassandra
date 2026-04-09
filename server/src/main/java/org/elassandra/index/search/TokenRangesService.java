@@ -9,6 +9,7 @@ import org.apache.cassandra.dht.Range;
 import org.apache.cassandra.dht.Token;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
+import org.apache.lucene.document.LongPoint;
 import org.apache.lucene.search.BooleanClause.Occur;
 import org.apache.lucene.search.BooleanQuery;
 import org.apache.lucene.search.Query;
@@ -108,14 +109,15 @@ public class TokenRangesService {
     }
 
     Query newNumericRangesQuery(Range<Token> range) {
-        Long left =  (Long) range.left.getTokenValue();
+        Long left = (Long) range.left.getTokenValue();
         Long right = (Long) range.right.getTokenValue();
-        return (left.equals(right)) ?
-            NumberFieldMapper.NumberType.LONG.termQuery(TokenFieldMapper.NAME,left) :
-            NumberFieldMapper.NumberType.LONG.rangeQuery(TokenFieldMapper.NAME,
-                left == Long.MIN_VALUE ? null : left,
-                right == Long.MAX_VALUE ? null : right,
-                false, true, true);
+        if (left.equals(right)) {
+            return NumberFieldMapper.NumberType.LONG.termQuery(TokenFieldMapper.NAME, left);
+        }
+        // OpenSearch 1.3 NumberType#rangeQuery requires QueryShardContext; use Lucene points (token field is long).
+        long lo = left == Long.MIN_VALUE ? Long.MIN_VALUE : left;
+        long hi = right == Long.MAX_VALUE ? Long.MAX_VALUE : right;
+        return LongPoint.newRangeQuery(TokenFieldMapper.NAME, lo, hi);
     }
 
     public static boolean tokenRangesIntersec(Collection<Range<Token>> shardTokenRanges, Range<Token> requestTokenRange) {

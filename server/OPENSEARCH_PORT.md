@@ -34,11 +34,13 @@ Optional: `OPENSEARCH_SYNC_DRY_RUN=1` on the sync script.
 
 That runs `./gradlew :cassandra-jar` (the Minio S3 test fixture is **skipped by default**; pass `-Delassandra.skipS3TestFixture=false` only if you need it—older Gradle + Docker Compose could fail configuration on **JDK 11**).
 
-Then run the full side-car compile attempt (sync, rewrite imports, attach jar, `:server:compileJava`):
+Then run the full side-car compile attempt (sync, rewrite imports, attach jar, then **`:server:compileJava`**, **`:test:framework:compileJava`**, and **`:server:compileTestJava`** by default):
 
 ```bash
 JAVA_HOME=/path/to/jdk-11 ./scripts/opensearch-sidecar-compile-try.sh
 ```
+
+To compile only main sources (faster): `OPENSEARCH_SIDECAR_TASKS=:server:compileJava ./scripts/opensearch-sidecar-compile-try.sh`
 
 The OpenSearch Gradle wrapper often does **not** forward `-Delassandra.cassandra.jar=...` from the CLI to the build JVM. This repo’s script sets **`GRADLE_OPTS`** for you. If you invoke Gradle yourself, use:
 
@@ -107,4 +109,5 @@ Run `./scripts/print-opensearch-port-pins.sh` to print those pins (avoids config
 ## CI
 
 * [.github/workflows/opensearch-sidecar.yml](../.github/workflows/opensearch-sidecar.yml) — weekly / manual upstream `:server:compileJava` on Java 11.
+* [.github/workflows/elassandra-opensearch-sidecar-compile.yml](../.github/workflows/elassandra-opensearch-sidecar-compile.yml) — Elassandra sync + patches + side-car `compileJava` / `compileTestJava` on PRs and `main`/`master`.
 * [.github/workflows/porting-scripts.yml](../.github/workflows/porting-scripts.yml) — `bash -n` on the scripts above.

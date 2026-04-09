@@ -37,7 +37,7 @@ import org.elasticsearch.common.xcontent.XContentFactory;
 import org.elasticsearch.common.xcontent.XContentType;
 import org.elasticsearch.index.mapper.MapperService;
 import org.elasticsearch.test.ESSingleNodeTestCase;
-import org.elasticsearch.test.discovery.MockCassandraDiscovery;
+import org.elassandra.discovery.MockCassandraDiscovery;
 import org.junit.Test;
 
 import java.nio.ByteBuffer;

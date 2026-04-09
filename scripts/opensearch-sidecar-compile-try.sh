@@ -36,7 +36,15 @@ fi
 "$ROOT/scripts/sync-elassandra-fork-minimal-to-opensearch-sidecar.sh" "$DEST"
 "$ROOT/scripts/sync-elassandra-fork-overlay-to-opensearch-sidecar.sh" "$DEST"
 "$ROOT/scripts/sync-elassandra-routing-overlay-to-opensearch-sidecar.sh" "$DEST"
+"$ROOT/scripts/patch-opensearch-routing-table-for-os13.sh" "$DEST"
 "$ROOT/scripts/rewrite-elassandra-imports-for-opensearch.sh" "$DEST"
+if [[ -d "$DEST/server/src/test/java/org/elassandra" ]]; then
+  "$ROOT/scripts/rewrite-engine-java-for-opensearch.sh" "$DEST/server/src/test/java/org/elassandra"
+  "$ROOT/scripts/patch-opensearch-elassandra-tests-assertions-import.sh" "$DEST"
+  "$ROOT/scripts/patch-opensearch-elassandra-tests-opensearch-api.sh" "$DEST"
+fi
+"$ROOT/scripts/sync-mock-cassandra-discovery-to-opensearch-sidecar.sh" "$DEST"
+"$ROOT/scripts/patch-opensearch-applied-cluster-state-transport-handler.sh" "$DEST"
 "$ROOT/scripts/patch-opensearch-sourcetoparse-elassandra-token.sh" "$DEST"
 "$ROOT/scripts/patch-opensearch-fieldmapper-elassandra-createfield.sh" "$DEST"
 "$ROOT/scripts/patch-opensearch-indexmetadata-elassandra-extensions.sh" "$DEST"
@@ -44,6 +52,8 @@ fi
 "$ROOT/scripts/patch-opensearch-elassandra-sidecar-templates.sh" "$DEST"
 "$ROOT/scripts/patch-opensearch-documentmapper-elassandra.sh" "$DEST"
 "$ROOT/scripts/patch-opensearch-querymanager-opensearch-api.sh" "$DEST"
+"$ROOT/scripts/patch-opensearch-querymanager-mapping-lookup.sh" "$DEST"
+"$ROOT/scripts/patch-opensearch-querymanager-version-conflict.sh" "$DEST"
 "$ROOT/scripts/patch-opensearch-cluster-service-elassandra-cql-process.sh" "$DEST"
 "$ROOT/scripts/patch-opensearch-elassandra-primary-first-strategy-node-id.sh" "$DEST"
 "$ROOT/scripts/patch-opensearch-metadata-elassandra-extensions.sh" "$DEST"
@@ -62,6 +72,9 @@ fi
 "$ROOT/scripts/patch-org-elassandra-opensearch-no-schema-update.sh" "$DEST"
 "$ROOT/scripts/patch-org-elassandra-opensearch-elastic-secondary.sh" "$DEST"
 "$ROOT/scripts/patch-opensearch-engine-delete-by-query.sh" "$DEST"
+"$ROOT/scripts/patch-opensearch-engine-elassandra-getresult-factory.sh" "$DEST"
+"$ROOT/scripts/patch-opensearch-gateway-service-protected-perform-recovery.sh" "$DEST"
+"$ROOT/scripts/patch-opensearch-discovery-module-elassandra.sh" "$DEST"
 "$ROOT/scripts/patch-cassandra-discovery-for-opensearch.sh" "$DEST"
 if [[ "${SKIP_OPENSEARCH_FORBIDDEN_DEPS_PATCH:-}" != "1" ]]; then
   "$ROOT/scripts/patch-opensearch-forbidden-deps-for-elassandra.sh" "$DEST"
@@ -69,4 +82,6 @@ fi
 cd "$DEST"
 # OpenSearch's gradlew often does not forward CLI -D to the build JVM; use GRADLE_OPTS (see gradle/opensearch-sidecar-elassandra.init.gradle).
 export GRADLE_OPTS="${GRADLE_OPTS:-} -Delassandra.cassandra.jar=$JAR"
-exec ./gradlew -I "$INIT_GRADLE" :server:compileJava --no-daemon "$@"
+# Main + optional tests: set OPENSEARCH_SIDECAR_TASKS=":server:compileJava" to skip test compilation.
+SIDECAR_TASKS="${OPENSEARCH_SIDECAR_TASKS:-:server:compileJava :test:framework:compileJava :server:compileTestJava}"
+exec ./gradlew -I "$INIT_GRADLE" ${SIDECAR_TASKS} --no-daemon "$@"

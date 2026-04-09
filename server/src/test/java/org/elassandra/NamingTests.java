@@ -88,7 +88,7 @@ public class NamingTests extends ESSingleNodeTestCase {
 
         assertThat(client().admin().indices().preparePutTemplate("test_template")
                 .addMapping("_default_", mapping1)
-                .setTemplate("test_index-*")
+                .setPatterns(java.util.Collections.singletonList("test_index-*"))
                 .get().isAcknowledged(), equalTo(true));
 
         assertThat(client().prepareIndex("test_index-2016.12.29", "_doc", "1")

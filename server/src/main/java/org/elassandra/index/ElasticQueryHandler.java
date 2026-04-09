@@ -97,16 +97,19 @@ import org.elasticsearch.search.aggregations.metrics.sum.Sum;
 import org.elasticsearch.search.aggregations.metrics.sum.SumAggregationBuilder;
 import org.elasticsearch.search.aggregations.pipeline.InternalSimpleValue;
 import org.elasticsearch.search.builder.SearchSourceBuilder;
+import org.elasticsearch.common.xcontent.NamedXContentRegistry;
 import org.elasticsearch.search.fetch.CqlFetchPhase;
 import org.joda.time.DateTime;
 
 import java.io.IOException;
+import java.lang.reflect.Method;
 import java.nio.ByteBuffer;
 import java.nio.charset.Charset;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
@@ -203,7 +206,10 @@ public class ElasticQueryHandler extends QueryProcessor {
             if (scrollId == null) {
                 SearchSourceBuilder ssb = null;
                 try {
-                    XContentParser parser = JsonXContent.jsonXContent.createParser(ElassandraDaemon.instance.node().getNamedXContentRegistry(), DeprecationHandler.THROW_UNSUPPORTED_OPERATION, query);
+                    XContentParser parser = JsonXContent.jsonXContent.createParser(
+                        namedXContentRegistryForQueryParsing(),
+                        DeprecationHandler.THROW_UNSUPPORTED_OPERATION,
+                        query);
                     ssb = SearchSourceBuilder.fromXContent(parser);
                 } catch (ParsingException e) {
                     throw new SyntaxException(e.getMessage());
@@ -221,7 +227,7 @@ public class ElasticQueryHandler extends QueryProcessor {
                     // undefined bound is set to minimum.
                     if (!left.isMinimum() || !right.isMinimum()) {
                         Range range = (!left.isMinimum() && right.isMinimum()) ? new Range(left, AbstractSearchStrategy.TOKEN_MAX) : new Range(left, right);
-                        srb.setTokenRanges(Collections.singletonList(range));
+                        srb.setTokenRanges(new HashSet<>(Collections.singletonList(range)));
                         if (logger.isDebugEnabled())
                             logger.debug("tokenRanges={}", range);
                     }
@@ -261,16 +267,14 @@ public class ElasticQueryHandler extends QueryProcessor {
                     }
                 }
                 handle(queryState, client);
-                if (extraParams != null)
-                    srb.setExtraParams(extraParams);
+                invokeSetExtraParamsIfPresent(srb, extraParams);
                 resp = srb.get();
                 scrollId = resp.getScrollId();
             } else {
                 SearchScrollRequestBuilder ssrb = client.prepareSearchScroll(scrollId);
                 ssrb.setScroll("1m"); // timeout for the next scroll fetch
                 handle(queryState, client);
-                if (extraParams != null)
-                    ssrb.setExtraParams(extraParams);
+                invokeSetExtraParamsIfPresent(ssrb, extraParams);
                 resp = ssrb.get();
                 scrollId = resp.getScrollId(); // only the most recently received _scroll_id should be used
             }
@@ -304,8 +308,10 @@ public class ElasticQueryHandler extends QueryProcessor {
                 if (logger.isDebugEnabled())
                     logger.debug("scrollId={} hits={}", scrollId, resp.getHits().getHits().length);
                 for (SearchHit hit : resp.getHits().getHits()) {
-                    if (hit.getValues() != null)
-                        rows.add(hit.getValues());
+                    List<ByteBuffer> rowVals = searchHitByteBufferValues(hit);
+                    if (rowVals != null) {
+                        rows.add(rowVals);
+                    }
                 }
                 resultMetadata = select.getResultMetadata().copy();
                 if (scrollId != null) {
@@ -587,6 +593,46 @@ public class ElasticQueryHandler extends QueryProcessor {
                         throw new IllegalArgumentException("unsupported aggregation type=[" + type + "] name=[" + agg.getName() + "]");
                 }
             }
+        }
+    }
+
+    private static NamedXContentRegistry namedXContentRegistryForQueryParsing() {
+        try {
+            if (ElassandraDaemon.instance != null && ElassandraDaemon.instance.node() != null) {
+                Object node = ElassandraDaemon.instance.node();
+                Method m = node.getClass().getMethod("getNamedXContentRegistry");
+                return (NamedXContentRegistry) m.invoke(node);
+            }
+        } catch (Throwable ignored) {
+            // side-car compile stub / Node API without registry
+        }
+        return NamedXContentRegistry.EMPTY;
+    }
+
+    @SuppressWarnings("unchecked")
+    private static void invokeSetExtraParamsIfPresent(Object builder, Map<String, Object> extraParams) {
+        if (extraParams == null) {
+            return;
+        }
+        try {
+            Method m = builder.getClass().getMethod("setExtraParams", Map.class);
+            m.invoke(builder, extraParams);
+        } catch (NoSuchMethodException ignored) {
+            // OpenSearch 1.3 removed SearchRequestBuilder#setExtraParams; CQL projection transport is wired elsewhere until ported.
+        } catch (ReflectiveOperationException e) {
+            throw new RuntimeException(e);
+        }
+    }
+
+    @SuppressWarnings("unchecked")
+    private static List<ByteBuffer> searchHitByteBufferValues(SearchHit hit) {
+        try {
+            Method m = hit.getClass().getMethod("getValues");
+            return (List<ByteBuffer>) m.invoke(hit);
+        } catch (NoSuchMethodException e) {
+            return null;
+        } catch (ReflectiveOperationException e) {
+            return null;
         }
     }
 }

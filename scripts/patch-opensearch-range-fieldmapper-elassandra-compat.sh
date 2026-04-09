@@ -38,7 +38,8 @@ if "public boolean isIncludeFrom()" not in t:
         sys.exit(1)
     t = t.replace(old, new, 1)
 
-if "Elassandra RangeFieldType cqlValue" not in t:
+# Idempotent: upstream or a prior run may already include cqlValue (comment text has changed over time).
+if "public Object cqlValue(Object value)" not in t:
     needle = """        public RangeType rangeType() {
             return rangeType;
         }
@@ -57,7 +58,7 @@ if "Elassandra RangeFieldType cqlValue" not in t:
         @Override
         public IndexFieldData.Builder fielddataBuilder"""
     if needle not in t:
-        print("RangeFieldMapper: rangeType anchor not found", file=sys.stderr)
+        print("RangeFieldMapper: rangeType/fielddataBuilder anchor not found", file=sys.stderr)
         sys.exit(1)
     t = t.replace(needle, repl, 1)
 

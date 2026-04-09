@@ -109,7 +109,7 @@ public class TokenRangesBitsetProducer implements BitSetProducer, Accountable {
       final IndexReaderContext topLevelContext = ReaderUtil.getTopLevelContext(context);
       final IndexSearcher searcher = new IndexSearcher(topLevelContext);
       searcher.setQueryCache(null);
-      final Weight weight = searcher.createNormalizedWeight(query, false);
+      final Weight weight = LuceneWeights.create(searcher, query, topLevelContext.reader());
       final Scorer s = weight.scorer(context);
       int tombestones = 0;
       if (s != null) {

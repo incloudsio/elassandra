@@ -438,6 +438,11 @@ public class IndexRoutingTable extends AbstractDiffable<IndexRoutingTable> imple
             return initializeEmpty(indexMetaData, new UnassignedInfo(UnassignedInfo.Reason.INDEX_REOPENED, null));
         }
 
+        /** Routing shards when closing an open index (OpenSearch {@code MetadataIndexStateService}). */
+        public Builder initializeAsFromOpenToClose(IndexMetaData indexMetaData) {
+            return initializeEmpty(indexMetaData, new UnassignedInfo(UnassignedInfo.Reason.INDEX_CLOSED, null));
+        }
+
         /**
          * Initializes a new empty index, to be restored from a snapshot
          */
@@ -612,9 +617,9 @@ public class IndexRoutingTable extends AbstractDiffable<IndexRoutingTable> imple
 
         for (IndexShardRoutingTable indexShard : ordered) {
             sb.append("----shard_id [").append(indexShard.shardId().getIndex().getName()).append("][").append(indexShard.shardId().id())
-            .append("][")
-            .append(indexShard.getPrimaryShardRouting().tokenRanges())
-            .append("]\n");
+                .append("][")
+                .append(indexShard.primaryShard() != null ? indexShard.primaryShard().tokenRanges() : "")
+                .append("]\n");
             for (ShardRouting shard : indexShard) {
                 sb.append("--------").append(shard.shortSummary()).append("\n");
             }

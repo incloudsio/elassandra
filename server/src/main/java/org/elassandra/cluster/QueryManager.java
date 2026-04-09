@@ -351,7 +351,7 @@ public class QueryManager {
         UntypedResultSet result = fetchRowInternal(indexShard, type, docPk, columnDefs.keySet().toArray(new String[columnDefs.size()]), columnDefs);
         onRefresh.accept(System.nanoTime() - time);
         if (!result.isEmpty()) {
-            return new Engine.GetResult(true, 1L, new DocIdAndVersion(0, 1L, 1L, 1L, null, 0), null);
+            return Engine.GetResult.elassandraRowExists();
         }
         return Engine.GetResult.NOT_EXISTS;
     }

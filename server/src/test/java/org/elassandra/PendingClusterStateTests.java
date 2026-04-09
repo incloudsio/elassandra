@@ -51,9 +51,9 @@ public class PendingClusterStateTests extends ESSingleNodeTestCase {
         ClusterState cs0 = ClusterState.builder(new ClusterName("cluster")).build();
         ClusterState cs1 = ClusterState.builder(cs0).version(1).build();
         ClusterState cs2 = ClusterState.builder(cs1).version(2).metaData(MetaData.builder().incrementVersion()).build();
-        ClusterState cs3 = ClusterState.builder(cs2).version(3).metaData(MetaData.builder(cs2.getMetaData()).incrementVersion()).build();
-        ClusterState cs4 = ClusterState.builder(cs3).version(4).metaData(MetaData.builder(cs3.getMetaData()).incrementVersion()).build();
-        ClusterState cs5 = ClusterState.builder(cs3).version(5).metaData(MetaData.builder(cs4.getMetaData()).incrementVersion()).build();
+        ClusterState cs3 = ClusterState.builder(cs2).version(3).metaData(MetaData.builder(cs2.metaData()).incrementVersion()).build();
+        ClusterState cs4 = ClusterState.builder(cs3).version(4).metaData(MetaData.builder(cs3.metaData()).incrementVersion()).build();
+        ClusterState cs5 = ClusterState.builder(cs3).version(5).metaData(MetaData.builder(cs4.metaData()).incrementVersion()).build();
 
         Listener listener = new Listener();
         queue.addPending(cs1, listener);
@@ -84,8 +84,8 @@ public class PendingClusterStateTests extends ESSingleNodeTestCase {
         ClusterState cs0 = ClusterState.builder(new ClusterName("cluster")).build();
         ClusterState cs1 = ClusterState.builder(cs0).version(1).build();
         ClusterState cs2 = ClusterState.builder(cs1).version(2).metaData(MetaData.builder().incrementVersion()).build();
-        ClusterState cs3 = ClusterState.builder(cs2).version(3).metaData(MetaData.builder(cs2.getMetaData()).incrementVersion()).build();
-        ClusterState cs4 = ClusterState.builder(cs3).version(4).metaData(MetaData.builder(cs3.getMetaData()).incrementVersion()).build();
+        ClusterState cs3 = ClusterState.builder(cs2).version(3).metaData(MetaData.builder(cs2.metaData()).incrementVersion()).build();
+        ClusterState cs4 = ClusterState.builder(cs3).version(4).metaData(MetaData.builder(cs3.metaData()).incrementVersion()).build();
 
         Listener listener = new Listener();
         queue.addPending(cs1, listener);

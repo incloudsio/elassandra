@@ -131,7 +131,12 @@ public final class UnassignedInfo implements ToXContentFragment, Writeable {
         /**
          * Forced manually to allocate
          */
-        MANUAL_ALLOCATION
+        MANUAL_ALLOCATION,
+        /**
+         * Unassigned when closing an opened index ({@code MetadataIndexStateService} on OpenSearch 1.3+ / 7.x lineage).
+         * Kept at the end of the enum for wire-compatibility with existing ordinal handling.
+         */
+        INDEX_CLOSED
     }
 
     /**

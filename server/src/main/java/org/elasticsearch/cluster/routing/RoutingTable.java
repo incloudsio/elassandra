@@ -181,19 +181,33 @@ public class RoutingTable implements Iterable<IndexRoutingTable>, Diffable<Routi
         return shards;
     }
 
+    /** Count shards matching a predicate (OpenSearch 1.3+ API; used by {@code UnassignedInfo}). */
+    public int shardsMatchingPredicateCount(Predicate<ShardRouting> predicate) {
+        int count = 0;
+        for (ShardRouting shard : allShards()) {
+            if (predicate.test(shard)) {
+                count++;
+            }
+        }
+        return count;
+    }
+
     /*
      * Block until all local primary shard are started (always has index 0 in routing table)
      */
     public boolean isLocalShardsStarted() {
         for (IndexRoutingTable indexRoutingTable : this) {
-            IndexShardRoutingTable indexShardRoutingTable = indexRoutingTable.shards().get(0);
-            if (indexShardRoutingTable != null & indexShardRoutingTable.getPrimaryShardRouting() != null) {
-                switch(indexShardRoutingTable.getPrimaryShardRouting().state()) {
+            IndexShardRoutingTable indexShardRoutingTable = indexRoutingTable.shard(0);
+            if (indexShardRoutingTable != null && indexShardRoutingTable.primaryShard() != null) {
+                switch (indexShardRoutingTable.primaryShard().state()) {
                 case UNASSIGNED:
                 case INITIALIZING:
                 case RELOCATING:
-                        return false;
-                case STARTED :
+                    return false;
+                case STARTED:
+                    break;
+                default:
+                    return false;
                 }
             }
         }
@@ -637,6 +651,12 @@ public class RoutingTable implements Iterable<IndexRoutingTable>, Diffable<Routi
                 add(indexRoutingBuilder);
             }
             return this;
+        }
+
+        public Builder addAsFromOpenToClose(IndexMetaData indexMetaData) {
+            IndexRoutingTable.Builder indexRoutingBuilder = new IndexRoutingTable.Builder(indexMetaData.getIndex())
+                    .initializeAsFromOpenToClose(indexMetaData);
+            return add(indexRoutingBuilder);
         }
 
         public Builder addAsRestore(IndexMetaData indexMetaData, SnapshotRecoverySource recoverySource) {
