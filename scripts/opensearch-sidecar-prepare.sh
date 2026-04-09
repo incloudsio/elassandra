@@ -53,6 +53,7 @@ fi
 "$ROOT/scripts/patch-opensearch-discovery-module-elassandra.sh" "$DEST"
 "$ROOT/scripts/patch-cassandra-discovery-for-opensearch.sh" "$DEST"
 "$ROOT/scripts/patch-opensearch-node-elassandra-activate.sh" "$DEST"
+"$ROOT/scripts/patch-opensearch-essingle-node-config-override.sh" "$DEST"
 if [[ "${SKIP_OPENSEARCH_FORBIDDEN_DEPS_PATCH:-}" != "1" ]]; then
   "$ROOT/scripts/patch-opensearch-forbidden-deps-for-elassandra.sh" "$DEST"
 fi

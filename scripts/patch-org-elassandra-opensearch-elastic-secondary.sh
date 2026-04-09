@@ -1,5 +1,7 @@
 #!/usr/bin/env bash
-# ElasticSecondaryIndex: OpenSearch has no SchemaUpdate / blockingMappingUpdate (Elassandra fork API).
+# ElasticSecondaryIndex: OpenSearch has no SchemaUpdate / blockingMappingUpdate (Elasticsearch 6.8 fork API).
+# To restore dynamic mapping updates on OpenSearch 1.3, wire this call site to the OS mapping pipeline:
+# e.g. MetadataMappingService / PutMappingRequest / IndicesClient.putMapping — see org.opensearch.cluster.metadata.MetadataMappingService.
 # Also: UidFieldMapper → IdFieldMapper, Uid.createUidAsBytes → Uid.encodeId, MapperService static → instance, parent field guard.
 set -euo pipefail
 DEST="${1:?OpenSearch clone root}"

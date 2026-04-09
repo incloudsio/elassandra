@@ -62,9 +62,21 @@ Expect failures until **`ElassandraDaemon`** (and related bootstrap: `cassandra.
 
 `opensearch-sidecar-test-try.sh` sets **`RUNTIME_JAVA_HOME`** to **`JAVA_HOME`** when unset so OpenSearch does not try to download a separate “bundled” JDK for tests (which can fail on **Apple Silicon** or air‑gapped hosts). Override **`RUNTIME_JAVA_HOME`** if you need a different JVM for test execution than for Gradle.
 
-By default the script sets **`cassandra.home`** and **`cassandra.config`** (as a `file:` URI) using the first layout that exists: **`ELASSANDRA_TEST_CASSANDRA_HOME`** (if set), else **`distribution/src`** (Cassandra 4.x–style yaml used for packages), else **`server/src/test/resources`**. **`gradle/opensearch-sidecar-elassandra.init.gradle`** forwards those system properties to forked **`Test`** workers. **`SKIP_ELASSANDRA_TEST_CASSANDRA_SYS_PROPS=1`** skips automatic defaults.
+By default the script sets **`cassandra.home`** and **`cassandra.config`** (as a `file:` URI) using the first layout that exists: **`ELASSANDRA_TEST_CASSANDRA_HOME`** (if set), else **`server/src/test/resources`** (minimal yaml aligned with embedded **`org.elassandra.*`** tests and the Elassandra Cassandra jar), else **`distribution/src`**. It also creates default **`data/`**, **`commitlog/`**, **`saved_caches/`**, and **`hints/`** under that root when present so embedded tests can write without missing-directory errors.
+
+**`gradle/opensearch-sidecar-elassandra.init.gradle`** forwards matching **`System` properties** from the Gradle JVM to forked **`Test`** workers for keys starting with **`cassandra.`**, **`jna.`**, **`io.netty.`**, and **`org.apache.cassandra.`** (so you can pass extra `-D` flags via **`GRADLE_OPTS`**). It adds **`-Djna.nosys=true`** to test JVMs so **JNA** prefers natives bundled with **`jna.jar`** (reduces **`UnsatisfiedLinkError`** on hosts without a system **`libjna`**). **`opensearch.set.netty.runtime.available.processors`** is set on the Gradle JVM by the test script (default **`1`**, override with **`OPENSEARCH_NETTY_PROCESSORS`**) and mirrored into test JVMs for deterministic CI. For extra heap or logging flags, use **`ELASSANDRA_OPENSEARCH_TEST_EXTRA_JVM_ARGS`** (space-separated, forwarded by the init script).
+
+**`SKIP_ELASSANDRA_TEST_CASSANDRA_SYS_PROPS=1`** skips automatic **`cassandra.home`** / **`cassandra.config`** defaults.
 
 The Elassandra Cassandra jar expects **SnakeYAML 1.x** for `YamlConfigurationLoader`; OpenSearch pins **2.x**, so the init script **forces SnakeYAML 1.26** on server classpaths. Even then, the checked-in **`conf/cassandra.yaml`** must match the **Cassandra 4.0** `Config` schema expected by the forked jar—if tests fail YAML construction errors, point **`ELASSANDRA_TEST_CASSANDRA_HOME`** at a full Elassandra/Cassandra tree with a valid 4.0 config (for example under **`server/cassandra`**) instead of the minimal test fixture.
+
+**Test waves (curated `--tests` sets):** set **`OPENSEARCH_SIDECAR_TEST_WAVE`** to **`0`**–**`4`** to run predefined slices (see script header in **`scripts/opensearch-sidecar-test-try.sh`**): wave **0** = smoke (**`ClusterSettingsTests`** only); **1** adds metadata/settings; **2** adds CQL/index; **3** adds cluster/discovery/snapshots; **4** = full **`org.elassandra.*`**. You can still pass an explicit comma-separated **`OPENSEARCH_SIDECAR_TEST_PATTERN`** when **`OPENSEARCH_SIDECAR_TEST_WAVE`** is unset.
+
+**Logging:** if tests fail with **`PrefixLogger`** or log4j initialization assertions, try **`ELASSANDRA_OPENSEARCH_TEST_EXTRA_JVM_ARGS='-Dlog4j2.disable.jmx=true'`** or align OpenSearch test **`log4j2`** configuration with the side-car **`Test`** worker (upstream **`server/src/test/resources`** in the clone).
+
+**Embedded `Config` (recommended for side-car tests):** **`scripts/patch-opensearch-essingle-node-config-override.sh`** (run from **`opensearch-sidecar-prepare.sh`**) patches **`test/framework/.../ESSingleNodeTestCase`** to call **`DatabaseDescriptor.daemonInitialization(() -> { ... })`** with a **`Config`** built from **`cassandra.home`** (paths, **`CommitLogSync.periodic`**, partitioner, snitch, seeds) instead of **`cassandra.yaml`**, avoiding **`YamlConfigurationLoader`** / SnakeYAML edge cases. Set **`-Delassandra.test.config.override=false`** to use YAML again. The merged **`ElassandraDaemon`** template uses **`LogManager.getLogger`** (not **`Loggers.getLogger(Class)`**) so OpenSearch 1.3 **`PrefixLogger`** does not throw on empty prefixes.
+
+**Cassandra runtime jars on the OpenSearch classpath:** **`gradle/opensearch-sidecar-elassandra.init.gradle`** adds the Elassandra Cassandra jar plus transitive needs surfaced by **`daemonInitialization` / `CassandraDaemon.setup`** (e.g. **high-scale-lib**, **jamm**, **lz4-java**, **caffeine**, **jctools**, Netty modules, **`--add-opens java.base/jdk.internal.ref=ALL-UNNAMED`**). **Guava** is **19** at compile (legacy Elassandra) and **forced to the OpenSearch pin** (e.g. **32.x**) on **runtime** / **testRuntime** classpaths so Cassandra’s **`HostAndPort.getHost()`** resolves at runtime.
 
 ### ElassandraDaemon and real bootstrap (next runtime milestone)
 
@@ -126,6 +138,8 @@ To list `org/elasticsearch` sources that likely contain Elassandra-specific edit
 ./scripts/list-elasticsearch-fork-touchpoints.sh
 ```
 
+A checked-in snapshot of that list (regenerate after large fork edits) lives at [`elasticsearch-fork-touchpoints.list`](elasticsearch-fork-touchpoints.list) in this directory.
+
 ## What to port (order)
 
 Follow [docs/elassandra/source/developer/opensearch_porting_guide.rst](../docs/elassandra/source/developer/opensearch_porting_guide.rst): Cassandra daemon bootstrap → discovery/gateway → routing/search → metadata/mappings → shard barriers → `ElasticSecondaryIndex` and REST/query handlers → modules/tests.
@@ -144,5 +158,6 @@ Run `./scripts/print-opensearch-port-pins.sh` to print those pins (avoids config
 
 * [.github/workflows/opensearch-sidecar.yml](../.github/workflows/opensearch-sidecar.yml) — weekly / manual upstream `:server:compileJava` on Java 11.
 * [.github/workflows/elassandra-opensearch-sidecar-compile.yml](../.github/workflows/elassandra-opensearch-sidecar-compile.yml) — Elassandra sync + patches + side-car `compileJava` / `compileTestJava` on PRs and `main`/`master`.
-* [.github/workflows/elassandra-opensearch-sidecar-test.yml](../.github/workflows/elassandra-opensearch-sidecar-test.yml) — **manual only** (`workflow_dispatch`): runs `opensearch-sidecar-test-try.sh`. The job is allowed to fail until the full daemon/runtime port is in place; use it to capture `:server:test` signal without blocking merges.
+* [.github/workflows/elassandra-opensearch-sidecar-test.yml](../.github/workflows/elassandra-opensearch-sidecar-test.yml) — **manual** (`workflow_dispatch`): runs `opensearch-sidecar-test-try.sh` with **`OPENSEARCH_SIDECAR_TEST_WAVE=0`**. Uses **`continue-on-error: true`** until wave 0 is stable on **`ubuntu-latest`**; tighten once green.
+* [.github/workflows/elassandra-opensearch-sidecar-test-full.yml](../.github/workflows/elassandra-opensearch-sidecar-test-full.yml) — **weekly** (Mondays 06:00 UTC) and **manual**: full **`org.elassandra.*`** slice (**wave 4**). Uses **`continue-on-error: true`** until the full package is green.
 * [.github/workflows/porting-scripts.yml](../.github/workflows/porting-scripts.yml) — `bash -n` on the scripts above.

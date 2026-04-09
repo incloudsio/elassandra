@@ -7,8 +7,12 @@
 #
 # Usage:
 #   JAVA_HOME=/path/to/jdk-11 ./scripts/opensearch-sidecar-test-try.sh
-# Narrow pattern (Gradle --tests):
-#   OPENSEARCH_SIDECAR_TEST_PATTERN='org.elassandra.PendingClusterStateTests' ./scripts/opensearch-sidecar-test-try.sh
+# Narrow pattern (Gradle --tests); comma-separated runs multiple classes:
+#   OPENSEARCH_SIDECAR_TEST_PATTERN='org.elassandra.PendingClusterStateTests,org.elassandra.NamingTests' ./scripts/opensearch-sidecar-test-try.sh
+# Curated waves (overrides OPENSEARCH_SIDECAR_TEST_PATTERN when set):
+#   OPENSEARCH_SIDECAR_TEST_WAVE=0|1|2|3|4 ./scripts/opensearch-sidecar-test-try.sh
+# Extra JVM args for forked test workers (passed through init.gradle):
+#   ELASSANDRA_OPENSEARCH_TEST_EXTRA_JVM_ARGS='-Xmx2g' ./scripts/opensearch-sidecar-test-try.sh
 #
 set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -50,21 +54,64 @@ cd "$DEST"
 export GRADLE_OPTS="${GRADLE_OPTS:-} -Delassandra.cassandra.jar=$JAR"
 
 # Default Cassandra layout for ESSingleNodeTestCase (YamlConfigurationLoader needs a file: URI for cassandra.config).
-# Prefer distribution/src (Cassandra 4.x-shaped yaml shipped for packages) over the slimmer server test fixture.
+# Prefer server/src/test/resources (minimal yaml known to load with the Elassandra Cassandra jar in :server:test).
+# Use ELASSANDRA_TEST_CASSANDRA_HOME=distribution/src only when validating package-shaped config.
 # Override with ELASSANDRA_TEST_CASSANDRA_HOME or skip with SKIP_ELASSANDRA_TEST_CASSANDRA_SYS_PROPS=1.
 if [[ -n "${ELASSANDRA_TEST_CASSANDRA_HOME:-}" ]]; then
   CASS_TEST_ROOT="$ELASSANDRA_TEST_CASSANDRA_HOME"
+elif [[ -f "$ROOT/server/src/test/resources/conf/cassandra.yaml" ]]; then
+  CASS_TEST_ROOT="$ROOT/server/src/test/resources"
 elif [[ -f "$ROOT/distribution/src/conf/cassandra.yaml" ]]; then
   CASS_TEST_ROOT="$ROOT/distribution/src"
 else
   CASS_TEST_ROOT="$ROOT/server/src/test/resources"
 fi
-if [[ -f "$CASS_TEST_ROOT/conf/cassandra.yaml" ]] && [[ "${SKIP_ELASSANDRA_TEST_CASSANDRA_SYS_PROPS:-}" != "1" ]]; then
+if [[ "${SKIP_ELASSANDRA_TEST_CASSANDRA_SYS_PROPS:-}" != "1" ]]; then
   _ABS="$(cd "$CASS_TEST_ROOT" && pwd)"
-  export GRADLE_OPTS="${GRADLE_OPTS} -Dcassandra.home=${_ABS} -Dcassandra.config=file://${_ABS}/conf/cassandra.yaml"
+  # Default dirs Cassandra uses when paths are relative to cassandra.home (embedded tests).
+  mkdir -p "${_ABS}/data" "${_ABS}/data/hints" "${_ABS}/commitlog" "${_ABS}/saved_caches" "${_ABS}/hints" 2>/dev/null || true
+  _CONFIG_URI=""
+  if [[ -n "${ELASSANDRA_TEST_CASSANDRA_CONFIG:-}" ]]; then
+    _CF="$(cd "$(dirname "${ELASSANDRA_TEST_CASSANDRA_CONFIG}")" && pwd)/$(basename "${ELASSANDRA_TEST_CASSANDRA_CONFIG}")"
+    _CONFIG_URI="file://${_CF}"
+  elif [[ -f "$ROOT/server/test-fixtures/cassandra-opensearch-sidecar.yaml" ]]; then
+    _CF="$(cd "$ROOT/server/test-fixtures" && pwd)/cassandra-opensearch-sidecar.yaml"
+    _CONFIG_URI="file://${_CF}"
+  elif [[ -f "$CASS_TEST_ROOT/conf/cassandra.yaml" ]]; then
+    _CONFIG_URI="file://${_ABS}/conf/cassandra.yaml"
+  fi
+  if [[ -n "$_CONFIG_URI" ]]; then
+    export GRADLE_OPTS="${GRADLE_OPTS} -Dcassandra.home=${_ABS} -Dcassandra.config=${_CONFIG_URI}"
+  fi
 fi
+
+# Deterministic Netty / embedded behavior in CI (forwarded to Gradle JVM and test JVMs by init.gradle).
+export OPENSEARCH_NETTY_PROCESSORS="${OPENSEARCH_NETTY_PROCESSORS:-1}"
+export GRADLE_OPTS="${GRADLE_OPTS} -Dopensearch.set.netty.runtime.available.processors=${OPENSEARCH_NETTY_PROCESSORS}"
 
 # Default: one test class as smoke; set to org.elassandra.* for full package (slow, needs runtime).
 PATTERN="${OPENSEARCH_SIDECAR_TEST_PATTERN:-org.elassandra.ClusterSettingsTests}"
+if [[ -n "${OPENSEARCH_SIDECAR_TEST_WAVE:-}" ]]; then
+  case "$OPENSEARCH_SIDECAR_TEST_WAVE" in
+    0) PATTERN="org.elassandra.ClusterSettingsTests";;
+    1) PATTERN="org.elassandra.ClusterSettingsTests,org.elassandra.NamingTests,org.elassandra.TableOptionsTests";;
+    2) PATTERN="org.elassandra.ClusterSettingsTests,org.elassandra.NamingTests,org.elassandra.TableOptionsTests,org.elassandra.CqlHandlerTests,org.elassandra.IndexBuildTests";;
+    3) PATTERN="org.elassandra.ClusterSettingsTests,org.elassandra.NamingTests,org.elassandra.TableOptionsTests,org.elassandra.CqlHandlerTests,org.elassandra.IndexBuildTests,org.elassandra.CassandraDiscoveryTests,org.elassandra.PendingClusterStateTests,org.elassandra.SnapshotTests";;
+    4) PATTERN="org.elassandra.*";;
+    *)
+      echo "Unknown OPENSEARCH_SIDECAR_TEST_WAVE=$OPENSEARCH_SIDECAR_TEST_WAVE (use 0-4)" >&2
+      exit 1
+      ;;
+  esac
+fi
 
-exec ./gradlew -I "$INIT_GRADLE" :server:test --tests "$PATTERN" -Dtests.security.manager=false --no-daemon "$@"
+TEST_ARGS=()
+IFS=',' read -ra _PAT_ARR <<< "$PATTERN"
+for _c in "${_PAT_ARR[@]}"; do
+  _t="${_c#"${_c%%[![:space:]]*}"}"
+  _t="${_t%"${_t##*[![:space:]]}"}"
+  [[ -z "$_t" ]] && continue
+  TEST_ARGS+=(--tests "$_t")
+done
+
+exec ./gradlew -I "$INIT_GRADLE" :server:test "${TEST_ARGS[@]}" -Dtests.security.manager=false --no-daemon "$@"

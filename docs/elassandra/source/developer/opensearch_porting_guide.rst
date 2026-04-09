@@ -82,6 +82,8 @@ List ``org/elasticsearch`` sources that mention Elassandra / Strapdata (likely f
 
    ./scripts/list-elasticsearch-fork-touchpoints.sh
 
+A checked-in snapshot of that output lives at ``server/elasticsearch-fork-touchpoints.list`` in this repository (regenerate after large fork edits).
+
 Target version pins for the side-car (from ``buildSrc/version.properties``):
 
 .. code-block:: bash

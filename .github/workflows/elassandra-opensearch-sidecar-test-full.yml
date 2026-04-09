@@ -1,14 +1,15 @@
-# Run wave 0 (ClusterSettingsTests smoke) in a stock OpenSearch 1.3.20 clone after Elassandra sync + patches.
-# See scripts/opensearch-sidecar-test-try.sh (OPENSEARCH_SIDECAR_TEST_WAVE) and server/OPENSEARCH_PORT.md.
-name: Elassandra OpenSearch side-car test (manual)
+# Optional full org.elassandra.* :server:test in the side-car (slow; exploratory).
+# Uses OPENSEARCH_SIDECAR_TEST_WAVE=4; allowed to fail until the full runtime is stable.
+name: Elassandra OpenSearch side-car test (full package, scheduled)
 on:
   workflow_dispatch:
+  schedule:
+    - cron: "0 6 * * 1"
 
 jobs:
-  sidecar-test-smoke:
-    name: opensearch-sidecar :server:test (wave 0)
+  sidecar-test-full:
+    name: opensearch-sidecar :server:test (wave 4)
     runs-on: ubuntu-latest
-    # Remove when wave 0 is reliably green on ubuntu-latest (embedded Config + Cassandra runtime deps).
     continue-on-error: true
     steps:
       - uses: actions/checkout@v4
@@ -29,12 +30,12 @@ jobs:
         run: ./scripts/build-elassandra-cassandra-jar.sh
         working-directory: ${{ github.workspace }}
 
-      - name: Run Elassandra sync + patches + OpenSearch :server:test (filtered)
+      - name: Run Elassandra sync + patches + OpenSearch :server:test (org.elassandra.*)
         working-directory: ${{ github.workspace }}
         env:
           JAVA_HOME: ${{ steps.jdk11.outputs.path }}
           RUNTIME_JAVA_HOME: ${{ steps.jdk11.outputs.path }}
           OPENSEARCH_CLONE_DIR: ${{ runner.temp }}/opensearch-sidecar
-          OPENSEARCH_SIDECAR_TEST_WAVE: "0"
+          OPENSEARCH_SIDECAR_TEST_WAVE: "4"
           OPENSEARCH_NETTY_PROCESSORS: "1"
         run: ./scripts/opensearch-sidecar-test-try.sh

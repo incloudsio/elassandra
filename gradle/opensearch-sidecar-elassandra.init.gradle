@@ -22,6 +22,8 @@ gradle.projectsEvaluated {
     def jacksonDatabind = '2.14.2'
     def httpclient = '4.5.13'
     def httpcore = '4.4.12'
+    def netty = '4.1.115.Final'
+    def guava = '32.0.1-jre'
     if (vfile.isFile()) {
         vfile.eachLine { line ->
             def m = (line =~ /^\s*jackson_databind\s*=\s*(\S+)/)
@@ -36,11 +38,20 @@ gradle.projectsEvaluated {
             if (m.find()) {
                 httpcore = m.group(1)
             }
+            m = (line =~ /^\s*netty\s*=\s*(\S+)/)
+            if (m.find()) {
+                netty = m.group(1)
+            }
+            m = (line =~ /^\s*guava\s*=\s*(\S+)/)
+            if (m.find()) {
+                guava = m.group(1)
+            }
         }
     }
     def deps = {
         api files(jarFile)
         compileOnly 'com.google.code.findbugs:jsr305:3.0.2'
+        // Compile against Guava 19 (ES 6.8-era Elassandra); Cassandra runtime needs newer APIs (e.g. HostAndPort.getHost).
         api 'com.google.guava:guava:19.0'
         api 'org.antlr:antlr:3.5.2'
         api 'org.antlr:antlr-runtime:3.5.2'
@@ -53,11 +64,22 @@ gradle.projectsEvaluated {
         api "org.apache.httpcomponents:httpcore:${httpcore}"
         // Elassandra tests (CompactionTests) use com.codahale.metrics via Cassandra metrics registry
         api 'com.codahale.metrics:metrics-core:3.0.2'
+        api 'com.boundary:high-scale-lib:1.0.6'
+        api 'com.github.jbellis:jamm:0.3.0'
+        api 'org.lz4:lz4-java:1.7.1'
+        api 'com.github.ben-manes.caffeine:caffeine:2.9.3'
+        api 'org.jctools:jctools-core:3.3.0'
+        // Cassandra Config / EncryptionOptions static init needs Netty (handler pulls SSL; buffer/common required).
+        api "io.netty:netty-common:${netty}"
+        api "io.netty:netty-buffer:${netty}"
+        api "io.netty:netty-transport:${netty}"
+        api "io.netty:netty-codec:${netty}"
+        api "io.netty:netty-handler:${netty}"
     }
     if (server != null) {
         server.dependencies deps
-        // Cassandra 4.0 config loader expects SnakeYAML 1.x (CustomClassLoaderConstructor ctor); OpenSearch pins 2.x.
-        ['runtimeClasspath', 'testRuntimeClasspath', 'compileClasspath', 'testCompileClasspath'].each { cn ->
+        // Cassandra 4.0 YamlConfigurationLoader expects SnakeYAML 1.x; OpenSearch pins 2.x.
+        ['compileClasspath', 'testCompileClasspath'].each { cn ->
             def c = server.configurations.findByName(cn)
             if (c != null) {
                 c.resolutionStrategy {
@@ -65,31 +87,69 @@ gradle.projectsEvaluated {
                 }
             }
         }
+        ['runtimeClasspath', 'testRuntimeClasspath'].each { cn ->
+            def c = server.configurations.findByName(cn)
+            if (c != null) {
+                c.resolutionStrategy {
+                    force 'org.yaml:snakeyaml:1.26'
+                    force "com.google.guava:guava:${guava}"
+                }
+            }
+        }
     }
     if (testFramework != null) {
         testFramework.dependencies deps
     }
-    logger.lifecycle("[opensearch-sidecar-elassandra] :server and :test:framework + Cassandra jar + jsr305 + guava/antlr/jackson (${jacksonDatabind}) httpclient ${httpclient}")
+    logger.lifecycle("[opensearch-sidecar-elassandra] :server and :test:framework + Cassandra jar + deps (compile guava 19, runtime guava ${guava}) jackson (${jacksonDatabind}) httpclient ${httpclient} netty ${netty}")
 }
 
-// Forward cassandra.home / cassandra.config from the Gradle JVM (e.g. GRADLE_OPTS -D…) to forked :server:test workers.
+// Forward Cassandra / JNA / Netty-related system properties from the Gradle JVM (GRADLE_OPTS -D…) to forked :server:test workers.
 // ESSingleNodeTestCase calls DatabaseDescriptor.daemonInitialization() before ElassandraDaemon.activate().
+def forwardTestSystemProperties = { org.gradle.api.tasks.testing.Test t ->
+    def prefixes = ['cassandra.', 'jna.', 'io.netty.', 'org.apache.cassandra.']
+    System.properties.each { k, v ->
+        if (v == null || k == null) {
+            return
+        }
+        def ks = k.toString()
+        if (prefixes.any { ks.startsWith(it) }) {
+            t.systemProperty(ks, v.toString())
+        }
+    }
+    // Explicit keys (also matched above, but kept for clarity)
+    def ch = System.getProperty('cassandra.home')
+    def cc = System.getProperty('cassandra.config')
+    if (ch != null) {
+        t.systemProperty('cassandra.home', ch)
+    }
+    if (cc != null) {
+        t.systemProperty('cassandra.config', cc)
+    }
+}
+
 gradle.projectsEvaluated {
     Project server = rootProject.findProject(':server')
     if (server == null) {
         return
     }
-    def ch = System.getProperty('cassandra.home')
-    def cc = System.getProperty('cassandra.config')
-    if (ch == null && cc == null) {
-        return
-    }
     server.tasks.withType(org.gradle.api.tasks.testing.Test).configureEach { t ->
-        if (ch != null) {
-            t.systemProperty('cassandra.home', ch)
+        forwardTestSystemProperties(t)
+        // Prefer JNA natives bundled with the jna.jar (helps CI / macOS where system libjna is missing or wrong).
+        t.jvmArgs('-Djna.nosys=true')
+        // Cassandra 4 FileUtils reflects into jdk.internal.ref.Cleaner (Java 11+).
+        t.jvmArgs('--add-opens', 'java.base/jdk.internal.ref=ALL-UNNAMED')
+        // Deterministic Netty pool sizing in constrained CI (override via GRADLE_OPTS -D… on Gradle JVM).
+        def nettyProcs = System.getProperty('opensearch.set.netty.runtime.available.processors')
+        if (nettyProcs != null) {
+            t.jvmArgs("-Dopensearch.set.netty.runtime.available.processors=${nettyProcs}")
         }
-        if (cc != null) {
-            t.systemProperty('cassandra.config', cc)
+        def extraJvm = System.getenv('ELASSANDRA_OPENSEARCH_TEST_EXTRA_JVM_ARGS')
+        if (extraJvm != null && !extraJvm.trim().isEmpty()) {
+            extraJvm.split(/\s+/).each { arg ->
+                if (arg != null && !arg.isEmpty()) {
+                    t.jvmArgs(arg)
+                }
+            }
         }
     }
 }

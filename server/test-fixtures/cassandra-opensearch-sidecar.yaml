@@ -1,0 +1,21 @@
+# Minimal Cassandra 4.0–compatible config for OpenSearch side-car :server:test (embedded).
+# Prefer this over distribution/src/conf/cassandra.yaml when YamlConfigurationLoader fails on
+# package-shaped or legacy test yamls. Tune via ELASSANDRA_TEST_CASSANDRA_HOME if needed.
+cluster_name: TestCluster
+memtable_allocation_type: heap_buffers
+commitlog_sync: periodic
+commitlog_segment_size_in_mb: 5
+partitioner: org.apache.cassandra.dht.Murmur3Partitioner
+listen_address: 127.0.0.1
+storage_port: 7000
+start_native_transport: true
+native_transport_port: 9042
+seed_provider:
+    - class_name: org.apache.cassandra.locator.SimpleSeedProvider
+      parameters:
+          - seeds: "127.0.0.1"
+endpoint_snitch: SimpleSnitch
+incremental_backups: false
+auto_snapshot: false
+write_request_timeout_in_ms: 30000
+enable_user_defined_functions: false
