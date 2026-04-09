@@ -14,7 +14,8 @@ if (!jarFile.isFile()) {
 
 gradle.projectsEvaluated {
     Project server = rootProject.findProject(':server')
-    if (server == null) {
+    Project testFramework = rootProject.findProject(':test:framework')
+    if (server == null && testFramework == null) {
         return
     }
     def vfile = new File(rootProject.projectDir, 'buildSrc/version.properties')
@@ -37,7 +38,7 @@ gradle.projectsEvaluated {
             }
         }
     }
-    server.dependencies {
+    def deps = {
         api files(jarFile)
         compileOnly 'com.google.code.findbugs:jsr305:3.0.2'
         api 'com.google.guava:guava:19.0'
@@ -50,6 +51,14 @@ gradle.projectsEvaluated {
         api 'org.slf4j:slf4j-api:1.7.36'
         api "org.apache.httpcomponents:httpclient:${httpclient}"
         api "org.apache.httpcomponents:httpcore:${httpcore}"
+        // Elassandra tests (CompactionTests) use com.codahale.metrics via Cassandra metrics registry
+        api 'com.codahale.metrics:metrics-core:3.0.2'
     }
-    logger.lifecycle("[opensearch-sidecar-elassandra] :server + Cassandra jar + jsr305 + guava/antlr/jackson (${jacksonDatabind}) httpclient ${httpclient}")
+    if (server != null) {
+        server.dependencies deps
+    }
+    if (testFramework != null) {
+        testFramework.dependencies deps
+    }
+    logger.lifecycle("[opensearch-sidecar-elassandra] :server and :test:framework + Cassandra jar + jsr305 + guava/antlr/jackson (${jacksonDatabind}) httpclient ${httpclient}")
 }
