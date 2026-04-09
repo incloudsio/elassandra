@@ -42,6 +42,40 @@ JAVA_HOME=/path/to/jdk-11 ./scripts/opensearch-sidecar-compile-try.sh
 
 To compile only main sources (faster): `OPENSEARCH_SIDECAR_TASKS=:server:compileJava ./scripts/opensearch-sidecar-compile-try.sh`
 
+### Side-car `:server:test` (integration; often not green yet)
+
+`org.elassandra.*` tests extend **`ESSingleNodeTestCase`** / **`OpenSearchSingleNodeTestCase`** and expect a **real Elassandra node** (Cassandra + search engine), not the compile-time stubs in the side-car overlay. Running them is still useful to see which runtime pieces are missing after `compileTestJava` succeeds.
+
+```bash
+JAVA_HOME=/path/to/jdk-11 ./scripts/opensearch-sidecar-test-try.sh
+```
+
+The script runs `opensearch-sidecar-prepare.sh`, then `./gradlew :server:test` with a **Gradle `--tests` filter**. By default it runs a single class (`org.elassandra.ClusterSettingsTests`) as a smoke run. To target more tests:
+
+```bash
+OPENSEARCH_SIDECAR_TEST_PATTERN='org.elassandra.PendingClusterStateTests' ./scripts/opensearch-sidecar-test-try.sh
+# Full package (slow; needs full runtime wiring):
+# OPENSEARCH_SIDECAR_TEST_PATTERN='org.elassandra.*' ./scripts/opensearch-sidecar-test-try.sh
+```
+
+Expect failures until **`ElassandraDaemon`** (and related bootstrap: `cassandra.home`, discovery, gateway) is fully ported and tests can start a real embedded cluster. Compile-only CI success does **not** imply `:server:test` passes.
+
+`opensearch-sidecar-test-try.sh` sets **`RUNTIME_JAVA_HOME`** to **`JAVA_HOME`** when unset so OpenSearch does not try to download a separate “bundled” JDK for tests (which can fail on **Apple Silicon** or air‑gapped hosts). Override **`RUNTIME_JAVA_HOME`** if you need a different JVM for test execution than for Gradle.
+
+By default the script sets **`cassandra.home`** and **`cassandra.config`** (as a `file:` URI) using the first layout that exists: **`ELASSANDRA_TEST_CASSANDRA_HOME`** (if set), else **`distribution/src`** (Cassandra 4.x–style yaml used for packages), else **`server/src/test/resources`**. **`gradle/opensearch-sidecar-elassandra.init.gradle`** forwards those system properties to forked **`Test`** workers. **`SKIP_ELASSANDRA_TEST_CASSANDRA_SYS_PROPS=1`** skips automatic defaults.
+
+The Elassandra Cassandra jar expects **SnakeYAML 1.x** for `YamlConfigurationLoader`; OpenSearch pins **2.x**, so the init script **forces SnakeYAML 1.26** on server classpaths. Even then, the checked-in **`conf/cassandra.yaml`** must match the **Cassandra 4.0** `Config` schema expected by the forked jar—if tests fail YAML construction errors, point **`ELASSANDRA_TEST_CASSANDRA_HOME`** at a full Elassandra/Cassandra tree with a valid 4.0 config (for example under **`server/cassandra`**) instead of the minimal test fixture.
+
+### ElassandraDaemon and real bootstrap (next runtime milestone)
+
+By default **`sync-elassandra-fork-overlay-to-opensearch-sidecar.sh`** installs **`scripts/templates/ElassandraDaemon-opensearch-merged.java`**: a port of the production **`ElassandraDaemon`** from this repo to **`org.opensearch.*`** ( **`CassandraDaemon`** lifecycle, **`OpenSearchBootstrap`** reflection for package-private bootstrap, **`Node(Environment, …)`**, **`injector().getInstance(ClusterService.class)`**, etc.). Set **`ELASSANDRA_SIDE_CAR_ELASSANDRA_DAEMON=stub`** to use the smaller **`ElassandraDaemon-opensearch-sidecar-stub.java`** instead (compile-only / minimal runtime).
+
+**`scripts/patch-opensearch-node-elassandra-activate.sh`** adds **`Node#activate()`** (delegates to **`start()`**) so **`activateAndWaitShards`** matches the Elasticsearch 6.8 fork API.
+
+Full **`:server:test`** for **`org.elassandra.*`** still depends on a healthy local Cassandra config, JNA, and logging init (see test output for **`PrefixLogger`** / **`JNA`** on some hosts). Treat **`opensearch-sidecar-test-try.sh`** as a **diagnostic** runner until those environments are stable.
+
+The **main** Elassandra tree still ships the Elasticsearch 6.8 **`ElassandraDaemon`** under [`ElassandraDaemon.java`](src/main/java/org/apache/cassandra/service/ElassandraDaemon.java); converge that file with the merged template when you cut over **`server/`** to OpenSearch. Track work in the porting guide’s recommended order (daemon → discovery/gateway → routing → metadata).
+
 The OpenSearch Gradle wrapper often does **not** forward `-Delassandra.cassandra.jar=...` from the CLI to the build JVM. This repo’s script sets **`GRADLE_OPTS`** for you. If you invoke Gradle yourself, use:
 
 ```bash
@@ -110,4 +144,5 @@ Run `./scripts/print-opensearch-port-pins.sh` to print those pins (avoids config
 
 * [.github/workflows/opensearch-sidecar.yml](../.github/workflows/opensearch-sidecar.yml) — weekly / manual upstream `:server:compileJava` on Java 11.
 * [.github/workflows/elassandra-opensearch-sidecar-compile.yml](../.github/workflows/elassandra-opensearch-sidecar-compile.yml) — Elassandra sync + patches + side-car `compileJava` / `compileTestJava` on PRs and `main`/`master`.
+* [.github/workflows/elassandra-opensearch-sidecar-test.yml](../.github/workflows/elassandra-opensearch-sidecar-test.yml) — **manual only** (`workflow_dispatch`): runs `opensearch-sidecar-test-try.sh`. The job is allowed to fail until the full daemon/runtime port is in place; use it to capture `:server:test` signal without blocking merges.
 * [.github/workflows/porting-scripts.yml](../.github/workflows/porting-scripts.yml) — `bash -n` on the scripts above.

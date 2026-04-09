@@ -85,12 +85,18 @@ elif [[ -f "$CFP_STUB" ]]; then
   echo "Wrote CqlFetchPhase compile stub → $CFP_DST"
 fi
 
-STUB_DAEMON="$ROOT/scripts/templates/ElassandraDaemon-opensearch-sidecar-stub.java"
 DAEMON_DST="$DEST/server/src/main/java/org/apache/cassandra/service/ElassandraDaemon.java"
-if [[ -f "$STUB_DAEMON" ]]; then
-  mkdir -p "$(dirname "$DAEMON_DST")"
-  cp "$STUB_DAEMON" "$DAEMON_DST"
-  echo "Installed compile-only ElassandraDaemon stub → $DAEMON_DST"
+MERGED_DAEMON="$ROOT/scripts/templates/ElassandraDaemon-opensearch-merged.java"
+STUB_DAEMON="$ROOT/scripts/templates/ElassandraDaemon-opensearch-sidecar-stub.java"
+mkdir -p "$(dirname "$DAEMON_DST")"
+if [[ "${ELASSANDRA_SIDE_CAR_ELASSANDRA_DAEMON:-merged}" == "stub" ]]; then
+  if [[ -f "$STUB_DAEMON" ]]; then
+    cp "$STUB_DAEMON" "$DAEMON_DST"
+    echo "Installed ElassandraDaemon compile stub → $DAEMON_DST"
+  fi
+elif [[ -f "$MERGED_DAEMON" ]]; then
+  cp "$MERGED_DAEMON" "$DAEMON_DST"
+  echo "Installed ElassandraDaemon OpenSearch merge template → $DAEMON_DST"
 fi
 
 # CassandraGatewayService: OpenSearch GatewayService API (Discovery ctor, no gateway()); stock template uses org.elasticsearch.* — rewrite pass converts to org.opensearch.*
@@ -102,10 +108,9 @@ if [[ -f "$CGW_TEMPLATE" ]]; then
   echo "Overlay CassandraGatewayService (OpenSearch-side ctor) → $CGW_DST"
 fi
 
-# Optional: full ElassandraDaemon + CQL helpers (expects Elasticsearch 6.8 APIs; use only when porting the bootstrap).
+# Optional: CQL helpers from this repo (raw ES 6.8). Does not copy ElassandraDaemon.java — use ELASSANDRA_SIDE_CAR_ELASSANDRA_DAEMON=stub|merged instead.
 if [[ "${ELASSANDRA_OVERLAY_CASSANDRA_SOURCES:-}" == "1" ]]; then
   for rel in \
-    "org/apache/cassandra/service/ElassandraDaemon.java" \
     "org/apache/cassandra/cql3/functions/ToJsonArrayFct.java" \
     "org/apache/cassandra/cql3/functions/ToStringFct.java"; do
     src="$ROOT/server/src/main/java/$rel"

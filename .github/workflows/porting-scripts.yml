@@ -31,6 +31,8 @@ jobs:
           bash -n scripts/sync-elassandra-to-opensearch-sidecar.sh
           bash -n scripts/rewrite-elassandra-imports-for-opensearch.sh
           bash -n scripts/opensearch-sidecar-compile-try.sh
+          bash -n scripts/opensearch-sidecar-prepare.sh
+          bash -n scripts/opensearch-sidecar-test-try.sh
           bash -n scripts/build-elassandra-cassandra-jar.sh
           bash -n scripts/sync-elassandra-fork-minimal-to-opensearch-sidecar.sh
           bash -n scripts/patch-opensearch-forbidden-deps-for-elassandra.sh
@@ -49,6 +51,7 @@ jobs:
           bash -n scripts/sync-elassandra-routing-overlay-to-opensearch-sidecar.sh
           bash -n scripts/patch-opensearch-cluster-service-elassandra-stubs.sh
           bash -n scripts/patch-opensearch-cluster-service-elassandra-schema-stubs.sh
+          bash -n scripts/patch-opensearch-node-elassandra-activate.sh
           bash -n scripts/patch-opensearch-mappers-elassandra-cql-compat.sh
           bash -n scripts/overlay-elassandra-parsecontext-to-opensearch-sidecar.sh
           bash -n scripts/patch-org-elassandra-opensearch-elastic-secondary.sh

@@ -12,7 +12,7 @@ The **`modernization/cassandra4-opensearch13`** branch embeds **Elasticsearch 6.
 
 **Next major target:** **OpenSearch 1.3.x** (Elasticsearch 7.10 lineage) as the embedded search engine, with the same Cassandra 4.0 base. Older release branches may still ship **Cassandra 3.11.x**; see submodule pointers and [CONTRIBUTING.md](CONTRIBUTING.md).
 
-Developer references: [RELEASING.md](RELEASING.md) and `docs/elassandra/source/` (`migration.rst`, `developer/cassandra_fork_inventory.rst`, `developer/cassandra_40_rebase.rst`, `developer/cassandra_40_jvm_port.rst`, `developer/opensearch_porting_guide.rst`). **Scripts:** `scripts/export-cassandra-elassandra-patches.sh`, `scripts/bootstrap-cassandra-40-worktree.sh`, `scripts/check-cassandra-submodule.sh`, `scripts/use-cassandra-40-submodule.sh`, `scripts/clone-opensearch-upstream.sh`, `scripts/opensearch-port-bootstrap.sh`.
+Developer references: [RELEASING.md](RELEASING.md) and `docs/elassandra/source/` (`migration.rst`, `developer/cassandra_fork_inventory.rst`, `developer/cassandra_40_rebase.rst`, `developer/cassandra_40_jvm_port.rst`, `developer/opensearch_porting_guide.rst`). **Scripts:** `scripts/export-cassandra-elassandra-patches.sh`, `scripts/bootstrap-cassandra-40-worktree.sh`, `scripts/check-cassandra-submodule.sh`, `scripts/use-cassandra-40-submodule.sh`, `scripts/clone-opensearch-upstream.sh`, `scripts/opensearch-port-bootstrap.sh`, `scripts/opensearch-sidecar-prepare.sh`, `scripts/opensearch-sidecar-compile-try.sh`, `scripts/opensearch-sidecar-test-try.sh` (optional `:server:test` probe; see `server/OPENSEARCH_PORT.md`).
 
 ## What Elassandra is (today)
 

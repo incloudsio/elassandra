@@ -56,9 +56,40 @@ gradle.projectsEvaluated {
     }
     if (server != null) {
         server.dependencies deps
+        // Cassandra 4.0 config loader expects SnakeYAML 1.x (CustomClassLoaderConstructor ctor); OpenSearch pins 2.x.
+        ['runtimeClasspath', 'testRuntimeClasspath', 'compileClasspath', 'testCompileClasspath'].each { cn ->
+            def c = server.configurations.findByName(cn)
+            if (c != null) {
+                c.resolutionStrategy {
+                    force 'org.yaml:snakeyaml:1.26'
+                }
+            }
+        }
     }
     if (testFramework != null) {
         testFramework.dependencies deps
     }
     logger.lifecycle("[opensearch-sidecar-elassandra] :server and :test:framework + Cassandra jar + jsr305 + guava/antlr/jackson (${jacksonDatabind}) httpclient ${httpclient}")
+}
+
+// Forward cassandra.home / cassandra.config from the Gradle JVM (e.g. GRADLE_OPTS -D…) to forked :server:test workers.
+// ESSingleNodeTestCase calls DatabaseDescriptor.daemonInitialization() before ElassandraDaemon.activate().
+gradle.projectsEvaluated {
+    Project server = rootProject.findProject(':server')
+    if (server == null) {
+        return
+    }
+    def ch = System.getProperty('cassandra.home')
+    def cc = System.getProperty('cassandra.config')
+    if (ch == null && cc == null) {
+        return
+    }
+    server.tasks.withType(org.gradle.api.tasks.testing.Test).configureEach { t ->
+        if (ch != null) {
+            t.systemProperty('cassandra.home', ch)
+        }
+        if (cc != null) {
+            t.systemProperty('cassandra.config', cc)
+        }
+    }
 }

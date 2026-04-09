@@ -57,6 +57,21 @@ To run a compile attempt (expect failures until the forked ``org.opensearch`` so
 
    JAVA_HOME=/path/to/jdk-11 ./scripts/opensearch-sidecar-compile-try.sh
 
+``opensearch-sidecar-compile-try.sh`` calls ``scripts/opensearch-sidecar-prepare.sh``, which syncs ``org.elassandra.*``, applies patch scripts, and rewrites imports—**without** running Gradle. To re-run only the prepare step (e.g. after editing a patch script):
+
+.. code-block:: bash
+
+   ./scripts/opensearch-sidecar-prepare.sh "${OPENSEARCH_CLONE_DIR:-../incloudsio-opensearch}"
+
+After main and test sources compile, you can probe **integration tests** in the side-car (usually **not** green until ``ElassandraDaemon`` and full runtime wiring land):
+
+.. code-block:: bash
+
+   JAVA_HOME=/path/to/jdk-11 ./scripts/opensearch-sidecar-test-try.sh
+   # Optional: OPENSEARCH_SIDECAR_TEST_PATTERN='org.elassandra.*' …
+
+See ``server/OPENSEARCH_PORT.md`` in this repo for Cassandra jar setup, ``GRADLE_OPTS``, ``RUNTIME_JAVA_HOME`` (avoids OpenSearch downloading a separate test JDK), optional CI workflows, and expectations for ``:server:test``.
+
 If you drive OpenSearch ``gradlew`` manually, pass the jar path via ``GRADLE_OPTS`` (``-D`` on the CLI is not always forwarded) and ``-I`` the init script under ``gradle/opensearch-sidecar-elassandra.init.gradle``. After Cassandra resolves, remaining errors are usually fork-only types such as ``CqlMapper`` that must be merged from the Elasticsearch tree.
 
 The same ``rewrite-elassandra-imports-for-opensearch.sh`` pass flattens nested metric imports (``metrics.min.*`` → ``metrics.*``), renames ``IndexMetaData`` / ``MetaData`` to ``IndexMetadata`` / ``Metadata``, rewrites ``.metaData()`` → ``.metadata()``, and adjusts ``getTotalHits()`` for Lucene ``TotalHits`` (7.x+). Types such as ``ObjectMapper`` must still implement Elassandra’s ``CqlMapper`` in the merged fork.
