@@ -37,10 +37,11 @@ fi
 "$ROOT/scripts/patch-opensearch-querymanager-opensearch-api.sh" "$DEST"
 "$ROOT/scripts/patch-opensearch-querymanager-mapping-lookup.sh" "$DEST"
 "$ROOT/scripts/patch-opensearch-querymanager-version-conflict.sh" "$DEST"
+# Stubs must run before cql-process: vanilla ClusterService has no replicationFactor / SETTING tail yet.
+"$ROOT/scripts/patch-opensearch-cluster-service-elassandra-stubs.sh" "$DEST"
 "$ROOT/scripts/patch-opensearch-cluster-service-elassandra-cql-process.sh" "$DEST"
 "$ROOT/scripts/patch-opensearch-elassandra-primary-first-strategy-node-id.sh" "$DEST"
 "$ROOT/scripts/patch-opensearch-metadata-elassandra-extensions.sh" "$DEST"
-"$ROOT/scripts/patch-opensearch-cluster-service-elassandra-stubs.sh" "$DEST"
 "$ROOT/scripts/patch-opensearch-cluster-service-elassandra-index-settings-keys.sh" "$DEST"
 "$ROOT/scripts/patch-opensearch-cluster-service-search-strategy-key.sh" "$DEST"
 "$ROOT/scripts/patch-opensearch-cluster-service-elassandra-schema-stubs.sh" "$DEST"
