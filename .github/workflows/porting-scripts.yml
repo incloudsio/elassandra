@@ -53,6 +53,9 @@ jobs:
           bash -n scripts/patch-opensearch-cluster-service-elassandra-schema-stubs.sh
           bash -n scripts/patch-opensearch-node-elassandra-activate.sh
           bash -n scripts/patch-opensearch-essingle-node-config-override.sh
+          bash -n scripts/patch-opensearch-essingle-node-activate-createnode.sh
+          bash -n scripts/patch-opensearch-server-test-runtime-netty4.sh
+          bash -n scripts/patch-opensearch-essingle-node-mock-fs-data-path.sh
           bash -n scripts/patch-opensearch-mappers-elassandra-cql-compat.sh
           bash -n scripts/overlay-elassandra-parsecontext-to-opensearch-sidecar.sh
           bash -n scripts/patch-org-elassandra-opensearch-elastic-secondary.sh

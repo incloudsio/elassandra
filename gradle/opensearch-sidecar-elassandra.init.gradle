@@ -2,6 +2,22 @@
 // Jar path via GRADLE_OPTS: -Delassandra.cassandra.jar=/abs/path/to/elassandra-cassandra-x.y.z.jar
 // Guava is normally forbidden on OpenSearch compileClasspath; run scripts/patch-opensearch-forbidden-deps-for-elassandra.sh on the clone first.
 
+import org.gradle.api.file.FileCollection
+import org.gradle.api.tasks.Classpath
+import org.gradle.process.CommandLineArgumentProvider
+
+class JctoolsBootArgumentProvider implements CommandLineArgumentProvider {
+    private final FileCollection jctoolsConfiguration
+    JctoolsBootArgumentProvider(FileCollection jctoolsConfiguration) { this.jctoolsConfiguration = jctoolsConfiguration }
+    @Classpath
+    FileCollection getClasspath() { return jctoolsConfiguration }
+    @Override
+    Iterable<String> asArguments() {
+        def jf = jctoolsConfiguration.files.find { it.name.startsWith('jctools-core') && it.name.endsWith('.jar') }
+        return (jf != null && jf.isFile()) ? ["-Xbootclasspath/a:${jf.absolutePath}"] : []
+    }
+}
+
 def jarProp = System.getProperty('elassandra.cassandra.jar')
 if (jarProp == null || jarProp.trim().isEmpty()) {
     return
@@ -10,6 +26,34 @@ def jarFile = new File(jarProp)
 if (!jarFile.isFile()) {
     logger.lifecycle("[opensearch-sidecar-elassandra] Skip: jar not found: ${jarFile.absolutePath}")
     return
+}
+
+// Forward Cassandra / JNA / Netty-related system properties from the Gradle JVM (GRADLE_OPTS -D…) to forked :server:test workers.
+def forwardTestSystemProperties = { org.gradle.api.tasks.testing.Test t ->
+    def prefixes = ['cassandra.', 'jna.', 'io.netty.', 'org.apache.cassandra.']
+    System.properties.each { k, v ->
+        if (v == null || k == null) {
+            return
+        }
+        def ks = k.toString()
+        if (prefixes.any { ks.startsWith(it) }) {
+            t.systemProperty(ks, v.toString())
+        }
+    }
+    def ch = System.getProperty('cassandra.home')
+    if (ch == null || ch.toString().trim().isEmpty()) {
+        ch = System.getenv('ELASSANDRA_GRADLE_CASSANDRA_HOME')
+    }
+    def cc = System.getProperty('cassandra.config')
+    if (cc == null || cc.toString().trim().isEmpty()) {
+        cc = System.getenv('ELASSANDRA_GRADLE_CASSANDRA_CONFIG')
+    }
+    if (ch != null) {
+        t.systemProperty('cassandra.home', ch.toString())
+    }
+    if (cc != null) {
+        t.systemProperty('cassandra.config', cc.toString())
+    }
 }
 
 gradle.projectsEvaluated {
@@ -84,6 +128,10 @@ gradle.projectsEvaluated {
             if (c != null) {
                 c.resolutionStrategy {
                     force 'org.yaml:snakeyaml:1.26'
+                    if (cn == 'testCompileClasspath') {
+                        // OpenSearch pins JNA 5.5.0 (x86-only darwin lib); Apple Silicon needs darwin-aarch64 in 5.12+.
+                        force 'net.java.dev.jna:jna:5.13.0'
+                    }
                 }
             }
         }
@@ -93,6 +141,9 @@ gradle.projectsEvaluated {
                 c.resolutionStrategy {
                     force 'org.yaml:snakeyaml:1.26'
                     force "com.google.guava:guava:${guava}"
+                    if (cn == 'testRuntimeClasspath') {
+                        force 'net.java.dev.jna:jna:5.13.0'
+                    }
                 }
             }
         }
@@ -100,56 +151,59 @@ gradle.projectsEvaluated {
     if (testFramework != null) {
         testFramework.dependencies deps
     }
-    logger.lifecycle("[opensearch-sidecar-elassandra] :server and :test:framework + Cassandra jar + deps (compile guava 19, runtime guava ${guava}) jackson (${jacksonDatabind}) httpclient ${httpclient} netty ${netty}")
-}
-
-// Forward Cassandra / JNA / Netty-related system properties from the Gradle JVM (GRADLE_OPTS -D…) to forked :server:test workers.
-// ESSingleNodeTestCase calls DatabaseDescriptor.daemonInitialization() before ElassandraDaemon.activate().
-def forwardTestSystemProperties = { org.gradle.api.tasks.testing.Test t ->
-    def prefixes = ['cassandra.', 'jna.', 'io.netty.', 'org.apache.cassandra.']
-    System.properties.each { k, v ->
-        if (v == null || k == null) {
-            return
-        }
-        def ks = k.toString()
-        if (prefixes.any { ks.startsWith(it) }) {
-            t.systemProperty(ks, v.toString())
-        }
-    }
-    // Explicit keys (also matched above, but kept for clarity)
-    def ch = System.getProperty('cassandra.home')
-    def cc = System.getProperty('cassandra.config')
-    if (ch != null) {
-        t.systemProperty('cassandra.home', ch)
-    }
-    if (cc != null) {
-        t.systemProperty('cassandra.config', cc)
-    }
-}
-
-gradle.projectsEvaluated {
-    Project server = rootProject.findProject(':server')
-    if (server == null) {
-        return
-    }
-    server.tasks.withType(org.gradle.api.tasks.testing.Test).configureEach { t ->
-        forwardTestSystemProperties(t)
-        // Prefer JNA natives bundled with the jna.jar (helps CI / macOS where system libjna is missing or wrong).
-        t.jvmArgs('-Djna.nosys=true')
-        // Cassandra 4 FileUtils reflects into jdk.internal.ref.Cleaner (Java 11+).
-        t.jvmArgs('--add-opens', 'java.base/jdk.internal.ref=ALL-UNNAMED')
-        // Deterministic Netty pool sizing in constrained CI (override via GRADLE_OPTS -D… on Gradle JVM).
-        def nettyProcs = System.getProperty('opensearch.set.netty.runtime.available.processors')
-        if (nettyProcs != null) {
-            t.jvmArgs("-Dopensearch.set.netty.runtime.available.processors=${nettyProcs}")
-        }
-        def extraJvm = System.getenv('ELASSANDRA_OPENSEARCH_TEST_EXTRA_JVM_ARGS')
-        if (extraJvm != null && !extraJvm.trim().isEmpty()) {
-            extraJvm.split(/\s+/).each { arg ->
-                if (arg != null && !arg.isEmpty()) {
-                    t.jvmArgs(arg)
+    if (server != null) {
+        def extraCp = server.configurations.maybeCreate('elassandraOpenSearchTestExtra')
+        extraCp.canBeConsumed = false
+        extraCp.canBeResolved = true
+        extraCp.visible = false
+        server.dependencies.add(extraCp.name, 'org.jctools:jctools-core:3.3.0')
+        server.tasks.withType(org.gradle.api.tasks.testing.Test).configureEach { t ->
+            // JaCoCo + embedded Cassandra has been observed to yield flaky / opaque worker exit 100 with SKIPPED tests.
+            try {
+                t.jacoco.enabled = false
+            } catch (Exception ignore) {
+            }
+            t.classpath += extraCp
+            t.jvmArgumentProviders.add(new JctoolsBootArgumentProvider(extraCp))
+            // java.io.tmpdir is OpenSearchTestBasePlugin nonInputProperties → workingDir/temp. Do not override here:
+            // Lucene TestRuleTemporaryFilesCleanup + PathUtilsForTesting expect that layout; overriding tmpdir caused
+            // FileAlreadyExistsException on the mock FS. Pre-mkdir of workingDir/temp is patched out in opensearch-sidecar-prepare.sh.
+            forwardTestSystemProperties(t)
+            def jvmCh = System.getProperty('cassandra.home')
+            if (jvmCh == null || jvmCh.toString().trim().isEmpty()) {
+                jvmCh = System.getenv('ELASSANDRA_GRADLE_CASSANDRA_HOME')
+            }
+            def jvmCc = System.getProperty('cassandra.config')
+            if (jvmCc == null || jvmCc.toString().trim().isEmpty()) {
+                jvmCc = System.getenv('ELASSANDRA_GRADLE_CASSANDRA_CONFIG')
+            }
+            // Also pass -D on the worker command line (some Gradle 6 / Test worker paths do not apply all
+            // task systemProperty entries to the forked JVM consistently with OpenSearch's providers).
+            if (jvmCh != null) {
+                t.jvmArgs("-Dcassandra.home=${jvmCh}")
+            }
+            if (jvmCc != null) {
+                t.jvmArgs("-Dcassandra.config=${jvmCc}")
+            }
+            t.jvmArgs('-Djna.nosys=true')
+            // Embedded Cassandra + OpenSearch is heavy; upstream :server:test defaults to -Xmx512m which can OOM-exit the worker (Gradle reports exit 100).
+            t.jvmArgs('-Xmx1536m')
+            // Lucene TestRuleLimitSysouts + verbose Cassandra/OpenSearch logging can exceed default limits; verbose disables strict sysout enforcement.
+            t.jvmArgs('-Dtests.verbose=true')
+            t.jvmArgs('--add-opens', 'java.base/jdk.internal.ref=ALL-UNNAMED')
+            def nettyProcs = System.getProperty('opensearch.set.netty.runtime.available.processors')
+            if (nettyProcs != null) {
+                t.jvmArgs("-Dopensearch.set.netty.runtime.available.processors=${nettyProcs}")
+            }
+            def extraJvm = System.getenv('ELASSANDRA_OPENSEARCH_TEST_EXTRA_JVM_ARGS')
+            if (extraJvm != null && !extraJvm.trim().isEmpty()) {
+                extraJvm.split(/\s+/).each { arg ->
+                    if (arg != null && !arg.isEmpty()) {
+                        t.jvmArgs(arg)
+                    }
                 }
             }
         }
     }
+    logger.lifecycle("[opensearch-sidecar-elassandra] :server and :test:framework + Cassandra jar + deps (compile guava 19, runtime guava ${guava}) jackson (${jacksonDatabind}) httpclient ${httpclient} netty ${netty}")
 }

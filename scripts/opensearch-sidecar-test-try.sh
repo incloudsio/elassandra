@@ -51,6 +51,8 @@ fi
 
 "$ROOT/scripts/opensearch-sidecar-prepare.sh" "$DEST"
 cd "$DEST"
+# Lucene PathUtilsForTesting + mock FS: stale server/build/testrun/test/temp from a prior run can make createDirectory fail with FileAlreadyExistsException (suite SKIPPED, Gradle worker exit 100). :cleanTest does not remove this tree.
+rm -rf "$DEST/server/build/testrun" 2>/dev/null || true
 export GRADLE_OPTS="${GRADLE_OPTS:-} -Delassandra.cassandra.jar=$JAR"
 
 # Default Cassandra layout for ESSingleNodeTestCase (YamlConfigurationLoader needs a file: URI for cassandra.config).
@@ -70,6 +72,8 @@ if [[ "${SKIP_ELASSANDRA_TEST_CASSANDRA_SYS_PROPS:-}" != "1" ]]; then
   _ABS="$(cd "$CASS_TEST_ROOT" && pwd)"
   # Default dirs Cassandra uses when paths are relative to cassandra.home (embedded tests).
   mkdir -p "${_ABS}/data" "${_ABS}/data/hints" "${_ABS}/commitlog" "${_ABS}/saved_caches" "${_ABS}/hints" 2>/dev/null || true
+  # Legacy: OpenSearch data used to live under cassandra data; leftover dirs are harmless. Current ESSingleNodeTestCase uses Lucene temp (mock FS).
+  rm -rf "${_ABS}/data/elasticsearch.data" 2>/dev/null || true
   _CONFIG_URI=""
   if [[ -n "${ELASSANDRA_TEST_CASSANDRA_CONFIG:-}" ]]; then
     _CF="$(cd "$(dirname "${ELASSANDRA_TEST_CASSANDRA_CONFIG}")" && pwd)/$(basename "${ELASSANDRA_TEST_CASSANDRA_CONFIG}")"
@@ -82,11 +86,15 @@ if [[ "${SKIP_ELASSANDRA_TEST_CASSANDRA_SYS_PROPS:-}" != "1" ]]; then
   fi
   if [[ -n "$_CONFIG_URI" ]]; then
     export GRADLE_OPTS="${GRADLE_OPTS} -Dcassandra.home=${_ABS} -Dcassandra.config=${_CONFIG_URI}"
+    # Init script also reads these if the Gradle daemon drops -D (forked workers still get props).
+    export ELASSANDRA_GRADLE_CASSANDRA_HOME="${_ABS}"
+    export ELASSANDRA_GRADLE_CASSANDRA_CONFIG="${_CONFIG_URI}"
   fi
 fi
 
-# Deterministic Netty / embedded behavior in CI (forwarded to Gradle JVM and test JVMs by init.gradle).
-export OPENSEARCH_NETTY_PROCESSORS="${OPENSEARCH_NETTY_PROCESSORS:-1}"
+# Netty reads this as a boolean (true/false), not a CPU count; "1" breaks Booleans.parseBoolean in Netty4Utils.
+# Default false skips pinning runtime processors (test-friendly); set to true to allow Netty to set from availableProcessors.
+export OPENSEARCH_NETTY_PROCESSORS="${OPENSEARCH_NETTY_PROCESSORS:-false}"
 export GRADLE_OPTS="${GRADLE_OPTS} -Dopensearch.set.netty.runtime.available.processors=${OPENSEARCH_NETTY_PROCESSORS}"
 
 # Default: one test class as smoke; set to org.elassandra.* for full package (slow, needs runtime).
@@ -114,4 +122,17 @@ for _c in "${_PAT_ARR[@]}"; do
   TEST_ARGS+=(--tests "$_t")
 done
 
-exec ./gradlew -I "$INIT_GRADLE" :server:test "${TEST_ARGS[@]}" -Dtests.security.manager=false --no-daemon "$@"
+# Pass -D on the gradlew command line so the Gradle JVM (and init.gradle System.getProperty) always sees
+# cassandra.*; GRADLE_OPTS alone is not reliably applied to the build JVM on all platforms.
+GRADLE_EXTRA_D=()
+if [[ "${SKIP_ELASSANDRA_TEST_CASSANDRA_SYS_PROPS:-}" != "1" ]]; then
+  if [[ -n "${_ABS:-}" ]]; then
+    GRADLE_EXTRA_D+=("-Dcassandra.home=${_ABS}")
+  fi
+  if [[ -n "${_CONFIG_URI:-}" ]]; then
+    GRADLE_EXTRA_D+=("-Dcassandra.config=${_CONFIG_URI}")
+  fi
+fi
+
+# Always clean test outputs so embedded Cassandra failures are not masked by stale XML (Gradle incremental test).
+exec ./gradlew "${GRADLE_EXTRA_D[@]}" -I "$INIT_GRADLE" :server:cleanTest :server:test "${TEST_ARGS[@]}" -Dtests.security.manager=false --no-daemon "$@"

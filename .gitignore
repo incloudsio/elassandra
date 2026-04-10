@@ -31,6 +31,9 @@ build/
 # vscode stuff
 .vscode/
 
+# Cursor IDE local config (not shared)
+.cursor/
+
 # testing stuff
 **/.local*
 .vagrant/
@@ -63,3 +66,5 @@ testfixtures_shared/
 docker
 *.rej
 *.orig
+
+server/src/test/resources/commitlog/*

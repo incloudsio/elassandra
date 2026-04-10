@@ -54,6 +54,12 @@ fi
 "$ROOT/scripts/patch-cassandra-discovery-for-opensearch.sh" "$DEST"
 "$ROOT/scripts/patch-opensearch-node-elassandra-activate.sh" "$DEST"
 "$ROOT/scripts/patch-opensearch-essingle-node-config-override.sh" "$DEST"
+"$ROOT/scripts/patch-opensearch-essingle-node-threadleak.sh" "$DEST"
+"$ROOT/scripts/patch-opensearch-essingle-node-activate-createnode.sh" "$DEST"
+"$ROOT/scripts/patch-opensearch-essingle-node-mock-fs-data-path.sh" "$DEST"
+"$ROOT/scripts/patch-opensearch-server-test-runtime-netty4.sh" "$DEST"
+"$ROOT/scripts/patch-opensearch-test-base-no-precreate-temp.sh" "$DEST"
+"$ROOT/scripts/patch-opensearch-bootstrap-testing-native-scratch-dir.sh" "$DEST"
 if [[ "${SKIP_OPENSEARCH_FORBIDDEN_DEPS_PATCH:-}" != "1" ]]; then
   "$ROOT/scripts/patch-opensearch-forbidden-deps-for-elassandra.sh" "$DEST"
 fi
