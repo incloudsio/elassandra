@@ -39,7 +39,7 @@ text = text.replace(
 )
 
 insert = r'''
-    /** Elassandra CQL secondary index: copy a materialized field value to copy_to targets (fork parity). */
+    /** Elassandra: createCopyFields — CQL secondary index copy_to path (fork parity). */
     public static void createCopyFields(ParseContext context, List<String> copyToFields, Object value) throws IOException {
         if (!context.isWithinCopyTo() && copyToFields.isEmpty() == false) {
             context = context.createCopyToContext();
