@@ -18,6 +18,16 @@ fi
 if [[ -n "${JAVA11_HOME:-}" ]]; then
   export JAVA_HOME="${JAVA_HOME:-$JAVA11_HOME}"
 fi
+# elasticsearch.build checks System.getenv("JAVA_HOME"), not only java.home. On Linux CI, JDK is often
+# on PATH while JAVA_HOME is unset (or empty if a workflow expression failed); derive from the JVM.
+if [[ -z "${JAVA_HOME:-}" ]] || [[ ! -d "${JAVA_HOME}" ]]; then
+  if command -v java >/dev/null 2>&1; then
+    _jh="$(java -XshowSettings:properties -version 2>&1 | sed -n 's/.*java\.home = //p' | tr -d '\r')"
+    if [[ -n "$_jh" ]] && [[ -d "$_jh" ]]; then
+      export JAVA_HOME="$_jh"
+    fi
+  fi
+fi
 export CASSANDRA_USE_JDK11="${CASSANDRA_USE_JDK11:-true}"
 echo "Running :cassandra-jar (this can take several minutes)..." >&2
 cd "$ROOT"
