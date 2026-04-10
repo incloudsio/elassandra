@@ -27,8 +27,10 @@ jobs:
           git clone --depth 1 --branch "1.3.20" https://github.com/opensearch-project/OpenSearch.git "${{ runner.temp }}/opensearch-sidecar"
 
       - name: Build Elassandra Cassandra jar (if missing)
-        run: ./scripts/build-elassandra-cassandra-jar.sh
         working-directory: ${{ github.workspace }}
+        env:
+          JAVA_HOME: ${{ steps.jdk11.outputs.path }}
+        run: ./scripts/build-elassandra-cassandra-jar.sh
 
       - name: Run Elassandra sync + patches + OpenSearch :server:test (org.elassandra.*)
         working-directory: ${{ github.workspace }}
