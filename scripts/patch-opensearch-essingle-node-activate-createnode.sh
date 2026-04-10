@@ -6,7 +6,7 @@
 # After merging env settings, force http.type netty4: prepared env can set http.type to "" which breaks NetworkModule on ElassandraNode (real Node, not MockNode).
 set -euo pipefail
 DEST="${1:?OpenSearch clone root}"
-F="$DEST/test/framework/src/main/java/org/opensearch/test/ESSingleNodeTestCase.java"
+F="$DEST/test/framework/src/main/java/org/opensearch/test/OpenSearchSingleNodeTestCase.java"
 [[ -f "$F" ]] || exit 0
 
 python3 - "$F" <<'PY'

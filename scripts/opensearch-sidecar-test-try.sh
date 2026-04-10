@@ -135,4 +135,6 @@ if [[ "${SKIP_ELASSANDRA_TEST_CASSANDRA_SYS_PROPS:-}" != "1" ]]; then
 fi
 
 # Always clean test outputs so embedded Cassandra failures are not masked by stale XML (Gradle incremental test).
-exec ./gradlew "${GRADLE_EXTRA_D[@]}" -I "$INIT_GRADLE" :server:cleanTest :server:test "${TEST_ARGS[@]}" -Dtests.security.manager=false --no-daemon "$@"
+# Forked tests use the default test SecurityManager; patch-opensearch-bootstrap-for-testing-elassandra-embedded-sm.sh
+# grants AllPermission when cassandra.home is set so embedded Cassandra + Netty + JMX are not blocked.
+exec ./gradlew "${GRADLE_EXTRA_D[@]}" -I "$INIT_GRADLE" :server:cleanTest :server:test "${TEST_ARGS[@]}" --no-daemon "$@"

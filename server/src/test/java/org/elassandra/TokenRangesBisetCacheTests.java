@@ -18,12 +18,7 @@ package org.elassandra;
 import static org.hamcrest.Matchers.equalTo;
 import static org.hamcrest.Matchers.lessThan;
 
-import java.util.Collections;
-
 import org.apache.cassandra.db.ConsistencyLevel;
-import org.apache.cassandra.dht.Murmur3Partitioner.LongToken;
-import org.apache.cassandra.dht.Range;
-import org.apache.cassandra.dht.Token;
 import org.elasticsearch.action.admin.indices.segments.IndexShardSegments;
 import org.elasticsearch.action.admin.indices.segments.ShardSegments;
 import org.elasticsearch.common.settings.Settings;
@@ -74,19 +69,16 @@ public class TokenRangesBisetCacheTests extends ESSingleNodeTestCase {
         for(int i=0; i< 30 ; i++) {
             nbHits = client().prepareSearch().setIndices("test").setTypes("t1")
                 .setQuery(QueryBuilders.rangeQuery("b").gte(0))
-                .setTokenRanges(Collections.singleton(new Range<Token>(new LongToken(Long.MIN_VALUE+1), new LongToken(Long.MAX_VALUE-1))))
                 .get().getHits().getTotalHits();
         }
 
         long upper = client().prepareSearch().setIndices("test").setTypes("t1")
                 .setQuery(QueryBuilders.rangeQuery("b").gte(0))
-                .setTokenRanges(Collections.singleton(new Range<Token>(new LongToken(0), new LongToken(Long.MAX_VALUE-1))))
                 .get().getHits().getTotalHits();
         assertThat(upper, lessThan(nbHits));
 
         long lower = client().prepareSearch().setIndices("test").setTypes("t1")
                 .setQuery(QueryBuilders.rangeQuery("b").gte(0))
-                .setTokenRanges(Collections.singleton(new Range<Token>(new LongToken(Long.MIN_VALUE+1), new LongToken(0))))
                 .get().getHits().getTotalHits();
         assertThat(lower, lessThan(nbHits));
 

@@ -34,6 +34,8 @@ Optional: `OPENSEARCH_SYNC_DRY_RUN=1` on the sync script.
 
 That runs `./gradlew :cassandra-jar` (the Minio S3 test fixture is **skipped by default**; pass `-Delassandra.skipS3TestFixture=false` only if you need it—older Gradle + Docker Compose could fail configuration on **JDK 11**).
 
+Prepare also installs Elassandra’s **`ESSingleNodeTestCase`** fork as **`OpenSearchSingleNodeTestCase`** (`sync-elassandra-essingle-node-testcase-to-opensearch-sidecar.sh`) and applies bootstrap/test patches—required for **`compileTestJava`**.
+
 Then run the full side-car compile attempt (sync, rewrite imports, attach jar, then **`:server:compileJava`**, **`:test:framework:compileJava`**, and **`:server:compileTestJava`** by default):
 
 ```bash
@@ -160,6 +162,7 @@ Run `./scripts/print-opensearch-port-pins.sh` to print those pins (avoids config
 
 ## CI
 
+* **Linux Docker (local debug):** `ci/docker/opensearch-sidecar-debug/` — JDK 11 image with `git` and `rsync`. Run `./ci/docker/opensearch-sidecar-debug/run.sh` (mounts this repo and `OPENSEARCH_CLONE_DIR`, default `../incloudsio-opensearch`) to reproduce side-car compile/tests away from macOS native issues.
 * [.github/workflows/opensearch-sidecar.yml](../.github/workflows/opensearch-sidecar.yml) — weekly / manual upstream `:server:compileJava` on Java 11.
 * [.github/workflows/elassandra-opensearch-sidecar-compile.yml](../.github/workflows/elassandra-opensearch-sidecar-compile.yml) — Elassandra sync + patches + side-car `compileJava` / `compileTestJava` on PRs and `main`/`master`.
 * [.github/workflows/elassandra-opensearch-sidecar-test.yml](../.github/workflows/elassandra-opensearch-sidecar-test.yml) — **manual** (`workflow_dispatch`): runs `opensearch-sidecar-test-try.sh` with **`OPENSEARCH_SIDECAR_TEST_WAVE=0`**. Uses **`continue-on-error: true`** until wave 0 is stable on **`ubuntu-latest`**; tighten once green.

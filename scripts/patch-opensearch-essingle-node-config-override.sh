@@ -3,11 +3,11 @@
 # Disable with -Delassandra.test.config.override=false to use YamlConfigurationLoader.
 set -euo pipefail
 DEST="${1:?OpenSearch clone root}"
-F="$DEST/test/framework/src/main/java/org/opensearch/test/ESSingleNodeTestCase.java"
+F="$DEST/test/framework/src/main/java/org/opensearch/test/OpenSearchSingleNodeTestCase.java"
 [[ -f "$F" ]] || exit 0
 
 if grep -q 'data_file_directories' "$F" 2>/dev/null; then
-  echo "ESSingleNodeTestCase already has embedded Config supplier → $F"
+  echo "OpenSearchSingleNodeTestCase already has embedded Config supplier → $F"
   exit 0
 fi
 
@@ -15,11 +15,31 @@ python3 - "$F" <<'PY'
 import pathlib, sys
 path = pathlib.Path(sys.argv[1])
 text = path.read_text(encoding="utf-8")
-marker = "        if (ElassandraDaemon.instance == null) {\n            DatabaseDescriptor.daemonInitialization();\n            DatabaseDescriptor.createAllDirectories();"
+marker = """        if (ElassandraDaemon.instance == null) {
+            System.out.println("working.dir="+System.getProperty("user.dir"));
+            System.out.println("cassandra.home="+System.getProperty("cassandra.home"));
+            System.out.println("cassandra.config.loader="+System.getProperty("cassandra.config.loader"));
+            System.out.println("cassandra.config="+System.getProperty("cassandra.config"));
+            System.out.println("cassandra.config.dir="+System.getProperty("cassandra.config.dir"));
+            System.out.println("cassandra-rackdc.properties="+System.getProperty("cassandra-rackdc.properties"));
+            System.out.println("cassandra.storagedir="+System.getProperty("cassandra.storagedir"));
+            System.out.println("logback.configurationFile="+System.getProperty("logback.configurationFile"));
+
+            DatabaseDescriptor.daemonInitialization();
+            DatabaseDescriptor.createAllDirectories();"""
 if marker not in text:
     print("Could not find initElassandraDeamon guard", file=sys.stderr)
     sys.exit(1)
 insert = """        if (ElassandraDaemon.instance == null) {
+            System.out.println("working.dir="+System.getProperty("user.dir"));
+            System.out.println("cassandra.home="+System.getProperty("cassandra.home"));
+            System.out.println("cassandra.config.loader="+System.getProperty("cassandra.config.loader"));
+            System.out.println("cassandra.config="+System.getProperty("cassandra.config"));
+            System.out.println("cassandra.config.dir="+System.getProperty("cassandra.config.dir"));
+            System.out.println("cassandra-rackdc.properties="+System.getProperty("cassandra-rackdc.properties"));
+            System.out.println("cassandra.storagedir="+System.getProperty("cassandra.storagedir"));
+            System.out.println("logback.configurationFile="+System.getProperty("logback.configurationFile"));
+
             if (Boolean.parseBoolean(System.getProperty("elassandra.test.config.override", "true"))) {
                 DatabaseDescriptor.daemonInitialization(() -> {
                     String homeProp = System.getProperty("cassandra.home");

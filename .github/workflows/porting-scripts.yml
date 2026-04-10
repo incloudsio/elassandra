@@ -33,6 +33,7 @@ jobs:
           bash -n scripts/opensearch-sidecar-compile-try.sh
           bash -n scripts/opensearch-sidecar-prepare.sh
           bash -n scripts/opensearch-sidecar-test-try.sh
+          bash -n ci/docker/opensearch-sidecar-debug/run.sh
           bash -n scripts/build-elassandra-cassandra-jar.sh
           bash -n scripts/sync-elassandra-fork-minimal-to-opensearch-sidecar.sh
           bash -n scripts/patch-opensearch-forbidden-deps-for-elassandra.sh
@@ -49,6 +50,18 @@ jobs:
           bash -n scripts/patch-cassandra-discovery-for-opensearch.sh
           bash -n scripts/patch-opensearch-metadata-elassandra-extensions.sh
           bash -n scripts/sync-elassandra-routing-overlay-to-opensearch-sidecar.sh
+          bash -n scripts/sync-elassandra-essingle-node-testcase-to-opensearch-sidecar.sh
+          bash -n scripts/patch-opensearch-cluster-service-cql-clientstate.sh
+          bash -n scripts/patch-opensearch-opens-search-single-node-opensearch13-api.sh
+          bash -n scripts/patch-opensearch-opens-search-single-node-nondeprecated-settings.sh
+          bash -n scripts/patch-opensearch-indexmetadata-elassandra-test-keys.sh
+          bash -n scripts/patch-opensearch-cluster-service-search-strategy-key.sh
+          bash -n scripts/patch-opensearch-discovery-module-tests-opensearch13.sh
+          bash -n scripts/patch-opensearch-discoverynode-ephemeral-javadoc.sh
+          bash -n scripts/patch-opensearch-readonly-engine-tests-delete-null.sh
+          bash -n scripts/patch-opensearch-bootstrap-checks-allpermission-null-sm.sh
+          bash -n scripts/patch-opensearch-bootstrap-for-testing-elassandra-embedded-sm.sh
+          bash -n scripts/patch-opensearch-test-base-delete-testrun-before-mkdir.sh
           bash -n scripts/patch-opensearch-cluster-service-elassandra-stubs.sh
           bash -n scripts/patch-opensearch-cluster-service-elassandra-schema-stubs.sh
           bash -n scripts/patch-opensearch-node-elassandra-activate.sh
@@ -61,4 +74,17 @@ jobs:
           bash -n scripts/patch-org-elassandra-opensearch-elastic-secondary.sh
           bash -n scripts/list-elasticsearch-fork-touchpoints.sh
           bash -n scripts/print-opensearch-port-pins.sh
+          bash -n scripts/patch-opensearch-discovery-module-cluster-service-param.sh
+          bash -n scripts/patch-opensearch-cluster-service-elassandra-full-stubs.sh
+          bash -n scripts/patch-opensearch-cluster-service-process-write-conditional.sh
+          bash -n scripts/patch-opensearch-operation-routing-shard-routing-fix.sh
+          bash -n scripts/patch-opensearch-document-parser-elassandra-delegates.sh
+          bash -n scripts/patch-opensearch-mapping-metadata-mappers-accessor.sh
+          bash -n scripts/patch-opensearch-metadata-field-mapper-prepost.sh
+          bash -n scripts/patch-opensearch-indexshard-elassandra-api.sh
+          bash -n scripts/patch-opensearch-cluster-blocks-issame.sh
+          bash -n scripts/patch-opensearch-shard-path-resolve-snapshot.sh
+          bash -n scripts/patch-opensearch-mapper-service-elassandra-types.sh
+          bash -n scripts/patch-opensearch-discoverynode-inet.sh
+          bash -n scripts/patch-opensearch-index-service-keyspace.sh
           ./scripts/print-opensearch-port-pins.sh

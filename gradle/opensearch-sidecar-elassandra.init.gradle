@@ -1,6 +1,11 @@
 // Init script: Elassandra Cassandra jar + deps for org.elassandra.* on OpenSearch :server.
 // Jar path via GRADLE_OPTS: -Delassandra.cassandra.jar=/abs/path/to/elassandra-cassandra-x.y.z.jar
 // Guava is normally forbidden on OpenSearch compileClasspath; run scripts/patch-opensearch-forbidden-deps-for-elassandra.sh on the clone first.
+//
+// If :server:test fails with Lucene mock FS FileAlreadyExistsException on java.io.tmpdir or Gradle worker exit 100:
+// the forked JVM materializes -Djava.io.tmpdir before Lucene’s worker thread runs PathUtilsForTesting.setup().
+// Patches in patch-opensearch-test-base-delete-testrun-before-mkdir.sh / no-precreate-temp reduce stale dirs;
+// a full fix may require Lucene/OpenSearch test-framework changes or different tmpdir wiring.
 
 import org.gradle.api.file.FileCollection
 import org.gradle.api.tasks.Classpath
@@ -158,6 +163,14 @@ gradle.projectsEvaluated {
         extraCp.visible = false
         server.dependencies.add(extraCp.name, 'org.jctools:jctools-core:3.3.0')
         server.tasks.withType(org.gradle.api.tasks.testing.Test).configureEach { t ->
+            // Stale server/build/test (JUnit XML from older layouts) can confuse incremental test state.
+            // testrun/ is removed at the start of OpenSearchTestBasePlugin's doFirst (patch-opensearch-test-base-delete-testrun-before-mkdir.sh).
+            t.doFirst {
+                def legacyTestRoot = new File(server.buildDir, 'test')
+                if (legacyTestRoot.exists()) {
+                    server.delete(legacyTestRoot)
+                }
+            }
             // JaCoCo + embedded Cassandra has been observed to yield flaky / opaque worker exit 100 with SKIPPED tests.
             try {
                 t.jacoco.enabled = false
@@ -186,8 +199,11 @@ gradle.projectsEvaluated {
                 t.jvmArgs("-Dcassandra.config=${jvmCc}")
             }
             t.jvmArgs('-Djna.nosys=true')
+            // macOS: seccomp-style system call filter can abort the forked test JVM early (EOF to Gradle) when combined with embedded Cassandra.
+            t.jvmArgs('-Dtests.system_call_filter=false')
             // Embedded Cassandra + OpenSearch is heavy; upstream :server:test defaults to -Xmx512m which can OOM-exit the worker (Gradle reports exit 100).
-            t.jvmArgs('-Xmx1536m')
+            // Embedded Cassandra + OpenSearch single-node can exceed 1536m on Apple Silicon; OOM kills the worker (Gradle exit 100, SKIPPED).
+            t.jvmArgs('-Xmx3072m')
             // Lucene TestRuleLimitSysouts + verbose Cassandra/OpenSearch logging can exceed default limits; verbose disables strict sysout enforcement.
             t.jvmArgs('-Dtests.verbose=true')
             t.jvmArgs('--add-opens', 'java.base/jdk.internal.ref=ALL-UNNAMED')
@@ -203,6 +219,7 @@ gradle.projectsEvaluated {
                     }
                 }
             }
+            // Cassandra -da:org.apache.cassandra... is applied in OpenSearchTestBasePlugin (patch-opensearch-test-base-cassandra-disable-asserts-after-ea.sh) so it follows -ea.
         }
     }
     logger.lifecycle("[opensearch-sidecar-elassandra] :server and :test:framework + Cassandra jar + deps (compile guava 19, runtime guava ${guava}) jackson (${jacksonDatabind}) httpclient ${httpclient} netty ${netty}")

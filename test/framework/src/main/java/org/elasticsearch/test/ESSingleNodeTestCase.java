@@ -97,6 +97,31 @@ public abstract class ESSingleNodeTestCase extends ESTestCase {
 
     private static final Semaphore testMutex = new Semaphore(1);
 
+    /**
+     * OpenSearch side-car Gradle runs often set {@code cassandra.config=file:...} without {@code cassandra.config.dir}
+     * (the main build sets the latter via BuildPlugin). {@link Environment} still needs a config directory path.
+     */
+    private static Path resolveCassandraConfigDir() {
+        String dir = System.getProperty("cassandra.config.dir");
+        if (dir != null && !dir.isEmpty()) {
+            return Paths.get(dir);
+        }
+        String cc = System.getProperty("cassandra.config");
+        if (cc != null && cc.regionMatches(true, 0, "file:", 0, 5)) {
+            java.nio.file.Path p = Paths.get(java.net.URI.create(cc));
+            java.nio.file.Path parent = p.getParent();
+            if (parent != null) {
+                return parent;
+            }
+        }
+        String home = System.getProperty("cassandra.home");
+        if (home != null && !home.isEmpty()) {
+            return Paths.get(home, "conf");
+        }
+        throw new IllegalStateException(
+            "Set cassandra.config.dir, or cassandra.config=file:.../cassandra.yaml, or cassandra.home");
+    }
+
     public static synchronized void initElassandraDeamon(Settings testSettings, Collection<Class<? extends Plugin>> classpathPlugins)  {
         if (ElassandraDaemon.instance == null) {
             System.out.println("working.dir="+System.getProperty("user.dir"));
@@ -149,7 +174,7 @@ public abstract class ESSingleNodeTestCase extends ESTestCase {
             };
 
             Settings elassandraSettings = ElassandraDaemon.instance.nodeSettings(testSettings);
-            Path confPath = Paths.get(System.getProperty("cassandra.config.dir"));
+            Path confPath = resolveCassandraConfigDir();
             ElassandraDaemon.instance.activate(false, false,  elassandraSettings, new Environment(elassandraSettings, confPath), classpathPlugins);
 
             // wait cassandra start.

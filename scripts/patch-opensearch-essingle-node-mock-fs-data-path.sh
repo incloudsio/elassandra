@@ -3,21 +3,20 @@
 # Pass one Lucene createTempDir() root into initElassandraDeamon(..., opensearchDataPath); use a static singleton path (no nested elasticsearch.data / no extra createTempDir per ctor) so the mock FS does not hit FileAlreadyExists on nodes/0.
 set -euo pipefail
 DEST="${1:?OpenSearch clone root}"
-F="$DEST/test/framework/src/main/java/org/opensearch/test/ESSingleNodeTestCase.java"
+F="$DEST/test/framework/src/main/java/org/opensearch/test/OpenSearchSingleNodeTestCase.java"
 [[ -f "$F" ]] || exit 0
 
 python3 - "$F" <<'PY'
-import pathlib, sys
+import pathlib, re, sys
 path = pathlib.Path(sys.argv[1])
 text = path.read_text(encoding="utf-8")
 changed = False
 
-if "private static volatile String embeddedOpensearchDataPath" in text and "embeddedOpensearchDataPath = createTempDir()" in text:
-    print("ESSingleNodeTestCase: mock-fs data path (singleton temp) already applied →", path)
+if "private static volatile String embeddedOpensearchDataPath" in text and "elassandra-embedded-os-" in text:
+    print("OpenSearchSingleNodeTestCase: mock-fs data path (singleton temp) already applied →", path)
     path.write_text(text, encoding="utf-8")
     sys.exit(0)
 
-old_sig = "    public static synchronized void initElassandraDeamon(Settings testSettings, Collection<Class<? extends Plugin>> classpathPlugins) {\n"
 new_sig = (
     "    /**\n"
     "     * @param opensearchDataPath absolute path for OpenSearch {@code path.data} / shared data; must live under Lucene's mock filesystem\n"
@@ -29,8 +28,9 @@ new_sig = (
     "        String opensearchDataPath\n"
     "    ) {\n"
 )
-if old_sig in text:
-    text = text.replace(old_sig, new_sig, 1)
+sig_pat = r"    public static synchronized void initElassandraDeamon\(Settings testSettings, Collection<Class<\? extends Plugin>> classpathPlugins\)\s*\{\n"
+if re.search(sig_pat, text):
+    text = re.sub(sig_pat, new_sig, text, count=1)
     changed = True
 
 old_paths = (
@@ -47,12 +47,26 @@ if old_paths in text:
     text = text.replace(old_paths, new_paths, 1)
     changed = True
 
+# After prepare, nodeSettings may already use opensearchDataPath; ensure bootstrap natives match embedded tests.
+boot_snip = '                        .put("bootstrap.memory_lock", false)\n                        .put("bootstrap.system_call_filter", false)\n                        .put("discovery.type", MockCassandraDiscovery.MOCK_CASSANDRA)'
+if "opensearchDataPath" in text and "bootstrap.memory_lock" not in text and '                        .put("discovery.type", MockCassandraDiscovery.MOCK_CASSANDRA)' in text:
+    text = text.replace(
+        '                        .put("discovery.type", MockCassandraDiscovery.MOCK_CASSANDRA)',
+        boot_snip,
+        1,
+    )
+    changed = True
+
 old_ctor = "        initElassandraDeamon(nodeSettings(1), getPlugins());\n"
 new_ctor = (
     "        if (embeddedOpensearchDataPath == null) {\n"
-    "            synchronized (ESSingleNodeTestCase.class) {\n"
+    "            synchronized (OpenSearchSingleNodeTestCase.class) {\n"
     "                if (embeddedOpensearchDataPath == null) {\n"
-    "                    embeddedOpensearchDataPath = createTempDir().toAbsolutePath().toString();\n"
+    "                    // Unique leaf: ctor thread vs suite worker can otherwise share tempDir-001 (FileAlreadyExists).\n"
+    "                    embeddedOpensearchDataPath =\n"
+    "                        createTempDir(\"elassandra-embedded-os-\" + java.util.UUID.randomUUID().toString().replace(\"-\", \"\"))\n"
+    "                            .toAbsolutePath()\n"
+    "                            .toString();\n"
     "                }\n"
     "            }\n"
     "        }\n"
@@ -92,11 +106,11 @@ if old_ctor2 in text:
 
 if changed:
     path.write_text(text, encoding="utf-8")
-    print("Patched ESSingleNodeTestCase (mock-fs opensearch data path) →", path)
+    print("Patched OpenSearchSingleNodeTestCase (mock-fs opensearch data path) →", path)
 else:
     if "opensearchDataPath" in text:
-        print("ESSingleNodeTestCase: mock-fs data path present; no file change →", path)
+        print("OpenSearchSingleNodeTestCase: mock-fs data path present; no file change →", path)
     else:
-        print("ESSingleNodeTestCase: mock-fs data path anchor not found →", path, file=sys.stderr)
+        print("OpenSearchSingleNodeTestCase: mock-fs data path anchor not found →", path, file=sys.stderr)
         sys.exit(1)
 PY

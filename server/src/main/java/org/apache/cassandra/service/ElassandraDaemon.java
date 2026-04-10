@@ -124,7 +124,9 @@ public class ElassandraDaemon extends CassandraDaemon {
     public void activate(boolean addShutdownHook, boolean createNode, Settings settings, Environment env, Collection<Class<? extends Plugin>> pluginList) {
         try
         {
-            DatabaseDescriptor.daemonInitialization();
+            if (Boolean.parseBoolean(System.getProperty("elassandra.test.config.override", "false")) == false) {
+                DatabaseDescriptor.daemonInitialization();
+            }
             DatabaseDescriptor.createAllDirectories();
         }
         catch (ExceptionInInitializerError e)
