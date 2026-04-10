@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # OpenSearch tests install PathUtils.DEFAULT = Lucene mock FS; path.data under cassandra.home/data/elasticsearch.data is outside that tree → NodeEnvironment mkdir failures (SKIPPED, worker exit 100).
-# Pass a subdirectory of Lucene createTempDir() into initElassandraDeamon(..., opensearchDataPath).
+# Pass one Lucene createTempDir() root into initElassandraDeamon(..., opensearchDataPath); use a static singleton path (no nested elasticsearch.data / no extra createTempDir per ctor) so the mock FS does not hit FileAlreadyExists on nodes/0.
 set -euo pipefail
 DEST="${1:?OpenSearch clone root}"
 F="$DEST/test/framework/src/main/java/org/opensearch/test/ESSingleNodeTestCase.java"
@@ -12,8 +12,8 @@ path = pathlib.Path(sys.argv[1])
 text = path.read_text(encoding="utf-8")
 changed = False
 
-if "String opensearchDataPath" in text and "createTempDir().resolve(\"elasticsearch.data\")" in text:
-    print("ESSingleNodeTestCase: mock-fs data path already applied →", path)
+if "private static volatile String embeddedOpensearchDataPath" in text and "embeddedOpensearchDataPath = createTempDir()" in text:
+    print("ESSingleNodeTestCase: mock-fs data path (singleton temp) already applied →", path)
     path.write_text(text, encoding="utf-8")
     sys.exit(0)
 
@@ -49,14 +49,45 @@ if old_paths in text:
 
 old_ctor = "        initElassandraDeamon(nodeSettings(1), getPlugins());\n"
 new_ctor = (
+    "        if (embeddedOpensearchDataPath == null) {\n"
+    "            synchronized (ESSingleNodeTestCase.class) {\n"
+    "                if (embeddedOpensearchDataPath == null) {\n"
+    "                    embeddedOpensearchDataPath = createTempDir().toAbsolutePath().toString();\n"
+    "                }\n"
+    "            }\n"
+    "        }\n"
+    "        initElassandraDeamon(nodeSettings(1), getPlugins(), embeddedOpensearchDataPath);\n"
+)
+# Insert field only if missing (prepare may re-run after edits; accept volatile or non-volatile declaration).
+has_field = (
+    "private static volatile String embeddedOpensearchDataPath" in text
+    or "private static String embeddedOpensearchDataPath" in text
+)
+if not has_field:
+    needle = "    private static final Semaphore testMutex = new Semaphore(1);\n"
+    insert = (
+        "    private static final Semaphore testMutex = new Semaphore(1);\n"
+        "\n"
+        "    /** One OpenSearch data root for the JVM singleton daemon; nested {@code elasticsearch.data} + extra {@link #createTempDir()} calls confused the Lucene mock FS. */\n"
+        "    private static volatile String embeddedOpensearchDataPath;\n"
+    )
+    if needle in text:
+        text = text.replace(needle, insert, 1)
+        changed = True
+
+if old_ctor in text:
+    text = text.replace(old_ctor, new_ctor, 1)
+    changed = True
+
+old_ctor2 = (
     "        initElassandraDeamon(\n"
     "            nodeSettings(1),\n"
     "            getPlugins(),\n"
     "            createTempDir().resolve(\"elasticsearch.data\").toAbsolutePath().toString()\n"
     "        );\n"
 )
-if old_ctor in text:
-    text = text.replace(old_ctor, new_ctor, 1)
+if old_ctor2 in text:
+    text = text.replace(old_ctor2, new_ctor, 1)
     changed = True
 
 if changed:
