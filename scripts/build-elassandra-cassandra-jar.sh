@@ -28,6 +28,12 @@ if [[ -z "${JAVA_HOME:-}" ]] || [[ ! -d "${JAVA_HOME}" ]]; then
     fi
   fi
 fi
+# BuildPlugin.findCompilerJavaHome() requires JAVA11_HOME or JAVA12_HOME (not only JAVA_HOME); the thrown
+# message still says "JAVA_HOME". Mirror JAVA_HOME into the versioned vars when unset.
+if [[ -n "${JAVA_HOME:-}" ]] && [[ -d "${JAVA_HOME}" ]]; then
+  export JAVA11_HOME="${JAVA11_HOME:-$JAVA_HOME}"
+  export JAVA12_HOME="${JAVA12_HOME:-$JAVA_HOME}"
+fi
 export CASSANDRA_USE_JDK11="${CASSANDRA_USE_JDK11:-true}"
 echo "Running :cassandra-jar (this can take several minutes)..." >&2
 cd "$ROOT"

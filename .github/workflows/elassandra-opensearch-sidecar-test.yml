@@ -30,8 +30,11 @@ jobs:
           distribution: temurin
           java-version: "11"
 
-      - name: Export JAVA_HOME for Gradle (elasticsearch.build)
-        run: echo "JAVA_HOME=${{ steps.jdk11.outputs.path }}" >> "$GITHUB_ENV"
+      - name: Export Java homes (BuildPlugin requires JAVA11_HOME)
+        run: |
+          echo "JAVA11_HOME=${{ steps.jdk11.outputs.path }}" >> "$GITHUB_ENV"
+          echo "JAVA12_HOME=${{ steps.jdk11.outputs.path }}" >> "$GITHUB_ENV"
+          echo "JAVA_HOME=${{ steps.jdk11.outputs.path }}" >> "$GITHUB_ENV"
 
       - name: Shallow clone OpenSearch 1.3.20
         run: |
