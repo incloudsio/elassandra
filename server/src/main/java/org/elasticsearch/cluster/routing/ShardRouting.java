@@ -85,6 +85,20 @@ public final class ShardRouting implements Writeable, ToXContentObject {
                 UNAVAILABLE_EXPECTED_SHARD_SIZE, tokenRanges);
     }
 
+    /**
+     * Delegates to the 6-arg constructor; name aligns with the OpenSearch 1.3 side-car patch ({@code ShardRouting.newElassandra}).
+     */
+    public static ShardRouting newElassandra(
+        ShardId shardId,
+        String currentNodeId,
+        boolean primary,
+        ShardRoutingState state,
+        UnassignedInfo unassignedInfo,
+        Collection<Range<Token>> tokenRanges
+    ) {
+        return new ShardRouting(shardId, currentNodeId, primary, state, unassignedInfo, tokenRanges);
+    }
+
     public ShardRouting(ShardId shardId, String currentNodeId,
             String relocatingNodeId, boolean primary, ShardRoutingState state, RecoverySource recoverySource,
             UnassignedInfo unassignedInfo, AllocationId allocationId, long expectedShardSize) {
