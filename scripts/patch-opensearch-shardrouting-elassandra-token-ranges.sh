@@ -76,9 +76,9 @@ text = text.replace(
     """    @Nullable
     private final ShardRouting targetRelocatingShard;
 
-    /** Elassandra: Cassandra token ranges for this routing (side-car / tests). */
+    /** Elassandra: Cassandra token ranges for this routing (side-car / tests; not on wire). */
     @Nullable
-    private final transient Collection<Range<Token>> elassandraTokenRanges;
+    private transient Collection<Range<Token>> elassandraTokenRanges = null;
 
     /**
      * A constructor to internally create shard routing instances""",
