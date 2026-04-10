@@ -13,6 +13,8 @@
 #   OPENSEARCH_SIDECAR_TEST_WAVE=0|1|2|3|4 ./scripts/opensearch-sidecar-test-try.sh
 # Extra JVM args for forked test workers (passed through init.gradle):
 #   ELASSANDRA_OPENSEARCH_TEST_EXTRA_JVM_ARGS='-Xmx2g' ./scripts/opensearch-sidecar-test-try.sh
+# Limit parallel test JVMs (OpenSearch reads -Dtests.jvms; 1 can help debug Lucene/Gradle worker ordering):
+#   OPENSEARCH_SIDECAR_TESTS_JVMS=1 ./scripts/opensearch-sidecar-test-try.sh
 #
 set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -132,6 +134,9 @@ if [[ "${SKIP_ELASSANDRA_TEST_CASSANDRA_SYS_PROPS:-}" != "1" ]]; then
   if [[ -n "${_CONFIG_URI:-}" ]]; then
     GRADLE_EXTRA_D+=("-Dcassandra.config=${_CONFIG_URI}")
   fi
+fi
+if [[ -n "${OPENSEARCH_SIDECAR_TESTS_JVMS:-}" ]]; then
+  GRADLE_EXTRA_D+=("-Dtests.jvms=${OPENSEARCH_SIDECAR_TESTS_JVMS}")
 fi
 
 # Always clean test outputs so embedded Cassandra failures are not masked by stale XML (Gradle incremental test).
