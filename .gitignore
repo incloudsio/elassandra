@@ -64,6 +64,9 @@ testfixtures_shared/
 # elassandra working files
 /private/
 docker
+# Allow tracked CI Docker assets (the bare `docker` rule above matches any path segment `docker`)
+!ci/docker/
+!ci/docker/**
 *.rej
 *.orig
 
