@@ -27,6 +27,8 @@ def jarProp = System.getProperty('elassandra.cassandra.jar')
 if (jarProp == null || jarProp.trim().isEmpty()) {
     return
 }
+// OpenSearchTestBasePlugin skips -Djava.io.tmpdir when set; we assign a unique OS tmp dir in :server:test doFirst.
+System.setProperty('elassandra.gradle.skip.test.tmpdir', 'true')
 def jarFile = new File(jarProp)
 if (!jarFile.isFile()) {
     logger.lifecycle("[opensearch-sidecar-elassandra] Skip: jar not found: ${jarFile.absolutePath}")
@@ -166,6 +168,11 @@ gradle.projectsEvaluated {
             // Stale server/build/test (JUnit XML from older layouts) can confuse incremental test state.
             // testrun/ is removed at the start of OpenSearchTestBasePlugin's doFirst (patch-opensearch-test-base-delete-testrun-before-mkdir.sh).
             t.doFirst {
+                // Use the Gradle JVM's java.io.tmpdir (existing OS temp root). A dedicated leaf dir collides with
+                // Lucene's mock layer (JVM creates -Djava.io.tmpdir before Lucene mkdir). Shared /var/.../T is fine.
+                def sysTmp = System.getProperty('java.io.tmpdir', '/tmp')
+                t.systemProperty('java.io.tmpdir', sysTmp)
+                t.jvmArgs("-Djava.io.tmpdir=${sysTmp}")
                 def legacyTestRoot = new File(server.buildDir, 'test')
                 if (legacyTestRoot.exists()) {
                     server.delete(legacyTestRoot)
@@ -178,9 +185,7 @@ gradle.projectsEvaluated {
             }
             t.classpath += extraCp
             t.jvmArgumentProviders.add(new JctoolsBootArgumentProvider(extraCp))
-            // java.io.tmpdir is OpenSearchTestBasePlugin nonInputProperties → workingDir/temp. Do not override here:
-            // Lucene TestRuleTemporaryFilesCleanup + PathUtilsForTesting expect that layout; overriding tmpdir caused
-            // FileAlreadyExistsException on the mock FS. Pre-mkdir of workingDir/temp is patched out in opensearch-sidecar-prepare.sh.
+            // java.io.tmpdir: overridden in doFirst above (unique dir under OS tmp) so it does not collide with CWD/temp.
             forwardTestSystemProperties(t)
             def jvmCh = System.getProperty('cassandra.home')
             if (jvmCh == null || jvmCh.toString().trim().isEmpty()) {
@@ -201,6 +206,12 @@ gradle.projectsEvaluated {
             t.jvmArgs('-Djna.nosys=true')
             // macOS: seccomp-style system call filter can abort the forked test JVM early (EOF to Gradle) when combined with embedded Cassandra.
             t.jvmArgs('-Dtests.system_call_filter=false')
+            // Embedded Cassandra + JNA + Netty: default test SM often yields opaque failures / SKIPPED (worker exit 100).
+            t.systemProperty('tests.security.manager', 'false')
+            t.jvmArgs('-Dtests.security.manager=false')
+            // Lucene mock FS + Gradle java.io.tmpdir/workingDir layout causes FileAlreadyExistsException (worker exit 100).
+            t.systemProperty('elassandra.disable.lucene.mock.filesystem', 'true')
+            t.jvmArgs('-Delassandra.disable.lucene.mock.filesystem=true')
             // Embedded Cassandra + OpenSearch is heavy; upstream :server:test defaults to -Xmx512m which can OOM-exit the worker (Gradle reports exit 100).
             // Embedded Cassandra + OpenSearch single-node can exceed 1536m on Apple Silicon; OOM kills the worker (Gradle exit 100, SKIPPED).
             t.jvmArgs('-Xmx3072m')
