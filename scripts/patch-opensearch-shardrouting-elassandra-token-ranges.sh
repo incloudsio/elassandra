@@ -127,6 +127,28 @@ text = text.replace(old_assign, new_assign, 1)
 
 text = patch_new_calls(text)
 
+# Stock OpenSearch calls the package 9-arg ctor from test:framework (TestShardRouting, ShardRoutingHelper).
+# Prepend a 9-arg overload that delegates to the 10-arg implementation (must come before the full ctor).
+delegator_9 = """    ShardRouting(
+        ShardId shardId,
+        String currentNodeId,
+        String relocatingNodeId,
+        boolean primary,
+        ShardRoutingState state,
+        RecoverySource recoverySource,
+        UnassignedInfo unassignedInfo,
+        AllocationId allocationId,
+        long expectedShardSize
+    ) {
+        this(shardId, currentNodeId, relocatingNodeId, primary, state, recoverySource, unassignedInfo, allocationId, expectedShardSize, null);
+    }
+
+"""
+if text.count(new_sig) != 1:
+    print("ShardRouting: expected exactly one 10-arg ctor signature after patch", file=sys.stderr)
+    sys.exit(1)
+text = text.replace(new_sig, delegator_9 + new_sig, 1)
+
 factory = """
 
     /** Elassandra: Cassandra token ranges attached to this routing (empty if none). */
