@@ -24,6 +24,10 @@ jobs:
         run: ./scripts/export-cassandra-elassandra-patches.sh
       - name: List patch count
         run: ls -1 build/cassandra-elassandra-patches/*.patch 2>/dev/null | wc -l
+      - name: bash -n every script invoked by opensearch-sidecar-prepare.sh
+        run: |
+          set -euo pipefail
+          grep -oE '\$ROOT/scripts/[^"]+\.sh' scripts/opensearch-sidecar-prepare.sh | sed 's|\$ROOT/||' | sort -u | while read -r s; do bash -n "$s"; done
       - name: OpenSearch port scripts (bash -n)
         run: |
           bash -n scripts/opensearch-port-bootstrap.sh

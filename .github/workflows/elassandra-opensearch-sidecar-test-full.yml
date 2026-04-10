@@ -37,4 +37,5 @@ jobs:
           RUNTIME_JAVA_HOME: ${{ steps.jdk11.outputs.path }}
           OPENSEARCH_CLONE_DIR: ${{ runner.temp }}/opensearch-sidecar
           OPENSEARCH_SIDECAR_TEST_WAVE: "4"
+          OPENSEARCH_SIDECAR_TESTS_JVMS: "1"
         run: ./scripts/opensearch-sidecar-test-try.sh
