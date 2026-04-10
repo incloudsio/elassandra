@@ -15,6 +15,7 @@ rm -f "$DEST/server/src/main/java/org/opensearch/index/mapper/DocumentParserComp
 "$ROOT/scripts/sync-elassandra-routing-overlay-to-opensearch-sidecar.sh" "$DEST"
 "$ROOT/scripts/sync-elassandra-essingle-node-testcase-to-opensearch-sidecar.sh" "$DEST"
 "$ROOT/scripts/patch-opensearch-routing-table-for-os13.sh" "$DEST"
+"$ROOT/scripts/patch-opensearch-shardrouting-elassandra-token-ranges.sh" "$DEST"
 "$ROOT/scripts/patch-opensearch-operation-routing-shard-routing-fix.sh" "$DEST"
 "$ROOT/scripts/rewrite-elassandra-imports-for-opensearch.sh" "$DEST"
 if [[ -d "$DEST/server/src/test/java/org/elassandra" ]]; then
@@ -34,6 +35,7 @@ fi
 "$ROOT/scripts/patch-opensearch-mapperservice-elassandra-extensions.sh" "$DEST"
 "$ROOT/scripts/patch-opensearch-elassandra-sidecar-templates.sh" "$DEST"
 "$ROOT/scripts/patch-opensearch-documentmapper-elassandra.sh" "$DEST"
+"$ROOT/scripts/patch-opensearch-documentparser-elassandra-compat.sh" "$DEST"
 "$ROOT/scripts/patch-opensearch-querymanager-opensearch-api.sh" "$DEST"
 "$ROOT/scripts/patch-opensearch-querymanager-mapping-lookup.sh" "$DEST"
 "$ROOT/scripts/patch-opensearch-querymanager-version-conflict.sh" "$DEST"

@@ -2,10 +2,6 @@
         return metadataMapper(RoutingFieldMapper.class);
     }
 
-    public UidFieldMapper uidMapper() {
-        return metadataMapper(UidFieldMapper.class);
-    }
-
     public org.elassandra.index.mapper.internal.TokenFieldMapper tokenFieldMapper() {
         return metadataMapper(org.elassandra.index.mapper.internal.TokenFieldMapper.class);
     }
