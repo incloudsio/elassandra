@@ -34,14 +34,18 @@ if "createNode must be true" not in text:
     else:
         text = text.replace(old_ring, new_ring, 1)
         changed = True
-    old_act = "ElassandraDaemon.instance.activate(false, false, elassandraSettings, new Environment(elassandraSettings, confPath), classpathPlugins);"
-    new_act = (
-        "            // createNode must be true so ElassandraNode is constructed; parent ringReady runs activateAndWaitShards.\n"
-        "            ElassandraDaemon.instance.activate(false, true, elassandraSettings, new Environment(elassandraSettings, confPath), classpathPlugins);"
-    )
-    if old_act in text:
-        text = text.replace(old_act, new_act, 1)
-        changed = True
+    for old_act in (
+        "ElassandraDaemon.instance.activate(false, false, elassandraSettings, new Environment(elassandraSettings, confPath), classpathPlugins);",
+        "ElassandraDaemon.instance.activate(false, false,  elassandraSettings, new Environment(elassandraSettings, confPath), classpathPlugins);",
+    ):
+        if old_act in text:
+            new_act = (
+                "            // createNode must be true so ElassandraNode is constructed; parent ringReady runs activateAndWaitShards.\n"
+                "            ElassandraDaemon.instance.activate(false, true, elassandraSettings, new Environment(elassandraSettings, confPath), classpathPlugins);"
+            )
+            text = text.replace(old_act, new_act, 1)
+            changed = True
+            break
 
 if "nodeSettings() always sets transport.type" not in text:
     old_tp = (
