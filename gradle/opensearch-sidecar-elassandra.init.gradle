@@ -34,6 +34,8 @@ if (!jarFile.isFile()) {
     logger.lifecycle("[opensearch-sidecar-elassandra] Skip: jar not found: ${jarFile.absolutePath}")
     return
 }
+// Cassandra Ant build drops companion jars next to the server artifact (chronicle-*, etc.); Maven coords vary by line.
+def cassandraLibJars = new File(jarFile.parentFile, 'lib/jars')
 
 // Forward Cassandra / JNA / Netty-related system properties from the Gradle JVM (GRADLE_OPTS -D…) to forked :server:test workers.
 def forwardTestSystemProperties = { org.gradle.api.tasks.testing.Test t ->
@@ -101,15 +103,27 @@ gradle.projectsEvaluated {
     }
     def deps = {
         api files(jarFile)
+        if (cassandraLibJars.isDirectory()) {
+            api fileTree(dir: cassandraLibJars, includes: ['chronicle-*.jar'])
+        } else {
+            logger.lifecycle("[opensearch-sidecar-elassandra] No ${cassandraLibJars.absolutePath} — add Chronicle jars from Cassandra build if NoClassDefError on net.openhft.*")
+        }
         compileOnly 'com.google.code.findbugs:jsr305:3.0.2'
         // Compile against Guava 19 (ES 6.8-era Elassandra); Cassandra runtime needs newer APIs (e.g. HostAndPort.getHost).
         api 'com.google.guava:guava:19.0'
+        // Guava 28+ splits ListenableFuture internals; test runtime forces guava 32 — failureaccess must be on classpath.
+        api 'com.google.guava:failureaccess:1.0.1'
         api 'org.antlr:antlr:3.5.2'
         api 'org.antlr:antlr-runtime:3.5.2'
         api "com.fasterxml.jackson.core:jackson-databind:${jacksonDatabind}"
         api "com.fasterxml.jackson.core:jackson-core:${jacksonDatabind}"
         api "com.fasterxml.jackson.core:jackson-annotations:${jacksonDatabind}"
         api 'org.apache.commons:commons-lang3:3.12.0'
+        // Cassandra 4 commitlog header (CommitLogDescriptor) uses org.json.simple.JSONValue — missing → NoClassDefError → JVMStabilityInspector exit 100.
+        api 'com.googlecode.json-simple:json-simple:1.1.1'
+        // StartupChecks#initSigarLibrary loads org.apache.cassandra.utils.SigarLibrary (org.hyperic.sigar.*) — jar required even if native .dylib fails (degraded mode).
+        api 'org.fusesource:sigar:1.6.4'
+        api 'com.clearspring.analytics:stream:2.9.8'
         api 'org.slf4j:slf4j-api:1.7.36'
         api "org.apache.httpcomponents:httpclient:${httpclient}"
         api "org.apache.httpcomponents:httpcore:${httpcore}"
@@ -126,6 +140,8 @@ gradle.projectsEvaluated {
         api "io.netty:netty-transport:${netty}"
         api "io.netty:netty-codec:${netty}"
         api "io.netty:netty-handler:${netty}"
+        // Cassandra / Netty may reference io.netty.channel.epoll.Epoll; classes jar is required on macOS (native .so is Linux-only).
+        api "io.netty:netty-transport-classes-epoll:${netty}"
     }
     if (server != null) {
         server.dependencies deps

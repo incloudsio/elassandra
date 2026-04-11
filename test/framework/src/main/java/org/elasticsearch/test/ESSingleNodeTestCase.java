@@ -31,6 +31,7 @@ import org.apache.cassandra.exceptions.RequestExecutionException;
 import org.apache.cassandra.exceptions.RequestValidationException;
 import org.apache.cassandra.service.ClientState;
 import org.apache.cassandra.service.ElassandraDaemon;
+import org.apache.cassandra.utils.JVMStabilityInspector;
 import org.apache.lucene.util.IOUtils;
 import org.elasticsearch.action.admin.cluster.health.ClusterHealthRequestBuilder;
 import org.elasticsearch.action.admin.cluster.health.ClusterHealthResponse;
@@ -88,6 +89,7 @@ import java.security.Permission;
 import java.util.*;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Semaphore;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 import static org.elasticsearch.test.hamcrest.ElasticsearchAssertions.assertAcked;
@@ -99,6 +101,13 @@ import static org.hamcrest.Matchers.lessThanOrEqualTo;
  * references to Guice injectors in unit tests.
  */
 public abstract class ESSingleNodeTestCase extends ESTestCase {
+
+    /**
+     * Captured when this class loads (after parent/Lucene static init). RandomizedRunner compares the JVM default
+     * uncaught handler at suite end; CassandraDaemon replaces it during startup — restore after init, in {@code setUp}, and in {@link #tearDownClass()}.
+     */
+    private static final Thread.UncaughtExceptionHandler UNCAUGHT_BEFORE_ELASSANDRA_TEST =
+        Thread.getDefaultUncaughtExceptionHandler();
 
     private static final Semaphore testMutex = new Semaphore(1);
 
@@ -289,6 +298,13 @@ public abstract class ESSingleNodeTestCase extends ESTestCase {
      */
     static {
         clearRandomizedZombieMarker();
+        // Cassandra's JVMStabilityInspector calls System.exit(100) on fatal errors; killCurrentJVM(t, true) skips
+        // printStackTrace — log here so Gradle output shows the root cause (e.g. commit log during init).
+        JVMStabilityInspector.killerHook = t -> {
+            System.err.println("[elassandra.test] Cassandra JVMStabilityInspector requested JVM exit; cause:");
+            t.printStackTrace(System.err);
+            return !Boolean.getBoolean("elassandra.embedded.suppress.cassandra.jvm.kill");
+        };
         if (Boolean.getBoolean("elassandra.test.shutdown.hook")) {
             Runtime.getRuntime()
                 .addShutdownHook(
@@ -386,11 +402,17 @@ public abstract class ESSingleNodeTestCase extends ESTestCase {
             Path confPath = resolveCassandraConfigDir();
             ElassandraDaemon.instance.activate(false, false,  elassandraSettings, new Environment(elassandraSettings, confPath), classpathPlugins);
 
-            // wait cassandra start.
+            // Wait for ringReady(); if MockCassandraDiscovery never calls it, constructor blocks forever (suite timeout).
             try {
-                startLatch.await();
+                if (startLatch.await(5, TimeUnit.MINUTES) == false) {
+                    throw new IllegalStateException(
+                        "ElassandraDaemon ringReady() did not run within 5 minutes — embedded Cassandra/OpenSearch bootstrap stalled (check MockCassandraDiscovery / logs).");
+                }
             } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                throw new RuntimeException(e);
             }
+            Thread.setDefaultUncaughtExceptionHandler(UNCAUGHT_BEFORE_ELASSANDRA_TEST);
         }
     }
 
@@ -512,7 +534,10 @@ public abstract class ESSingleNodeTestCase extends ESTestCase {
         // SERVICE_UNAVAILABLE/1/state not recovered / initialized block
         ClusterAdminClient clusterAdminClient = client().admin().cluster();
         ClusterHealthRequestBuilder builder = clusterAdminClient.prepareHealth();
-        ClusterHealthResponse clusterHealthResponse = builder.setWaitForGreenStatus().get();
+        // Single-node embedded Elassandra typically reaches yellow (not green); waiting for green hangs until suite timeout.
+        ClusterHealthResponse clusterHealthResponse = builder.setWaitForYellowStatus()
+            .setTimeout(TimeValue.timeValueMinutes(2))
+            .get();
 
         assertFalse(clusterHealthResponse.isTimedOut());
     }
@@ -540,6 +565,7 @@ public abstract class ESSingleNodeTestCase extends ESTestCase {
         if (ElassandraDaemon.instance.node() == null) {
             startNode(seed);
         }
+        Thread.setDefaultUncaughtExceptionHandler(UNCAUGHT_BEFORE_ELASSANDRA_TEST);
         ensureDelegatingExitTraceSecurityManager();
     }
 
@@ -597,6 +623,7 @@ public abstract class ESSingleNodeTestCase extends ESTestCase {
 
     @AfterClass
     public static void tearDownClass() throws IOException {
+        Thread.setDefaultUncaughtExceptionHandler(UNCAUGHT_BEFORE_ELASSANDRA_TEST);
         stopNode();
     }
 

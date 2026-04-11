@@ -61,6 +61,13 @@ testfixtures_shared/
 # These are generated from .ci/jobs.t
 .ci/jobs/
 
+# Local javaagent build cache (scripts/build-exit-trace-javaagent.sh)
+.tmp-exit-agent-build/
+
+# Side-car / agent debug scratch (tee output, temp status files)
+.agent-debug-out.txt
+.git-commit-tmp-status.txt
+
 # elassandra working files
 /private/
 docker

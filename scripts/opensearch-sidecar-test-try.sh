@@ -17,6 +17,9 @@
 #   ELASSANDRA_TEST_SHUTDOWN_HOOK=1 ./scripts/opensearch-sidecar-test-try.sh
 # Log stack traces for System.exit (needs tests.security.manager=false — side-car default):
 #   ELASSANDRA_TEST_TRACE_SYSTEM_EXIT=1 ./scripts/opensearch-sidecar-test-try.sh
+# When SM is off, checkExit never runs — use a discardable javaagent that retransforms java.lang.System#exit:
+#   ./scripts/build-exit-trace-javaagent.sh
+#   ELASSANDRA_OPENSEARCH_TEST_EXTRA_JVM_ARGS='-javaagent:/tmp/elassandra-system-exit-trace-agent.jar' OPENSEARCH_SIDECAR_TESTS_JVMS=1 ./scripts/opensearch-sidecar-test-try.sh
 # Limit parallel test JVMs (OpenSearch reads -Dtests.jvms; 1 can help debug Lucene/Gradle worker ordering):
 #   OPENSEARCH_SIDECAR_TESTS_JVMS=1 ./scripts/opensearch-sidecar-test-try.sh
 #
@@ -76,10 +79,10 @@ else
 fi
 if [[ "${SKIP_ELASSANDRA_TEST_CASSANDRA_SYS_PROPS:-}" != "1" ]]; then
   _ABS="$(cd "$CASS_TEST_ROOT" && pwd)"
-  # Default dirs Cassandra uses when paths are relative to cassandra.home (embedded tests).
+  # Fresh Cassandra data dirs for each side-car run (stale system keyspace / commitlog breaks init and triggers
+  # JVMStabilityInspector → System.exit(100)).
+  rm -rf "${_ABS}/data" "${_ABS}/commitlog" "${_ABS}/saved_caches" "${_ABS}/hints" 2>/dev/null || true
   mkdir -p "${_ABS}/data" "${_ABS}/data/hints" "${_ABS}/commitlog" "${_ABS}/saved_caches" "${_ABS}/hints" 2>/dev/null || true
-  # Legacy: OpenSearch data used to live under cassandra data; leftover dirs are harmless. Current ESSingleNodeTestCase uses Lucene temp (mock FS).
-  rm -rf "${_ABS}/data/elasticsearch.data" 2>/dev/null || true
   _CONFIG_URI=""
   if [[ -n "${ELASSANDRA_TEST_CASSANDRA_CONFIG:-}" ]]; then
     _CF="$(cd "$(dirname "${ELASSANDRA_TEST_CASSANDRA_CONFIG}")" && pwd)/$(basename "${ELASSANDRA_TEST_CASSANDRA_CONFIG}")"

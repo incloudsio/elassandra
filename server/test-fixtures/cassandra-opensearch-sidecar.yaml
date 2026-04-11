@@ -1,7 +1,17 @@
 # Minimal Cassandra 4.0–compatible config for OpenSearch side-car :server:test (embedded).
 # Prefer this over distribution/src/conf/cassandra.yaml when YamlConfigurationLoader fails on
 # package-shaped or legacy test yamls. Tune via ELASSANDRA_TEST_CASSANDRA_HOME if needed.
+#
+# Explicit paths are relative to cassandra.home (see opensearch-sidecar-test-try.sh). Stale commitlog
+# segments under cassandra.home/commitlog can make replay fail during init; the test script clears
+# that directory before Gradle. disk_access_mode standard avoids mmap edge cases on macOS test runs.
 cluster_name: TestCluster
+data_file_directories:
+    - data
+commitlog_directory: commitlog
+saved_caches_directory: saved_caches
+hints_directory: hints
+disk_access_mode: standard
 memtable_allocation_type: heap_buffers
 commitlog_sync: periodic
 commitlog_segment_size_in_mb: 5
