@@ -39,7 +39,7 @@ def cassandraLibJars = new File(jarFile.parentFile, 'lib/jars')
 
 // Forward Cassandra / JNA / Netty-related system properties from the Gradle JVM (GRADLE_OPTS -D…) to forked :server:test workers.
 def forwardTestSystemProperties = { org.gradle.api.tasks.testing.Test t ->
-    def prefixes = ['cassandra.', 'jna.', 'io.netty.', 'org.apache.cassandra.']
+    def prefixes = ['cassandra.', 'jna.', 'io.netty.', 'org.apache.cassandra.', 'elassandra.test.']
     System.properties.each { k, v ->
         if (v == null || k == null) {
             return
@@ -121,6 +121,8 @@ gradle.projectsEvaluated {
         api 'org.apache.commons:commons-lang3:3.12.0'
         // Cassandra 4 commitlog header (CommitLogDescriptor) uses org.json.simple.JSONValue — missing → NoClassDefError → JVMStabilityInspector exit 100.
         api 'com.googlecode.json-simple:json-simple:1.1.1'
+        // CassandraRoleManager#hashpw (default role setup) uses org.mindrot.jbcrypt.BCrypt.
+        api 'org.mindrot:jbcrypt:0.4'
         // StartupChecks#initSigarLibrary loads org.apache.cassandra.utils.SigarLibrary (org.hyperic.sigar.*) — jar required even if native .dylib fails (degraded mode).
         api 'org.fusesource:sigar:1.6.4'
         api 'com.clearspring.analytics:stream:2.9.8'
@@ -219,6 +221,15 @@ gradle.projectsEvaluated {
             if (jvmCc != null) {
                 t.jvmArgs("-Dcassandra.config=${jvmCc}")
             }
+            def storagePort = System.getProperty('elassandra.test.storage_port')
+            if (storagePort == null || storagePort.toString().trim().isEmpty()) {
+                storagePort = System.getenv('ELASSANDRA_TEST_STORAGE_PORT')
+            }
+            if (storagePort == null || storagePort.toString().trim().isEmpty()) {
+                storagePort = '17100'
+            }
+            t.systemProperty('elassandra.test.storage_port', storagePort.toString())
+            t.jvmArgs("-Delassandra.test.storage_port=${storagePort}")
             t.jvmArgs('-Djna.nosys=true')
             // macOS: seccomp-style system call filter can abort the forked test JVM early (EOF to Gradle) when combined with embedded Cassandra.
             t.jvmArgs('-Dtests.system_call_filter=false')

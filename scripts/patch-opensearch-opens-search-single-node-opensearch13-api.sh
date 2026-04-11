@@ -38,7 +38,7 @@ text = text.replace(
 )
 text = text.replace(
     "                        .put(Node.NODE_DATA_SETTING.getKey(), true)\n",
-    "                        .put(\"node.roles\", \"data\")\n",
+    "                        .putList(\"node.roles\", \"master\", \"data\")\n",
 )
 text = text.replace(
     "                        .put(ScriptService.SCRIPT_MAX_COMPILATIONS_RATE.getKey(), \"1000/1m\")\n",

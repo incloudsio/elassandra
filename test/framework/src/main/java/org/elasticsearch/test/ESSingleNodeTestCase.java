@@ -33,7 +33,6 @@ import org.apache.cassandra.service.ClientState;
 import org.apache.cassandra.service.ElassandraDaemon;
 import org.apache.cassandra.utils.JVMStabilityInspector;
 import org.apache.lucene.util.IOUtils;
-import org.elasticsearch.action.admin.cluster.health.ClusterHealthRequestBuilder;
 import org.elasticsearch.action.admin.cluster.health.ClusterHealthResponse;
 import org.elasticsearch.action.admin.indices.create.CreateIndexRequestBuilder;
 import org.elasticsearch.action.admin.indices.delete.DeleteIndexRequestBuilder;
@@ -55,6 +54,7 @@ import org.elasticsearch.common.xcontent.XContentBuilder;
 import org.elasticsearch.common.xcontent.XContentFactory;
 import org.elasticsearch.env.Environment;
 import org.elasticsearch.env.NodeEnvironment;
+import org.elasticsearch.gateway.GatewayService;
 import org.elasticsearch.index.Index;
 import org.elasticsearch.index.IndexService;
 import org.elasticsearch.index.MockEngineFactoryPlugin;
@@ -533,17 +533,18 @@ public abstract class ESSingleNodeTestCase extends ESTestCase {
 
     protected void startNode(long seed) throws Exception {
         ElassandraDaemon.instance.node(RandomizedContext.current().runWithPrivateRandomness(seed, this::newNode));
-        // we must wait for the node to actually be up and running. otherwise the node might have started,
-        // elected itself master but might not yet have removed the
-        // SERVICE_UNAVAILABLE/1/state not recovered / initialized block
-        ClusterAdminClient clusterAdminClient = client().admin().cluster();
-        ClusterHealthRequestBuilder builder = clusterAdminClient.prepareHealth();
-        // Single-node embedded Elassandra typically reaches yellow (not green); waiting for green hangs until suite timeout.
-        ClusterHealthResponse clusterHealthResponse = builder.setWaitForYellowStatus()
-            .setTimeout(TimeValue.timeValueMinutes(2))
-            .get();
-
-        assertFalse(clusterHealthResponse.isTimedOut());
+        ClusterService cs = clusterService();
+        long deadline = System.currentTimeMillis() + TimeUnit.MINUTES.toMillis(5);
+        while (System.currentTimeMillis() < deadline) {
+            org.elasticsearch.cluster.ClusterState state = cs.state();
+            if (state.nodes().isLocalNodeElectedMaster()
+                && !state.blocks().hasGlobalBlock(GatewayService.STATE_NOT_RECOVERED_BLOCK)) {
+                return;
+            }
+            Thread.sleep(200L);
+        }
+        throw new IllegalStateException(
+            "Embedded node did not become master / finish gateway recovery within 5 minutes (see CassandraDiscovery / gateway logs).");
     }
 
     private static void stopNode() throws IOException {
@@ -605,6 +606,7 @@ public abstract class ESSingleNodeTestCase extends ESTestCase {
             //the seed can be created within this if as it will either be executed before every test method or will never be.
             startNode(random().nextLong());
         }
+        Thread.setDefaultUncaughtExceptionHandler(UNCAUGHT_BEFORE_ELASSANDRA_TEST);
     }
 
     /** Resets {@link RandomizedRunner}'s static {@code zombieMarker} via reflection; see static class initializer. */
@@ -628,7 +630,11 @@ public abstract class ESSingleNodeTestCase extends ESTestCase {
     @AfterClass
     public static void tearDownClass() throws IOException {
         Thread.setDefaultUncaughtExceptionHandler(UNCAUGHT_BEFORE_ELASSANDRA_TEST);
-        stopNode();
+        try {
+            stopNode();
+        } finally {
+            Thread.setDefaultUncaughtExceptionHandler(UNCAUGHT_BEFORE_ELASSANDRA_TEST);
+        }
     }
 
     protected void ensureNoWarnings() throws IOException {

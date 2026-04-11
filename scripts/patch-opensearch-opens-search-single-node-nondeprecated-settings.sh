@@ -8,7 +8,8 @@ F="$DEST/test/framework/src/main/java/org/opensearch/test/OpenSearchSingleNodeTe
 [[ -f "$F" ]] || exit 0
 
 perl -i -0777 -pe '
-  s/                        \.put\("node\.data", true\)\n/                        .put("node.roles", "data")\n/g;
+  s/                        \.put\("node\.data", true\)\n/                        .putList("node.roles", "master", "data")\n/g;
+  s/                        \.put\("node\.roles", "data"\)\n/                        .putList("node.roles", "master", "data")\n/g;
   s/                        \.put\(ScriptService\.SCRIPT_GENERAL_MAX_COMPILATIONS_RATE_SETTING\.getKey\(\), "[^"]*"\)\n//g;
 ' "$F"
 echo "Patched OpenSearchSingleNodeTestCase non-deprecated settings → $F"

@@ -17,7 +17,8 @@ commitlog_sync: periodic
 commitlog_segment_size_in_mb: 5
 partitioner: org.apache.cassandra.dht.Murmur3Partitioner
 listen_address: 127.0.0.1
-storage_port: 7000
+# 17100 avoids clashing with a local Cassandra default (7000); embedded Config override uses elassandra.test.storage_port.
+storage_port: 17100
 start_native_transport: true
 native_transport_port: 9042
 seed_provider:

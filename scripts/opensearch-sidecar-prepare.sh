@@ -71,6 +71,7 @@ fi
 "$ROOT/scripts/patch-cassandra-discovery-for-opensearch.sh" "$DEST"
 "$ROOT/scripts/patch-opensearch-node-elassandra-activate.sh" "$DEST"
 "$ROOT/scripts/patch-opensearch-essingle-node-config-override.sh" "$DEST"
+"$ROOT/scripts/patch-opensearch-essingle-node-embedded-storage-port.sh" "$DEST"
 "$ROOT/scripts/patch-opensearch-essingle-node-threadleak.sh" "$DEST"
 "$ROOT/scripts/patch-opensearch-essingle-node-activate-createnode.sh" "$DEST"
 "$ROOT/scripts/patch-opensearch-essingle-node-mock-fs-data-path.sh" "$DEST"

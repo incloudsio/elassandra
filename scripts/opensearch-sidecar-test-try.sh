@@ -32,6 +32,9 @@ if [[ -z "${JAVA_HOME:-}" ]]; then
   echo "Set JAVA_HOME to JDK 11+ (OpenSearch 1.3 requirement)." >&2
   exit 1
 fi
+# Elassandra BuildPlugin.findCompilerJavaHome() uses JAVA11_HOME (message text still says JAVA_HOME).
+export JAVA11_HOME="${JAVA11_HOME:-$JAVA_HOME}"
+export JAVA12_HOME="${JAVA12_HOME:-$JAVA_HOME}"
 
 # OpenSearch's :server:test normally downloads a "bundled" JDK for the test JVM unless a runtime JDK is
 # explicitly set (see upstream gradle/runtime-jdk-provision.gradle). Point it at the same JDK as the build
@@ -106,6 +109,10 @@ fi
 export OPENSEARCH_NETTY_PROCESSORS="${OPENSEARCH_NETTY_PROCESSORS:-false}"
 export GRADLE_OPTS="${GRADLE_OPTS} -Dopensearch.set.netty.runtime.available.processors=${OPENSEARCH_NETTY_PROCESSORS}"
 
+# Embedded Cassandra storage_port; default 17100 avoids conflict with a system Cassandra on 7000.
+ELASSANDRA_TEST_STORAGE_PORT="${ELASSANDRA_TEST_STORAGE_PORT:-17100}"
+export GRADLE_OPTS="${GRADLE_OPTS} -Delassandra.test.storage_port=${ELASSANDRA_TEST_STORAGE_PORT}"
+
 # Default: one test class as smoke; set to org.elassandra.* for full package (slow, needs runtime).
 PATTERN="${OPENSEARCH_SIDECAR_TEST_PATTERN:-org.elassandra.ClusterSettingsTests}"
 if [[ -n "${OPENSEARCH_SIDECAR_TEST_WAVE:-}" ]]; then
@@ -145,6 +152,7 @@ fi
 if [[ -n "${OPENSEARCH_SIDECAR_TESTS_JVMS:-}" ]]; then
   GRADLE_EXTRA_D+=("-Dtests.jvms=${OPENSEARCH_SIDECAR_TESTS_JVMS}")
 fi
+GRADLE_EXTRA_D+=("-Delassandra.test.storage_port=${ELASSANDRA_TEST_STORAGE_PORT:-17100}")
 
 # Always clean test outputs so embedded Cassandra failures are not masked by stale XML (Gradle incremental test).
 # Forked tests use the default test SecurityManager; patch-opensearch-bootstrap-for-testing-elassandra-embedded-sm.sh

@@ -54,6 +54,7 @@ insert = """        if (ElassandraDaemon.instance == null) {
                     c.commitlog_directory = new java.io.File(home, "commitlog").getPath();
                     c.saved_caches_directory = new java.io.File(home, "saved_caches").getPath();
                     c.hints_directory = new java.io.File(home, "hints").getPath();
+                    c.storage_port = Integer.getInteger("elassandra.test.storage_port", 17100);
                     c.partitioner = "org.apache.cassandra.dht.Murmur3Partitioner";
                     c.endpoint_snitch = "org.apache.cassandra.locator.SimpleSnitch";
                     java.util.Map<String, String> seedParams = java.util.Collections.singletonMap("seeds", "127.0.0.1");

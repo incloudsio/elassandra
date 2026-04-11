@@ -10,7 +10,8 @@ commitlog_segment_size_in_mb: 5
 #commitlog_directory: commitlog
 partitioner: org.apache.cassandra.dht.Murmur3Partitioner
 listen_address: 127.0.0.1
-storage_port: 7000
+# 17100 avoids conflicting with a typical local Cassandra on 7000 (side-car / embedded tests).
+storage_port: 17100
 rpc_port: 9160
 start_native_transport: true
 native_transport_port: 9042

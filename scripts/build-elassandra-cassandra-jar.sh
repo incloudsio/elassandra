@@ -37,6 +37,8 @@ fi
 export CASSANDRA_USE_JDK11="${CASSANDRA_USE_JDK11:-true}"
 echo "Running :cassandra-jar (this can take several minutes)..." >&2
 cd "$ROOT"
+# Gradle daemon keeps its initial env; BuildPlugin needs JAVA11_HOME in getenv().
+"$ROOT/gradlew" --stop 2>/dev/null || true
 # Minio fixture is skipped by default in plugins/repository-s3; explicit flag keeps behaviour if defaults change.
 ./gradlew :cassandra-jar -Delassandra.skipS3TestFixture=true --no-daemon >&2
 echo "$(cd "$(dirname "$JAR")" && pwd)/$(basename "$JAR")"

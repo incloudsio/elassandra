@@ -12,10 +12,25 @@ path = pathlib.Path(sys.argv[1])
 text = path.read_text(encoding="utf-8")
 changed = False
 
-if "private static volatile String embeddedOpensearchDataPath" in text and "elassandra-embedded-os-" in text:
-    print("OpenSearchSingleNodeTestCase: mock-fs data path (singleton temp) already applied →", path)
-    path.write_text(text, encoding="utf-8")
-    sys.exit(0)
+def uses_embedded_data_path(t: str) -> bool:
+    return (
+        '.put(Environment.PATH_DATA_SETTING.getKey(), opensearchDataPath)' in t
+        or '.put(Environment.PATH_DATA_SETTING.getKey(), resolvedOpensearchDataPath)' in t
+    )
+
+# Remove stale "resolvedOpensearchDataPath" helper — nodeSettings must use the init parameter `opensearchDataPath`.
+if "final String resolvedOpensearchDataPath" in text:
+    text = re.sub(
+        r"\n            final String resolvedOpensearchDataPath =[\s\S]*?DatabaseDescriptor\.getAllDataFileLocations\(\)\[0\] \+ File\.separatorChar \+ \"elasticsearch\.data\";\n",
+        "\n",
+        text,
+        count=1,
+    )
+    text = text.replace(
+        "resolvedOpensearchDataPath",
+        "opensearchDataPath",
+    )
+    changed = True
 
 new_sig = (
     "    /**\n"
@@ -33,19 +48,18 @@ if re.search(sig_pat, text):
     text = re.sub(sig_pat, new_sig, text, count=1)
     changed = True
 
-old_paths = (
-    "                        .put(Environment.PATH_DATA_SETTING.getKey(), DatabaseDescriptor.getAllDataFileLocations()[0] + File.separatorChar + \"elasticsearch.data\")\n"
-    "                        .put(Environment.PATH_REPO_SETTING.getKey(), System.getProperty(\"cassandra.home\") + \"/repo\")\n"
-    "                        .put(Environment.PATH_SHARED_DATA_SETTING.getKey(), DatabaseDescriptor.getAllDataFileLocations()[0] + File.separatorChar + \"elasticsearch.data\")\n"
+# ESSingleNode uses PATH_REPO with `+"/repo"` (no spaces); older patch scripts expected `+ "/repo"`. Match DATA lines only.
+dd_path = (
+    r'DatabaseDescriptor\.getAllDataFileLocations\(\)\[0\] \+ File\.separatorChar \+ "elasticsearch\.data"'
 )
-new_paths = (
-    "                        .put(Environment.PATH_DATA_SETTING.getKey(), opensearchDataPath)\n"
-    "                        .put(Environment.PATH_REPO_SETTING.getKey(), System.getProperty(\"cassandra.home\") + \"/repo\")\n"
-    "                        .put(Environment.PATH_SHARED_DATA_SETTING.getKey(), opensearchDataPath)\n"
-)
-if old_paths in text:
-    text = text.replace(old_paths, new_paths, 1)
-    changed = True
+for setting in ("PATH_DATA_SETTING", "PATH_SHARED_DATA_SETTING"):
+    pat = re.compile(
+        r'(\s+\.put\(Environment\.' + setting + r'\.getKey\(\), )' + dd_path + r'(\)\s*\n)'
+    )
+    new_t, n = pat.subn(r'\1opensearchDataPath\2', text, count=1)
+    if n:
+        text = new_t
+        changed = True
 
 # After prepare, nodeSettings may already use opensearchDataPath; ensure bootstrap natives match embedded tests.
 boot_snip = '                        .put("bootstrap.memory_lock", false)\n                        .put("bootstrap.system_call_filter", false)\n                        .put("discovery.type", MockCassandraDiscovery.MOCK_CASSANDRA)'
@@ -72,7 +86,6 @@ new_ctor = (
     "        }\n"
     "        initElassandraDeamon(nodeSettings(1), getPlugins(), embeddedOpensearchDataPath);\n"
 )
-# Insert field only if missing (prepare may re-run after edits; accept volatile or non-volatile declaration).
 has_field = (
     "private static volatile String embeddedOpensearchDataPath" in text
     or "private static String embeddedOpensearchDataPath" in text
@@ -107,10 +120,9 @@ if old_ctor2 in text:
 if changed:
     path.write_text(text, encoding="utf-8")
     print("Patched OpenSearchSingleNodeTestCase (mock-fs opensearch data path) →", path)
+elif uses_embedded_data_path(text):
+    print("OpenSearchSingleNodeTestCase: mock-fs data path already wired →", path)
 else:
-    if "opensearchDataPath" in text:
-        print("OpenSearchSingleNodeTestCase: mock-fs data path present; no file change →", path)
-    else:
-        print("OpenSearchSingleNodeTestCase: mock-fs data path anchor not found →", path, file=sys.stderr)
-        sys.exit(1)
+    print("OpenSearchSingleNodeTestCase: mock-fs data path anchor not found →", path, file=sys.stderr)
+    sys.exit(1)
 PY
