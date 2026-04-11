@@ -401,6 +401,10 @@ public abstract class ESSingleNodeTestCase extends ESTestCase {
             Settings elassandraSettings = ElassandraDaemon.instance.nodeSettings(testSettings);
             Path confPath = resolveCassandraConfigDir();
             ElassandraDaemon.instance.activate(false, false,  elassandraSettings, new Environment(elassandraSettings, confPath), classpathPlugins);
+            // StorageService usually invokes ringReady() when the gossip ring is ready; embedded side-car runs sometimes
+            // never receive that callback (same JVM, createNode=false). With node==null, ElassandraDaemon.ringReady()
+            // is a no-op except our override counting down — calling it here unblocks init without waiting 20m for gossip.
+            ElassandraDaemon.instance.ringReady();
 
             // Wait for ringReady(); if MockCassandraDiscovery never calls it, constructor blocks forever (suite timeout).
             try {
