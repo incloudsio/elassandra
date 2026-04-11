@@ -66,12 +66,15 @@ public class ClusterSettingsTests extends ESSingleNodeTestCase {
             client().admin().indices().prepareCreate("test1").get();
             fail("expected failure creating index with invalid search strategy class");
         } catch (Exception e) {
+            // "foo" resolves to org.elassandra.cluster.routing.foo → ClassNotFoundException;
+            // wrong concrete type → ConfigurationException (see AbstractSearchStrategy.getSearchStrategyClass).
             for (Throwable t = e; t != null; t = t.getCause()) {
-                if (t instanceof org.apache.cassandra.exceptions.ConfigurationException) {
+                if (t instanceof org.apache.cassandra.exceptions.ConfigurationException
+                    || t instanceof ClassNotFoundException) {
                     return;
                 }
             }
-            throw new AssertionError("Expected ConfigurationException in cause chain", e);
+            throw new AssertionError("Expected ConfigurationException or ClassNotFoundException in cause chain", e);
         }
     }
     
