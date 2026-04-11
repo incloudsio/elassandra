@@ -78,3 +78,5 @@ docker
 *.orig
 
 server/src/test/resources/commitlog/*
+# Embedded Cassandra SSTables / system keyspace (created by local :server:test; do not commit)
+server/src/test/resources/data/
