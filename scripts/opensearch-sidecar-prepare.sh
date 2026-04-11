@@ -46,6 +46,7 @@ fi
 "$ROOT/scripts/patch-opensearch-metadata-elassandra-extensions.sh" "$DEST"
 "$ROOT/scripts/patch-opensearch-cluster-service-elassandra-index-settings-keys.sh" "$DEST"
 "$ROOT/scripts/patch-opensearch-cluster-service-search-strategy-key.sh" "$DEST"
+"$ROOT/scripts/patch-opensearch-cluster-settings-search-strategy.sh" "$DEST"
 "$ROOT/scripts/patch-opensearch-cluster-service-elassandra-schema-stubs.sh" "$DEST"
 "$ROOT/scripts/patch-opensearch-cluster-service-elassandra-full-stubs.sh" "$DEST"
 "$ROOT/scripts/patch-opensearch-cluster-service-process-write-conditional.sh" "$DEST"

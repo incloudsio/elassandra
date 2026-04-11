@@ -25,6 +25,7 @@ import org.junit.Test;
 
 import static org.elasticsearch.test.hamcrest.ElasticsearchAssertions.assertAcked;
 import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.fail;
 
 /**
  * Test default cluster settings.
@@ -57,9 +58,19 @@ public class ClusterSettingsTests extends ESSingleNodeTestCase {
         super.tearDown();
     }
     
-    @Test(expected = org.apache.cassandra.exceptions.ConfigurationException.class)
+    @Test
     public void testIndexBadSearchStrategy() {
-        client().admin().indices().prepareCreate("test1").get();
+        try {
+            client().admin().indices().prepareCreate("test1").get();
+            fail("expected failure creating index with invalid search strategy class");
+        } catch (Exception e) {
+            for (Throwable t = e; t != null; t = t.getCause()) {
+                if (t instanceof org.apache.cassandra.exceptions.ConfigurationException) {
+                    return;
+                }
+            }
+            throw new AssertionError("Expected ConfigurationException in cause chain", e);
+        }
     }
     
 }
