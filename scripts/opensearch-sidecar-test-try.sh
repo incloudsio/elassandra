@@ -142,4 +142,16 @@ fi
 # Always clean test outputs so embedded Cassandra failures are not masked by stale XML (Gradle incremental test).
 # Forked tests use the default test SecurityManager; patch-opensearch-bootstrap-for-testing-elassandra-embedded-sm.sh
 # grants AllPermission when cassandra.home is set so embedded Cassandra + Netty + JMX are not blocked.
-exec ./gradlew "${GRADLE_EXTRA_D[@]}" -I "$INIT_GRADLE" :server:cleanTest :server:test "${TEST_ARGS[@]}" --no-daemon "$@"
+set +e
+./gradlew "${GRADLE_EXTRA_D[@]}" -I "$INIT_GRADLE" :server:cleanTest :server:test "${TEST_ARGS[@]}" --no-daemon "$@"
+_gradle_rc=$?
+set -e
+if [[ "$_gradle_rc" -ne 0 ]]; then
+  echo "opensearch-sidecar-test-try: :server:test failed (exit $_gradle_rc); dumping TEST-*.xml (tail)..." >&2
+  find server/build -name 'TEST-*.xml' 2>/dev/null | head -40 | while read -r _xf; do
+    echo "============ $_xf ============" >&2
+    tail -c 200000 "$_xf" 2>/dev/null >&2 || true
+  done
+  exit "$_gradle_rc"
+fi
+exit 0

@@ -51,11 +51,13 @@ public class ClusterSettingsTests extends ESSingleNodeTestCase {
     
     @Override
     public void tearDown() throws Exception {
-        assertAcked(client().admin().cluster().prepareUpdateSettings().setPersistentSettings(
-                Settings.builder()
-                .put(ClusterService.SETTING_CLUSTER_SEARCH_STRATEGY_CLASS, (String)null)
-        ).get());
-        super.tearDown();
+        try {
+            assertAcked(client().admin().cluster().prepareUpdateSettings().setPersistentSettings(
+                    Settings.builder().putNull(ClusterService.SETTING_CLUSTER_SEARCH_STRATEGY_CLASS)
+            ).get());
+        } finally {
+            super.tearDown();
+        }
     }
     
     @Test
