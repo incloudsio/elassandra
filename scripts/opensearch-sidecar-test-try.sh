@@ -158,6 +158,10 @@ if [[ "$_gradle_rc" -ne 0 ]]; then
     echo "============ $_hf ============" >&2
     tail -c 120000 "$_hf" 2>/dev/null >&2 || true
   done
+  find server/build -maxdepth 5 \( -name 'hs_err_pid*.log' -o -name 'replay_pid*.log' -o -name '*.hprof' \) 2>/dev/null | head -20 | while read -r _cf; do
+    echo "============ $_cf ============" >&2
+    tail -c 80000 "$_cf" 2>/dev/null >&2 || true
+  done
   exit "$_gradle_rc"
 fi
 exit 0

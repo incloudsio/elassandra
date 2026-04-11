@@ -21,7 +21,9 @@ import com.carrotsearch.randomizedtesting.annotations.ThreadLeakScope.Scope;
 import org.elasticsearch.cluster.service.ClusterService;
 import org.elasticsearch.common.settings.Settings;
 import org.elasticsearch.test.ESSingleNodeTestCase;
+import org.junit.FixMethodOrder;
 import org.junit.Test;
+import org.junit.runners.MethodSorters;
 
 import static org.elasticsearch.test.hamcrest.ElasticsearchAssertions.assertAcked;
 import static org.junit.Assert.assertTrue;
@@ -33,7 +35,26 @@ import static org.junit.Assert.fail;
  */
 //gradle :server:test -Dtests.seed=65E2CF27F286CC89 -Dtests.class=org.elassandra.ClusterSettingsTests -Dtests.security.manager=false -Dtests.locale=en-PH -Dtests.timezone=America/Coral_Harbour
 @ThreadLeakScope(Scope.NONE)
+@FixMethodOrder(MethodSorters.NAME_ASCENDING)
 public class ClusterSettingsTests extends ESSingleNodeTestCase {
+
+    /**
+     * {@link ESSingleNodeTestCase#tearDown()} asserts no persistent cluster settings remain; this test sets
+     * {@code cluster.search_strategy_class} and must clear it even if the method body or {@code finally} fails.
+     */
+    @Override
+    public void tearDown() throws Exception {
+        try {
+            assertAcked(
+                client().admin().cluster().prepareUpdateSettings().setPersistentSettings(
+                    Settings.builder().putNull(ClusterService.SETTING_CLUSTER_SEARCH_STRATEGY_CLASS)
+                ).get()
+            );
+        } catch (Throwable t) {
+            logger.warn("ClusterSettingsTests: could not clear cluster.search_strategy_class before parent tearDown", t);
+        }
+        super.tearDown();
+    }
 
     @Test
     public void smokeSidecarJvm() {
