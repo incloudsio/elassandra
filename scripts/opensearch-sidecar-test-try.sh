@@ -147,16 +147,16 @@ set +e
 _gradle_rc=$?
 set -e
 if [[ "$_gradle_rc" -ne 0 ]]; then
-  echo "opensearch-sidecar-test-try: :server:test failed (exit $_gradle_rc); listing test output dirs + XML..." >&2
+  echo "opensearch-sidecar-test-try: :server:test failed (exit $_gradle_rc); listing test outputs (Gradle 6 may use binary test-results)..." >&2
   ls -la server/build/test-results 2>/dev/null >&2 || true
-  find server/build/test-results -type f 2>/dev/null | head -60 >&2 || true
+  find server/build/test-results -type f 2>/dev/null | head -80 >&2 || true
   find server/build -type f \( -name 'TEST-*.xml' -o -name '*-output.txt' \) 2>/dev/null | head -40 | while read -r _xf; do
     echo "============ $_xf ============" >&2
     tail -c 200000 "$_xf" 2>/dev/null >&2 || true
   done
-  find server/build -path '*/reports/tests/*' -type f \( -name '*.html' -o -name 'index.html' \) 2>/dev/null | head -5 | while read -r _hf; do
+  find server/build/reports/tests -type f -name '*.html' 2>/dev/null | head -25 | while read -r _hf; do
     echo "============ $_hf ============" >&2
-    tail -c 80000 "$_hf" 2>/dev/null >&2 || true
+    tail -c 120000 "$_hf" 2>/dev/null >&2 || true
   done
   exit "$_gradle_rc"
 fi

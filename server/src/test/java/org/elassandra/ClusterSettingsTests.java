@@ -40,43 +40,38 @@ public class ClusterSettingsTests extends ESSingleNodeTestCase {
         assertTrue(true);
     }
 
-    @Override
-    public void setUp() throws Exception {
-        super.setUp();
-        assertAcked(client().admin().cluster().prepareUpdateSettings().setPersistentSettings(
-                Settings.builder()
-                .put(ClusterService.SETTING_CLUSTER_SEARCH_STRATEGY_CLASS, "foo")
-        ).get());
-    }
-    
-    @Override
-    public void tearDown() throws Exception {
-        try {
-            assertAcked(client().admin().cluster().prepareUpdateSettings().setPersistentSettings(
-                    Settings.builder().putNull(ClusterService.SETTING_CLUSTER_SEARCH_STRATEGY_CLASS)
-            ).get());
-        } finally {
-            super.tearDown();
-        }
-    }
-    
+    /**
+     * Invalid strategy is scoped to this method (not {@code @Before}) so {@link #smokeSidecarJvm} does not inherit a
+     * broken cluster default, and OpenSearch side-car does not fail applying cluster state before the test body runs.
+     */
     @Test
     public void testIndexBadSearchStrategy() {
+        assertAcked(
+            client().admin().cluster().prepareUpdateSettings().setPersistentSettings(
+                Settings.builder().put(ClusterService.SETTING_CLUSTER_SEARCH_STRATEGY_CLASS, "foo")
+            ).get()
+        );
         try {
-            client().admin().indices().prepareCreate("test1").get();
-            fail("expected failure creating index with invalid search strategy class");
-        } catch (Exception e) {
-            // "foo" resolves to org.elassandra.cluster.routing.foo → ClassNotFoundException;
-            // wrong concrete type → ConfigurationException (see AbstractSearchStrategy.getSearchStrategyClass).
-            for (Throwable t = e; t != null; t = t.getCause()) {
-                if (t instanceof org.apache.cassandra.exceptions.ConfigurationException
-                    || t instanceof ClassNotFoundException) {
-                    return;
+            try {
+                client().admin().indices().prepareCreate("test1").get();
+                fail("expected failure creating index with invalid search strategy class");
+            } catch (Exception e) {
+                // "foo" resolves to org.elassandra.cluster.routing.foo → ClassNotFoundException;
+                // wrong concrete type → ConfigurationException (see AbstractSearchStrategy.getSearchStrategyClass).
+                for (Throwable t = e; t != null; t = t.getCause()) {
+                    if (t instanceof org.apache.cassandra.exceptions.ConfigurationException
+                        || t instanceof ClassNotFoundException) {
+                        return;
+                    }
                 }
+                throw new AssertionError("Expected ConfigurationException or ClassNotFoundException in cause chain", e);
             }
-            throw new AssertionError("Expected ConfigurationException or ClassNotFoundException in cause chain", e);
+        } finally {
+            assertAcked(
+                client().admin().cluster().prepareUpdateSettings().setPersistentSettings(
+                    Settings.builder().putNull(ClusterService.SETTING_CLUSTER_SEARCH_STRATEGY_CLASS)
+                ).get()
+            );
         }
     }
-    
 }
-
