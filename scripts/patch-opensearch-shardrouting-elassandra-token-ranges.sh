@@ -25,6 +25,52 @@ if "newElassandra" in text:
     print("ShardRouting already patched:", path)
     raise SystemExit(0)
 
+# Side-car may already carry token ranges from a prior sync with a different field order than the
+# vanilla OpenSearch anchor below (prepare must stay idempotent).
+if "private transient Collection<Range<Token>> tokenRanges" in text:
+    factory = """
+
+    /** Elassandra: Cassandra token ranges attached to this routing (empty if none). */
+    public static ShardRouting newElassandra(
+        ShardId shardId,
+        String currentNodeId,
+        boolean primary,
+        ShardRoutingState state,
+        UnassignedInfo unassignedInfo,
+        Collection<Range<Token>> tokenRanges
+    ) {
+        RecoverySource recoverySource =
+            (!primary)
+                ? PeerRecoverySource.INSTANCE
+                : ((state == ShardRoutingState.UNASSIGNED || state == ShardRoutingState.INITIALIZING)
+                    ? RecoverySource.LocalShardsRecoverySource.INSTANCE
+                    : null);
+        UnassignedInfo ui =
+            (state == ShardRoutingState.UNASSIGNED || state == ShardRoutingState.INITIALIZING) ? unassignedInfo : null;
+        AllocationId aid =
+            (state == ShardRoutingState.STARTED || state == ShardRoutingState.INITIALIZING)
+                ? AllocationId.newInitializing()
+                : null;
+        return new ShardRouting(
+            shardId,
+            currentNodeId,
+            null,
+            primary,
+            state,
+            recoverySource,
+            ui,
+            aid,
+            UNAVAILABLE_EXPECTED_SHARD_SIZE,
+            tokenRanges
+        );
+    }
+"""
+    idx = text.rfind("\n}")
+    text = text[:idx] + factory + text[idx:]
+    path.write_text(text, encoding="utf-8")
+    print("Patched newElassandra only (alternate tokenRanges layout):", path)
+    raise SystemExit(0)
+
 
 def patch_new_calls(s: str) -> str:
     out = []

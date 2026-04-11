@@ -82,6 +82,7 @@ fi
 "$ROOT/scripts/patch-opensearch-test-base-skip-tmpdir-for-elassandra.sh" "$DEST"
 "$ROOT/scripts/patch-opensearch-pathutils-disable-mock-for-elassandra.sh" "$DEST"
 "$ROOT/scripts/patch-opensearch-testcase-suppress-filesystems.sh" "$DEST"
+"$ROOT/scripts/patch-opensearch-testcase-threadleak-zombies-continue.sh" "$DEST"
 "$ROOT/scripts/patch-opensearch-test-base-cassandra-disable-asserts-after-ea.sh" "$DEST"
 "$ROOT/scripts/patch-opensearch-bootstrap-testing-native-scratch-dir.sh" "$DEST"
 "$ROOT/scripts/patch-opensearch-bootstrap-for-testing-elassandra-embedded-sm.sh" "$DEST"
@@ -97,6 +98,7 @@ fi
 "$ROOT/scripts/patch-opensearch-index-service-keyspace.sh" "$DEST"
 "$ROOT/scripts/patch-opensearch-discovery-module-tests-opensearch13.sh" "$DEST"
 "$ROOT/scripts/patch-opensearch-readonly-engine-tests-delete-null.sh" "$DEST"
+"$ROOT/scripts/patch-opensearch-logging-listener-assumption-failure.sh" "$DEST"
 
 if [[ "${SKIP_OPENSEARCH_FORBIDDEN_DEPS_PATCH:-}" != "1" ]]; then
   "$ROOT/scripts/patch-opensearch-forbidden-deps-for-elassandra.sh" "$DEST"

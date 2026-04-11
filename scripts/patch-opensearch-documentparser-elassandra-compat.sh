@@ -8,18 +8,34 @@ DEST="${1:?OpenSearch clone root}"
 DP="$DEST/server/src/main/java/org/opensearch/index/mapper/DocumentParser.java"
 [[ -f "$DP" ]] || exit 0
 
-if grep -q 'Elassandra: createCopyFields' "$DP"; then
-  echo "DocumentParser Elassandra compat already applied: $DP"
-  exit 0
-fi
-
 python3 - "$DP" <<'PY'
 from pathlib import Path
 import sys
 path = Path(sys.argv[1])
 text = path.read_text(encoding="utf-8")
-if "Elassandra: createCopyFields" in text:
-    print("DocumentParser compat already applied:", path)
+# Full apply = delegates patch (line 89 of opensearch-sidecar-prepare.sh) + visibility + at most one createCopyFields.
+dup = "\n\n    /** Elassandra: createCopyFields — CQL secondary index copy_to path (fork parity). */"
+anchor = "\n\n    // looks up a child mapper, but takes into account field names that expand to objects"
+while (
+    text.count("public static void createCopyFields(ParseContext context, List<String> copyToFields, Object value)") > 1
+    and dup in text
+):
+    i = text.rfind(dup)
+    j = text.find(anchor, i)
+    if i == -1 or j == -1:
+        break
+    text = text[:i] + text[j:]
+    print("DocumentParser: removed duplicate Elassandra createCopyFields block →", path)
+
+_cf = text.count("public static void createCopyFields(ParseContext context, List<String> copyToFields, Object value)")
+if (
+    _cf == 1
+    and "Elassandra: ES 6.8 static API for org.elassandra.index.ElasticSecondaryIndex" in text
+    and "public static ParseContext nestedContext(ParseContext context, ObjectMapper mapper)" in text
+    and "public static void nested(ParseContext context, ObjectMapper.Nested nested)" in text
+    and "public static ObjectMapper.Dynamic dynamicOrDefault(ObjectMapper parentMapper, ParseContext context)" in text
+):
+    print("DocumentParser Elassandra compat already applied:", path)
     raise SystemExit(0)
 
 text = text.replace(
@@ -38,7 +54,11 @@ text = text.replace(
     1,
 )
 
-insert = r'''
+# Fork / upstream may already ship public createCopyFields; do not insert a second method.
+has_create = "public static void createCopyFields(ParseContext context, List<String> copyToFields, Object value)" in text
+insert = ""
+if not has_create:
+    insert = r'''
     /** Elassandra: createCopyFields — CQL secondary index copy_to path (fork parity). */
     public static void createCopyFields(ParseContext context, List<String> copyToFields, Object value) throws IOException {
         if (!context.isWithinCopyTo() && copyToFields.isEmpty() == false) {
@@ -78,7 +98,10 @@ marker = "    // looks up a child mapper, but takes into account field names tha
 if marker not in text:
     print("DocumentParser: getMapper anchor not found", file=sys.stderr)
     sys.exit(1)
-text = text.replace(marker, insert + marker, 1)
+if insert:
+    text = text.replace(marker, insert + marker, 1)
+else:
+    print("DocumentParser: createCopyFields already present; skipping duplicate insert →", path)
 
 if "import java.io.IOException;" not in text[:2000]:
     pass  # already have IOException via mapper imports

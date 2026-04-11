@@ -13,6 +13,10 @@
 #   OPENSEARCH_SIDECAR_TEST_WAVE=0|1|2|3|4 ./scripts/opensearch-sidecar-test-try.sh
 # Extra JVM args for forked test workers (passed through init.gradle):
 #   ELASSANDRA_OPENSEARCH_TEST_EXTRA_JVM_ARGS='-Xmx2g' ./scripts/opensearch-sidecar-test-try.sh
+# Debug opaque worker exit 100: enables shutdown hook + default uncaught handler in ESSingleNodeTestCase static init.
+#   ELASSANDRA_TEST_SHUTDOWN_HOOK=1 ./scripts/opensearch-sidecar-test-try.sh
+# Log stack traces for System.exit (needs tests.security.manager=false — side-car default):
+#   ELASSANDRA_TEST_TRACE_SYSTEM_EXIT=1 ./scripts/opensearch-sidecar-test-try.sh
 # Limit parallel test JVMs (OpenSearch reads -Dtests.jvms; 1 can help debug Lucene/Gradle worker ordering):
 #   OPENSEARCH_SIDECAR_TESTS_JVMS=1 ./scripts/opensearch-sidecar-test-try.sh
 #
@@ -147,21 +151,7 @@ set +e
 _gradle_rc=$?
 set -e
 if [[ "$_gradle_rc" -ne 0 ]]; then
-  echo "opensearch-sidecar-test-try: :server:test failed (exit $_gradle_rc); listing test outputs (Gradle 6 may use binary test-results)..." >&2
-  ls -la server/build/test-results 2>/dev/null >&2 || true
-  find server/build/test-results -type f 2>/dev/null | head -80 >&2 || true
-  find server/build -type f \( -name 'TEST-*.xml' -o -name '*-output.txt' \) 2>/dev/null | head -40 | while read -r _xf; do
-    echo "============ $_xf ============" >&2
-    tail -c 200000 "$_xf" 2>/dev/null >&2 || true
-  done
-  find server/build/reports/tests -type f -name '*.html' 2>/dev/null | head -25 | while read -r _hf; do
-    echo "============ $_hf ============" >&2
-    tail -c 120000 "$_hf" 2>/dev/null >&2 || true
-  done
-  find server/build -maxdepth 5 \( -name 'hs_err_pid*.log' -o -name 'replay_pid*.log' -o -name '*.hprof' \) 2>/dev/null | head -20 | while read -r _cf; do
-    echo "============ $_cf ============" >&2
-    tail -c 80000 "$_cf" 2>/dev/null >&2 || true
-  done
+  echo "opensearch-sidecar-test-try: :server:test failed (exit $_gradle_rc)." >&2
   exit "$_gradle_rc"
 fi
 exit 0

@@ -230,7 +230,43 @@ gradle.projectsEvaluated {
                     }
                 }
             }
+            // When debugging fork exit 100 / SKIPPED with no exception: stderr line from the hook means shutdown
+            // hooks ran (so not SIGKILL); typically System.exit or normal JVM teardown — pair with tracing System.exit.
+            if (System.getenv('ELASSANDRA_TEST_SHUTDOWN_HOOK') == '1') {
+                t.systemProperty('elassandra.test.shutdown.hook', 'true')
+                t.jvmArgs('-Delassandra.test.shutdown.hook=true')
+            }
+            // Log stack when System.exit is invoked (wraps Cassandra ThreadAwareSecurityManager). Forked workers need
+            // the env var too — Boolean.getBoolean alone can miss -D from the Gradle CLI on some OpenSearch test setups.
+            def traceExit = System.getenv('ELASSANDRA_TEST_TRACE_SYSTEM_EXIT') == '1' || 'true'.equalsIgnoreCase(System.getenv('ELASSANDRA_TEST_TRACE_SYSTEM_EXIT')) || Boolean.parseBoolean(System.getProperty('elassandra.test.trace.system.exit', 'false'))
+            if (traceExit) {
+                t.systemProperty('elassandra.test.trace.system.exit', 'true')
+                t.jvmArgs('-Delassandra.test.trace.system.exit=true')
+                t.environment('ELASSANDRA_TEST_TRACE_SYSTEM_EXIT', '1')
+            }
             // Cassandra -da:org.apache.cassandra... is applied in OpenSearchTestBasePlugin (patch-opensearch-test-base-cassandra-disable-asserts-after-ea.sh) so it follows -ea.
+            try {
+                t.testLogging { tl ->
+                    tl.events 'started', 'failed', 'skipped'
+                    tl.showExceptions true
+                    tl.showCauses true
+                    tl.showStackTraces true
+                    tl.showStandardStreams true
+                    tl.exceptionFormat 'full'
+                }
+            } catch (Exception ignore) {
+            }
+            // Forked JVM sometimes exits 100 with only "SKIPPED" in console; log Throwable Gradle attached (e.g. AssumptionViolatedException).
+            t.afterTest { org.gradle.api.tasks.testing.TestDescriptor td, org.gradle.api.tasks.testing.TestResult tr ->
+                if (tr.resultType == org.gradle.api.tasks.testing.TestResult.ResultType.SKIPPED) {
+                    def ex = tr.exception
+                    def msg = ex != null ? (ex.class.name + ': ' + ex.message) : '(no Throwable on TestResult)'
+                    logger.lifecycle("[opensearch-sidecar-elassandra] skipped test: ${td.className} ${td.name} → ${msg}")
+                    if (ex != null) {
+                        ex.printStackTrace()
+                    }
+                }
+            }
         }
     }
     logger.lifecycle("[opensearch-sidecar-elassandra] :server and :test:framework + Cassandra jar + deps (compile guava 19, runtime guava ${guava}) jackson (${jacksonDatabind}) httpclient ${httpclient} netty ${netty}")
