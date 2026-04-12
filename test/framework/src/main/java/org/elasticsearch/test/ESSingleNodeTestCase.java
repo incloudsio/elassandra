@@ -35,6 +35,7 @@ import org.apache.cassandra.utils.JVMStabilityInspector;
 import org.apache.lucene.util.IOUtils;
 import org.elasticsearch.action.admin.cluster.health.ClusterHealthResponse;
 import org.elasticsearch.action.admin.indices.create.CreateIndexRequestBuilder;
+import org.elasticsearch.action.support.ActiveShardCount;
 import org.elasticsearch.action.admin.indices.delete.DeleteIndexRequestBuilder;
 import org.elasticsearch.action.admin.indices.get.GetIndexResponse;
 import org.elasticsearch.client.Client;
@@ -44,7 +45,6 @@ import org.elasticsearch.cluster.health.ClusterHealthStatus;
 import org.elasticsearch.cluster.metadata.IndexMetaData;
 import org.elasticsearch.cluster.metadata.MetaData;
 import org.elasticsearch.cluster.service.ClusterService;
-import org.elasticsearch.common.Priority;
 import org.elasticsearch.common.network.NetworkModule;
 import org.elasticsearch.common.settings.Settings;
 import org.elasticsearch.common.unit.TimeValue;
@@ -790,12 +790,26 @@ public abstract class ESSingleNodeTestCase extends ESTestCase {
     }
 
     protected IndexService createIndex(String index, CreateIndexRequestBuilder createIndexRequestBuilder) {
-        assertAcked(createIndexRequestBuilder.get());
+        // Default create index waits for active shard copies (ActiveShardsObserver + ClusterStateObserver). With
+        // CassandraDiscovery / searchEnabled routing, that step can fail to converge and blocks get() until the
+        // suite times out. We only need metadata + routing applied here; yellow/green is enforced below and in ensureGreen.
+        // Bound master discovery + ack: unbounded get() can hang past the randomized suite timeout (e.g. 5m) on the
+        // OpenSearch sidecar; align with post-create health timeout below.
+        createIndexRequestBuilder.setMasterNodeTimeout(TimeValue.timeValueSeconds(120));
+        createIndexRequestBuilder.setTimeout(TimeValue.timeValueSeconds(120));
+        createIndexRequestBuilder.setWaitForActiveShards(ActiveShardCount.NONE);
+        assertAcked(createIndexRequestBuilder.get(TimeValue.timeValueSeconds(120)));
         // Wait for the index to be allocated so that cluster state updates don't override
-        // changes that would have been done locally
+        // changes that would have been done locally.
+        // Do not use waitForEvents(Priority.LANGUID): Elassandra CassandraDiscovery + routing tasks can keep the
+        // cluster applier from ever satisfying that barrier, and the default health request has no timeout — tests
+        // then hang until the suite timeout. Yellow + relocating + explicit timeout is enough for a single node.
         ClusterHealthResponse health = client().admin().cluster()
-                .health(Requests.clusterHealthRequest(index).waitForYellowStatus().waitForEvents(Priority.LANGUID)
-                        .waitForNoRelocatingShards(true)).actionGet();
+                .health(Requests.clusterHealthRequest(index).timeout(TimeValue.timeValueSeconds(120))
+                        .waitForYellowStatus().waitForNoRelocatingShards(true))
+                .actionGet(TimeValue.timeValueSeconds(120));
+        assertThat("timed out waiting for yellow after create index; see cluster state / pending tasks logs",
+                health.isTimedOut(), equalTo(false));
         assertThat(health.getStatus(), lessThanOrEqualTo(ClusterHealthStatus.YELLOW));
         assertThat("Cluster must be a single node cluster", health.getNumberOfDataNodes(), equalTo(1));
         IndicesService instanceFromNode = getInstanceFromNode(IndicesService.class);
@@ -840,12 +854,15 @@ public abstract class ESSingleNodeTestCase extends ESTestCase {
      * @param timeout time out value to set on {@link org.elasticsearch.action.admin.cluster.health.ClusterHealthRequest}
      */
     public ClusterHealthStatus ensureGreen(TimeValue timeout, String... indices) {
+        // Same rationale as createIndex: avoid waitForEvents(LANGUID) — it can wait indefinitely with Elassandra.
+        // Bound client-side actionGet to prevent indefinite hangs when the embedded transport never delivers.
         ClusterHealthResponse actionGet = client().admin().cluster()
-                .health(Requests.clusterHealthRequest(indices).timeout(timeout).waitForGreenStatus().waitForEvents(Priority.LANGUID)
-                        .waitForNoRelocatingShards(true)).actionGet();
+                .health(Requests.clusterHealthRequest(indices).timeout(timeout).waitForGreenStatus()
+                        .waitForNoRelocatingShards(true)).actionGet(timeout);
         if (actionGet.isTimedOut()) {
-            logger.info("ensureGreen timed out, cluster state:\n{}\n{}", client().admin().cluster().prepareState().get().getState(),
-                client().admin().cluster().preparePendingClusterTasks().get());
+            logger.info("ensureGreen timed out, cluster state:\n{}\n{}",
+                client().admin().cluster().prepareState().get(TimeValue.timeValueSeconds(30)).getState(),
+                client().admin().cluster().preparePendingClusterTasks().get(TimeValue.timeValueSeconds(30)));
             assertThat("timed out waiting for green state", actionGet.isTimedOut(), equalTo(false));
         }
         assertThat(actionGet.getStatus(), equalTo(ClusterHealthStatus.GREEN));

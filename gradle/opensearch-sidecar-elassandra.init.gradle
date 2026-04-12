@@ -236,6 +236,19 @@ gradle.projectsEvaluated {
             // Embedded Cassandra + JNA + Netty: default test SM often yields opaque failures / SKIPPED (worker exit 100).
             t.systemProperty('tests.security.manager', 'false')
             t.jvmArgs('-Dtests.security.manager=false')
+            // RandomizedTesting suite timeout (default upstream is 20m). Propagate from Gradle CLI / env so hangs fail faster while debugging.
+            def suiteTimeout = System.getProperty('tests.timeoutSuite')
+            if (suiteTimeout == null || suiteTimeout.toString().trim().isEmpty()) {
+                def envTo = System.getenv('OPENSEARCH_SIDECAR_SUITE_TIMEOUT_MS')
+                if (envTo != null && !envTo.toString().trim().isEmpty() && !'0'.equals(envTo.toString().trim())) {
+                    suiteTimeout = envTo.toString().trim() + '!'
+                }
+            }
+            if (suiteTimeout != null && !suiteTimeout.toString().trim().isEmpty()) {
+                def st = suiteTimeout.toString()
+                t.systemProperty('tests.timeoutSuite', st)
+                t.jvmArgs("-Dtests.timeoutSuite=${st}")
+            }
             // Lucene mock FS + Gradle java.io.tmpdir/workingDir layout causes FileAlreadyExistsException (worker exit 100).
             t.systemProperty('elassandra.disable.lucene.mock.filesystem', 'true')
             t.jvmArgs('-Delassandra.disable.lucene.mock.filesystem=true')

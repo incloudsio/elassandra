@@ -81,6 +81,22 @@ if TP.exists():
             print("TypeParsers.java: OFFSETS anchor not found", file=sys.stderr)
             sys.exit(1)
         t = t.replace(needle, repl, 1)
+    if "CQL_UDT_NAME" not in t:
+        needle = '    public static final String CQL_MANDATORY = "cql_mandatory";\n'
+        repl = (
+            needle
+            + "    public static final String CQL_COLLECTION = \"cql_collection\";\n"
+            + "    public static final String CQL_STRUCT = \"cql_struct\";\n"
+            + "    public static final String CQL_UDT_NAME = \"cql_udt_name\";\n"
+            + "    public static final String CQL_PARTITION_KEY = \"cql_partition_key\";\n"
+            + "    public static final String CQL_STATIC_COLUMN = \"cql_static_column\";\n"
+            + "    public static final String CQL_CLUSTERING_KEY_DESC = \"cql_clustering_key_desc\";\n"
+            + "    public static final String CQL_PRIMARY_KEY_ORDER = \"cql_primary_key_order\";\n"
+        )
+        if needle not in t:
+            print("TypeParsers.java: CQL_MANDATORY anchor not found (for extended CQL keys)", file=sys.stderr)
+            sys.exit(1)
+        t = t.replace(needle, repl, 1)
     write_if_changed(TP, t)
 
 OM = root / "server/src/main/java/org/opensearch/index/mapper/ObjectMapper.java"
@@ -201,6 +217,80 @@ if ML.exists():
             sys.exit(1)
         t = t.replace(needle, repl, 1)
     write_if_changed(ML, t)
+
+# Stock OpenSearch tests that construct ObjectMapper directly need the Elassandra CQL constructor args.
+FAV = root / "server/src/test/java/org/opensearch/index/mapper/FieldAliasMapperValidationTests.java"
+if FAV.exists():
+    t = FAV.read_text(encoding="utf-8")
+    if "ObjectMapper.Defaults.CQL_PRIMARY_KEY_ORDER" not in t:
+        old1 = """    private static ObjectMapper createObjectMapper(String name) {
+        return new ObjectMapper(
+            name,
+            name,
+            new Explicit<>(true, false),
+            ObjectMapper.Nested.NO,
+            ObjectMapper.Dynamic.FALSE,
+            emptyMap(),
+            Settings.EMPTY
+        );
+    }"""
+        new1 = """    private static ObjectMapper createObjectMapper(String name) {
+        return new ObjectMapper(
+            name,
+            name,
+            new Explicit<>(true, false),
+            ObjectMapper.Nested.NO,
+            ObjectMapper.Dynamic.FALSE,
+            ObjectMapper.Defaults.CQL_COLLECTION,
+            ObjectMapper.Defaults.CQL_STRUCT,
+            null,
+            ObjectMapper.Defaults.CQL_MANDATORY,
+            ObjectMapper.Defaults.CQL_PARTITION_KEY,
+            ObjectMapper.Defaults.CQL_STATIC_COLUMN,
+            ObjectMapper.Defaults.CQL_CLUSTERING_KEY_DESC,
+            ObjectMapper.Defaults.CQL_PRIMARY_KEY_ORDER,
+            emptyMap(),
+            Settings.EMPTY
+        );
+    }"""
+        old2 = """    private static ObjectMapper createNestedObjectMapper(String name) {
+        return new ObjectMapper(
+            name,
+            name,
+            new Explicit<>(true, false),
+            ObjectMapper.Nested.newNested(),
+            ObjectMapper.Dynamic.FALSE,
+            emptyMap(),
+            Settings.EMPTY
+        );
+    }"""
+        new2 = """    private static ObjectMapper createNestedObjectMapper(String name) {
+        return new ObjectMapper(
+            name,
+            name,
+            new Explicit<>(true, false),
+            ObjectMapper.Nested.newNested(),
+            ObjectMapper.Dynamic.FALSE,
+            ObjectMapper.Defaults.CQL_COLLECTION,
+            ObjectMapper.Defaults.CQL_STRUCT,
+            null,
+            ObjectMapper.Defaults.CQL_MANDATORY,
+            ObjectMapper.Defaults.CQL_PARTITION_KEY,
+            ObjectMapper.Defaults.CQL_STATIC_COLUMN,
+            ObjectMapper.Defaults.CQL_CLUSTERING_KEY_DESC,
+            ObjectMapper.Defaults.CQL_PRIMARY_KEY_ORDER,
+            emptyMap(),
+            Settings.EMPTY
+        );
+    }"""
+        if old1 in t and old2 in t:
+            t = t.replace(old1, new1, 1).replace(old2, new2, 1)
+            write_if_changed(FAV, t)
+        elif "createObjectMapper(String name)" in t:
+            print(
+                "FieldAliasMapperValidationTests.java: expected stock ObjectMapper(...) helpers; manual update needed",
+                file=sys.stderr,
+            )
 PY
 
 chmod +x /Users/maxsmith/Documents/GitHub/elassandra/scripts/patch-opensearch-mappers-elassandra-cql-compat.sh 2>/dev/null || true

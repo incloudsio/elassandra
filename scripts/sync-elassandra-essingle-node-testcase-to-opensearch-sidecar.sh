@@ -2,6 +2,9 @@
 # Replace stock OpenSearch OpenSearchSingleNodeTestCase with Elassandra's forked ESSingleNodeTestCase
 # (CQL process(), ElassandraDaemon bootstrap, MockCassandraDiscovery, etc.), rewritten for org.opensearch.*.
 #
+# createIndex / ensureGreen behavior (wait-for-active-shards NONE, bounded health, master/ack timeouts) lives only
+# in Elassandra's ESSingleNodeTestCase — edit that file, then re-run this script or opensearch-sidecar-prepare.sh.
+#
 # Usage: ./scripts/sync-elassandra-essingle-node-testcase-to-opensearch-sidecar.sh "${OPENSEARCH_CLONE_DIR}"
 set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"

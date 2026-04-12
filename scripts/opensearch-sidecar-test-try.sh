@@ -18,6 +18,9 @@
 #     :server:test --tests 'org.elassandra.ClusterSettingsTests.testIndexBadSearchStrategy' -Dtests.jvms=1 --no-daemon
 # Curated waves (overrides OPENSEARCH_SIDECAR_TEST_PATTERN when set):
 #   OPENSEARCH_SIDECAR_TEST_WAVE=0|1|2|3|4 ./scripts/opensearch-sidecar-test-try.sh
+# Suite timeout (randomizedtesting default is 20m — long when debugging hangs). Shorter default here; restore 20m with:
+#   OPENSEARCH_SIDECAR_SUITE_TIMEOUT_MS=1200000 ./scripts/opensearch-sidecar-test-try.sh
+#   OPENSEARCH_SIDECAR_SUITE_TIMEOUT_MS=0 disables this script’s -D (use Gradle/OpenSearch defaults).
 # Fast-fail when debugging stuck gateway/ring (seconds + minutes; default barrier 600s, master wait 5m):
 #   GRADLE_OPTS='-Delassandra.test.shard.barrier.wait.seconds=30 -Delassandra.test.master.wait.minutes=1' ./scripts/opensearch-sidecar-test-try.sh
 # Extra JVM args for forked test workers (passed through init.gradle):
@@ -166,6 +169,11 @@ if [[ "${SKIP_ELASSANDRA_TEST_CASSANDRA_SYS_PROPS:-}" != "1" ]]; then
 fi
 GRADLE_EXTRA_D+=("-Dtests.jvms=${OPENSEARCH_SIDECAR_TESTS_JVMS}")
 GRADLE_EXTRA_D+=("-Delassandra.test.storage_port=${ELASSANDRA_TEST_STORAGE_PORT:-17100}")
+# RandomizedTesting suite timeout (ms); "!" forces override of @TimeoutSuite. Default 5m unless disabled via 0.
+_OPENSEARCH_SUITE_TO="${OPENSEARCH_SIDECAR_SUITE_TIMEOUT_MS:-300000}"
+if [[ "${_OPENSEARCH_SUITE_TO}" != "0" ]]; then
+  GRADLE_EXTRA_D+=("-Dtests.timeoutSuite=${_OPENSEARCH_SUITE_TO}!")
+fi
 
 # Default: :server:cleanTest before :server:test so stale JUnit XML does not mask failures. While iterating on one
 # method, set OPENSEARCH_SIDECAR_SKIP_CLEAN_TEST=1 to skip clean and shorten each round (still compiles if sources changed).
