@@ -69,6 +69,8 @@ jobs:
           bash -n scripts/patch-opensearch-cluster-service-elassandra-stubs.sh
           bash -n scripts/patch-opensearch-cluster-service-elassandra-schema-stubs.sh
           bash -n scripts/patch-opensearch-node-elassandra-activate.sh
+          bash -n scripts/patch-opensearch-gateway-module-elassandra-bind.sh
+          bash -n scripts/patch-opensearch-node-elassandra-post-discovery-hooks.sh
           bash -n scripts/patch-opensearch-essingle-node-config-override.sh
           bash -n scripts/patch-opensearch-essingle-node-activate-createnode.sh
           bash -n scripts/patch-opensearch-server-test-runtime-netty4.sh
@@ -80,6 +82,7 @@ jobs:
           bash -n scripts/print-opensearch-port-pins.sh
           bash -n scripts/patch-opensearch-discovery-module-cluster-service-param.sh
           bash -n scripts/patch-opensearch-cluster-service-elassandra-full-stubs.sh
+          bash -n scripts/patch-opensearch-cluster-service-create-elastic-admin-keyspace.sh
           bash -n scripts/patch-opensearch-cluster-service-process-write-conditional.sh
           bash -n scripts/patch-opensearch-operation-routing-shard-routing-fix.sh
           bash -n scripts/patch-opensearch-document-parser-elassandra-delegates.sh
@@ -91,4 +94,6 @@ jobs:
           bash -n scripts/patch-opensearch-mapper-service-elassandra-types.sh
           bash -n scripts/patch-opensearch-discoverynode-inet.sh
           bash -n scripts/patch-opensearch-index-service-keyspace.sh
+          bash -n scripts/verify-elassandra-bootstrap-order.sh
+          ./scripts/verify-elassandra-bootstrap-order.sh
           ./scripts/print-opensearch-port-pins.sh

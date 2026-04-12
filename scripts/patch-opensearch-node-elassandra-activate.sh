@@ -1,5 +1,9 @@
 #!/usr/bin/env bash
 # Insert Elassandra-compatible Node#activate() (delegates to start) — required by org.apache.cassandra.service.ElassandraDaemon.
+#
+# Upstream OpenSearch Node.start() begins with if (!lifecycle.moveToStarted()) return this;
+# So ElassandraDaemon calling activate(); start() runs start() twice; the second call is a no-op.
+# The Elasticsearch fork in this repo uses a real two-phase Node (gateway in activate(), HTTP in start()).
 # Idempotent: skips if the Elassandra marker is already present.
 # Usage: ./scripts/patch-opensearch-node-elassandra-activate.sh "${OPENSEARCH_CLONE_DIR}"
 set -euo pipefail

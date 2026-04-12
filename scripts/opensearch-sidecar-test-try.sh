@@ -9,8 +9,17 @@
 #   JAVA_HOME=/path/to/jdk-11 ./scripts/opensearch-sidecar-test-try.sh
 # Narrow pattern (Gradle --tests); comma-separated runs multiple classes:
 #   OPENSEARCH_SIDECAR_TEST_PATTERN='org.elassandra.PendingClusterStateTests,org.elassandra.NamingTests' ./scripts/opensearch-sidecar-test-try.sh
+# Single test method (fastest iteration — one method, not the whole class):
+#   OPENSEARCH_SIDECAR_TEST_PATTERN='org.elassandra.ClusterSettingsTests.testIndexBadSearchStrategy' ./scripts/opensearch-sidecar-test-try.sh
+# Same from the OpenSearch clone (after prepare); omit :server:cleanTest while iterating to save minutes per run:
+#   OPENSEARCH_SIDECAR_SKIP_CLEAN_TEST=1 OPENSEARCH_SIDECAR_TEST_PATTERN='org.elassandra.FooTests.barMethod' ./scripts/opensearch-sidecar-test-try.sh
+# Or call Gradle directly (still needs -I init.gradle + cassandra -D… from GRADLE_OPTS / env):
+#   cd "$OPENSEARCH_CLONE_DIR" && ./gradlew -I "$ELASSANDRA_ROOT/gradle/opensearch-sidecar-elassandra.init.gradle" \
+#     :server:test --tests 'org.elassandra.ClusterSettingsTests.testIndexBadSearchStrategy' -Dtests.jvms=1 --no-daemon
 # Curated waves (overrides OPENSEARCH_SIDECAR_TEST_PATTERN when set):
 #   OPENSEARCH_SIDECAR_TEST_WAVE=0|1|2|3|4 ./scripts/opensearch-sidecar-test-try.sh
+# Fast-fail when debugging stuck gateway/ring (seconds + minutes; default barrier 600s, master wait 5m):
+#   GRADLE_OPTS='-Delassandra.test.shard.barrier.wait.seconds=30 -Delassandra.test.master.wait.minutes=1' ./scripts/opensearch-sidecar-test-try.sh
 # Extra JVM args for forked test workers (passed through init.gradle):
 #   ELASSANDRA_OPENSEARCH_TEST_EXTRA_JVM_ARGS='-Xmx2g' ./scripts/opensearch-sidecar-test-try.sh
 # Debug opaque worker exit 100: enables shutdown hook + default uncaught handler in ESSingleNodeTestCase static init.
@@ -20,8 +29,9 @@
 # When SM is off, checkExit never runs — use a discardable javaagent that retransforms java.lang.System#exit:
 #   ./scripts/build-exit-trace-javaagent.sh
 #   ELASSANDRA_OPENSEARCH_TEST_EXTRA_JVM_ARGS='-javaagent:/tmp/elassandra-system-exit-trace-agent.jar' OPENSEARCH_SIDECAR_TESTS_JVMS=1 ./scripts/opensearch-sidecar-test-try.sh
-# Limit parallel test JVMs (OpenSearch reads -Dtests.jvms; 1 can help debug Lucene/Gradle worker ordering):
-#   OPENSEARCH_SIDECAR_TESTS_JVMS=1 ./scripts/opensearch-sidecar-test-try.sh
+# Parallel test JVMs: OpenSearch defaults tests.jvms to CPU count; embedded Cassandra uses one storage_port
+# (17100) per machine — multiple forks bind the same port and fail. This script defaults OPENSEARCH_SIDECAR_TESTS_JVMS=1;
+# set OPENSEARCH_SIDECAR_TESTS_JVMS=N only if you assign distinct ports per fork (not supported here).
 #
 set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -40,6 +50,9 @@ export JAVA12_HOME="${JAVA12_HOME:-$JAVA_HOME}"
 # explicitly set (see upstream gradle/runtime-jdk-provision.gradle). Point it at the same JDK as the build
 # so Apple Silicon / offline CI does not fail resolving adoptium_11 artifacts.
 export RUNTIME_JAVA_HOME="${RUNTIME_JAVA_HOME:-$JAVA_HOME}"
+
+# See header: one test JVM avoids storage_port / embedded singleton contention across forks.
+OPENSEARCH_SIDECAR_TESTS_JVMS="${OPENSEARCH_SIDECAR_TESTS_JVMS:-1}"
 
 JAR="${ELASSANDRA_CASSANDRA_JAR:-}"
 if [[ -z "$JAR" ]]; then
@@ -130,11 +143,13 @@ if [[ -n "${OPENSEARCH_SIDECAR_TEST_WAVE:-}" ]]; then
 fi
 
 TEST_ARGS=()
+CLASS_LIST=()
 IFS=',' read -ra _PAT_ARR <<< "$PATTERN"
 for _c in "${_PAT_ARR[@]}"; do
   _t="${_c#"${_c%%[![:space:]]*}"}"
   _t="${_t%"${_t##*[![:space:]]}"}"
   [[ -z "$_t" ]] && continue
+  CLASS_LIST+=("$_t")
   TEST_ARGS+=(--tests "$_t")
 done
 
@@ -149,17 +164,33 @@ if [[ "${SKIP_ELASSANDRA_TEST_CASSANDRA_SYS_PROPS:-}" != "1" ]]; then
     GRADLE_EXTRA_D+=("-Dcassandra.config=${_CONFIG_URI}")
   fi
 fi
-if [[ -n "${OPENSEARCH_SIDECAR_TESTS_JVMS:-}" ]]; then
-  GRADLE_EXTRA_D+=("-Dtests.jvms=${OPENSEARCH_SIDECAR_TESTS_JVMS}")
-fi
+GRADLE_EXTRA_D+=("-Dtests.jvms=${OPENSEARCH_SIDECAR_TESTS_JVMS}")
 GRADLE_EXTRA_D+=("-Delassandra.test.storage_port=${ELASSANDRA_TEST_STORAGE_PORT:-17100}")
 
-# Always clean test outputs so embedded Cassandra failures are not masked by stale XML (Gradle incremental test).
-# Forked tests use the default test SecurityManager; patch-opensearch-bootstrap-for-testing-elassandra-embedded-sm.sh
-# grants AllPermission when cassandra.home is set so embedded Cassandra + Netty + JMX are not blocked.
+# Default: :server:cleanTest before :server:test so stale JUnit XML does not mask failures. While iterating on one
+# method, set OPENSEARCH_SIDECAR_SKIP_CLEAN_TEST=1 to skip clean and shorten each round (still compiles if sources changed).
+# (Do not use an empty bash array with set -u — "${_CLEAN[@]}" is "unbound" when _CLEAN=().)
+#
+# Waves 1–3 list multiple test classes; the embedded Elassandra/OpenSearch singleton in one JVM often breaks between
+# classes (cluster blocks, master discovery). Run one Gradle :server:test per class unless
+# OPENSEARCH_SIDECAR_BATCH_TEST_CLASSES=1 (old single-invocation behavior). Wave 4 uses org.elassandra.* — keep one run.
 set +e
-./gradlew "${GRADLE_EXTRA_D[@]}" -I "$INIT_GRADLE" :server:cleanTest :server:test "${TEST_ARGS[@]}" --no-daemon "$@"
-_gradle_rc=$?
+_gradle_rc=0
+GRADLE_CMD=(./gradlew "${GRADLE_EXTRA_D[@]}" -I "$INIT_GRADLE")
+if [[ "${OPENSEARCH_SIDECAR_SKIP_CLEAN_TEST:-}" != "1" ]]; then
+  GRADLE_CMD+=(:server:cleanTest)
+fi
+if [[ "${OPENSEARCH_SIDECAR_BATCH_TEST_CLASSES:-}" != "1" ]] && [[ "${OPENSEARCH_SIDECAR_TEST_WAVE:-}" =~ ^[123]$ ]] && [[ ${#CLASS_LIST[@]} -gt 1 ]]; then
+  for _cls in "${CLASS_LIST[@]}"; do
+    "${GRADLE_CMD[@]}" :server:test --tests "$_cls" --no-daemon "$@" || _gradle_rc=$?
+    if [[ "$_gradle_rc" -ne 0 ]]; then
+      break
+    fi
+    sleep 1
+  done
+else
+  "${GRADLE_CMD[@]}" :server:test "${TEST_ARGS[@]}" --no-daemon "$@" || _gradle_rc=$?
+fi
 set -e
 if [[ "$_gradle_rc" -ne 0 ]]; then
   echo "opensearch-sidecar-test-try: :server:test failed (exit $_gradle_rc)." >&2

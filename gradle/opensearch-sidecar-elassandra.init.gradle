@@ -241,10 +241,19 @@ gradle.projectsEvaluated {
             t.jvmArgs('-Delassandra.disable.lucene.mock.filesystem=true')
             // Embedded Cassandra + OpenSearch is heavy; upstream :server:test defaults to -Xmx512m which can OOM-exit the worker (Gradle reports exit 100).
             // Embedded Cassandra + OpenSearch single-node can exceed 1536m on Apple Silicon; OOM kills the worker (Gradle exit 100, SKIPPED).
-            t.jvmArgs('-Xmx3072m')
+            // Match -Xms to -Xmx to avoid heap resize pauses and BootstrapChecks WARN (initial != max).
+            t.jvmArgs('-Xms3072m', '-Xmx3072m')
+            // JAMM (Cassandra heap introspection) uses deep reflection into java.base — silences Illegal reflective access spam on JDK 11+.
+            t.jvmArgs('--add-opens', 'java.base/java.lang=ALL-UNNAMED')
+            t.jvmArgs('--add-opens', 'java.base/java.util=ALL-UNNAMED')
+            t.jvmArgs('--add-opens', 'java.base/java.util.concurrent=ALL-UNNAMED')
             // Lucene TestRuleLimitSysouts + verbose Cassandra/OpenSearch logging can exceed default limits; verbose disables strict sysout enforcement.
             t.jvmArgs('-Dtests.verbose=true')
             t.jvmArgs('--add-opens', 'java.base/jdk.internal.ref=ALL-UNNAMED')
+            // Cassandra FBUtilities / SyncUtil / GCInspector + JAMM: deep reflection into java.io / sun.nio.ch / java.nio.
+            t.jvmArgs('--add-opens', 'java.base/java.io=ALL-UNNAMED')
+            t.jvmArgs('--add-opens', 'java.base/sun.nio.ch=ALL-UNNAMED')
+            t.jvmArgs('--add-opens', 'java.base/java.nio=ALL-UNNAMED')
             def nettyProcs = System.getProperty('opensearch.set.netty.runtime.available.processors')
             if (nettyProcs != null) {
                 t.jvmArgs("-Dopensearch.set.netty.runtime.available.processors=${nettyProcs}")
