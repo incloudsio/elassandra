@@ -35,8 +35,10 @@ jobs:
           bash -n scripts/sync-elassandra-to-opensearch-sidecar.sh
           bash -n scripts/rewrite-elassandra-imports-for-opensearch.sh
           bash -n scripts/opensearch-sidecar-compile-try.sh
+          bash -n scripts/gradlew-elassandra-sidecar.sh
           bash -n scripts/opensearch-sidecar-prepare.sh
           bash -n scripts/opensearch-sidecar-test-try.sh
+          bash -n scripts/setup-script-permissions.sh
           bash -n ci/docker/opensearch-sidecar-debug/run.sh
           bash -n scripts/build-elassandra-cassandra-jar.sh
           bash -n scripts/sync-elassandra-fork-minimal-to-opensearch-sidecar.sh
@@ -75,6 +77,7 @@ jobs:
           bash -n scripts/patch-opensearch-essingle-node-activate-createnode.sh
           bash -n scripts/patch-opensearch-server-test-runtime-netty4.sh
           bash -n scripts/patch-opensearch-essingle-node-mock-fs-data-path.sh
+          bash -n scripts/patch-opensearch-essingle-node-disk-watermark.sh
           bash -n scripts/patch-opensearch-mappers-elassandra-cql-compat.sh
           bash -n scripts/overlay-elassandra-parsecontext-to-opensearch-sidecar.sh
           bash -n scripts/patch-org-elassandra-opensearch-elastic-secondary.sh
@@ -83,6 +86,8 @@ jobs:
           bash -n scripts/patch-opensearch-discovery-module-cluster-service-param.sh
           bash -n scripts/patch-opensearch-cluster-service-elassandra-full-stubs.sh
           bash -n scripts/patch-opensearch-cluster-service-create-elastic-admin-keyspace.sh
+          bash -n scripts/patch-opensearch-cluster-service-load-global-state.sh
+          bash -n scripts/install-elassandra-gateway-opensearch-sidecar.sh
           bash -n scripts/patch-opensearch-cluster-service-process-write-conditional.sh
           bash -n scripts/patch-opensearch-operation-routing-shard-routing-fix.sh
           bash -n scripts/patch-opensearch-document-parser-elassandra-delegates.sh

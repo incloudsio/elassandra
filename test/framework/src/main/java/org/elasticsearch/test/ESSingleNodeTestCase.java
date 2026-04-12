@@ -386,6 +386,7 @@ public abstract class ESSingleNodeTestCase extends ESTestCase {
                         //.put("script.indexed", "on")
                         //.put(EsExecutors.PROCESSORS, 1) // limit the number of threads created
                         .put("client.type", "node")
+                        .put("cluster.routing.allocation.disk.threshold_enabled", false)
                         //.put(InternalSettingsPreparer.IGNORE_SYSTEM_PROPERTIES_SETTING, true)
 
                         .put(settings)
