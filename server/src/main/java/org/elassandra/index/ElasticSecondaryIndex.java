@@ -128,6 +128,7 @@ import org.elasticsearch.common.geo.parsers.ShapeParser;
 import org.elasticsearch.common.lucene.BytesRefs;
 import org.elasticsearch.common.lucene.all.AllEntries;
 import org.elasticsearch.common.lucene.search.Queries;
+import org.elasticsearch.common.lucene.uid.Versions;
 import org.elasticsearch.common.settings.Setting;
 import org.elasticsearch.common.settings.Settings;
 import org.elasticsearch.common.xcontent.*;
@@ -229,6 +230,7 @@ public class ElasticSecondaryIndex implements Index {
     protected String typeName;
     protected Object[] readBeforeWriteLocks;
     protected AtomicBoolean needBuild;
+    private volatile Index registeredIndex;
 
     ElasticSecondaryIndex(ColumnFamilyStore baseCfs, org.apache.cassandra.schema.IndexMetadata indexDef) {
         this.baseCfs = baseCfs;
@@ -245,6 +247,11 @@ public class ElasticSecondaryIndex implements Index {
         }
         this.mappingInfoRef = new AtomicReference<>( state != null ? new ImmutableMappingInfo(state) : null);
         this.needBuild = new AtomicBoolean(!isBuilt());
+        this.registeredIndex = this;
+    }
+
+    void setRegisteredIndex(Index registeredIndex) {
+        this.registeredIndex = registeredIndex;
     }
 
     public static ElasticSecondaryIndex newElasticSecondaryIndex(ColumnFamilyStore baseCfs, org.apache.cassandra.schema.IndexMetadata indexDef) {
@@ -307,6 +314,13 @@ public class ElasticSecondaryIndex implements Index {
         } catch (ReflectiveOperationException e) {
             return true;
         }
+    }
+
+    @SuppressWarnings("unchecked")
+    private static Map<String, Object> mappingRoot(MappingMetaData mappingMetaData, String typeName) throws IOException {
+        Map<String, Object> mappingMap = mappingMetaData.getSourceAsMap();
+        Object typedMapping = mappingMap == null ? null : mappingMap.get(typeName);
+        return typedMapping instanceof Map ? (Map<String, Object>) typedMapping : mappingMap;
     }
 
     // reusable per thread context
@@ -861,7 +875,7 @@ public class ElasticSecondaryIndex implements Index {
                 this.type = mappingMetaData.type();
                 this.shardStarted = (shard() != null);
 
-                Map<String, Object> mappingMap = mappingMetaData.getSourceAsMap();
+                Map<String, Object> mappingMap = mappingRoot(mappingMetaData, this.type);
                 Map<String, Object> metaMap = (mappingMap == null) ? null : (Map<String, Object>) mappingMap.get("_meta");
 
                 this.version = ElassandraSecondaryIndexCompat.indexMetadataVersion(indexService);
@@ -1261,7 +1275,7 @@ public class ElasticSecondaryIndex implements Index {
                 }
 
                 try {
-                    Map<String, Object> mappingMap = mappingMetaData.getSourceAsMap();
+                    Map<String, Object> mappingMap = mappingRoot(mappingMetaData, typeName);
                     // #181 IndiceService is available when activated and before Node start.
                     IndicesService indicesService = clusterService.getIndicesService();
                     IndexService indexService = indicesService.indexService(indexMetaData.getIndex());
@@ -1269,7 +1283,7 @@ public class ElasticSecondaryIndex implements Index {
                         logger.error("indexService not available for [{}], ignoring", index);
                         continue;
                     }
-                    ImmutableIndexInfo indexInfo = new ImmutableIndexInfo(index, indexService, mappingMetaData, state.metaData(), true);
+                    ImmutableIndexInfo indexInfo = new ImmutableIndexInfo(index, indexService, mappingMetaData, state.metaData(), false);
                     indexList.add(indexInfo);
 
                     Map<String, Object> props = (Map<String, Object>) mappingMap.computeIfAbsent("properties", s -> new HashMap<>());
@@ -2185,7 +2199,9 @@ public class ElasticSecondaryIndex implements Index {
                         context.docMapper.routingFieldMapper().createField(context, partitionKey);
 
                     if (!indexInfo.versionLessEngine) {
-                        context.doc().add(DEFAULT_INTERNAL_VERSION);
+                        Field version = new NumericDocValuesField(VersionFieldMapper.NAME, -1L);
+                        context.version(version);
+                        context.doc().add(version);
                     }
 
                     // add all mapped fields to the current context.
@@ -2338,7 +2354,7 @@ public class ElasticSecondaryIndex implements Index {
                             parsedDoc,
                             SequenceNumbers.UNASSIGNED_SEQ_NO,
                             UNASSIGNED_PRIMARY_TERM,
-                            1L,
+                            Versions.MATCH_ANY,
                             VersionType.INTERNAL,
                             Engine.Operation.Origin.PRIMARY,
                             startTime,
@@ -2538,7 +2554,7 @@ public class ElasticSecondaryIndex implements Index {
     {
         needBuild.set(false);
         return () -> {
-            this.baseCfs.indexManager.initIndex(this);
+            this.baseCfs.indexManager.initIndex(registeredIndex);
             return null;
         };
     }
@@ -2561,12 +2577,13 @@ public class ElasticSecondaryIndex implements Index {
         ImmutableMappingInfo mappingInfo = mappingInfoRef.get();
         if (!isBuilt() &&
             !isBuilding() &&
+            !baseCfs.isEmpty() &&
             mappingInfo != null &&
             mappingInfo.hasAllShardStarted() &&
             needBuild.compareAndSet(true, false))
         {
             logger.info("start building secondary {}.{}.{}", baseCfs.keyspace.getName(), baseCfs.metadata.get().name, indexMetadata.name);
-            baseCfs.indexManager.initIndex(this);
+            baseCfs.indexManager.initIndex(registeredIndex);
         }
     }
 
@@ -2738,6 +2755,7 @@ public class ElasticSecondaryIndex implements Index {
 
     @Override
     public void register(IndexRegistry registry) {
+        registeredIndex = this;
         registry.registerIndex(this);
     }
 

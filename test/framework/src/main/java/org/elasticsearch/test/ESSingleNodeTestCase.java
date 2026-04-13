@@ -358,6 +358,11 @@ public abstract class ESSingleNodeTestCase extends ESTestCase {
             System.out.println("cassandra.storagedir="+System.getProperty("cassandra.storagedir"));
             System.out.println("logback.configurationFile="+System.getProperty("logback.configurationFile"));
 
+            if (System.getProperty("cassandra.custom_query_handler_class") == null) {
+                System.setProperty("cassandra.custom_query_handler_class", "org.elassandra.index.ElasticQueryHandler");
+            }
+            System.out.println("cassandra.custom_query_handler_class="+System.getProperty("cassandra.custom_query_handler_class"));
+
             DatabaseDescriptor.daemonInitialization();
             DatabaseDescriptor.createAllDirectories();
 
