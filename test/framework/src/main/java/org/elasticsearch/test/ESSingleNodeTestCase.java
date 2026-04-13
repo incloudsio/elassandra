@@ -606,9 +606,11 @@ public abstract class ESSingleNodeTestCase extends ESTestCase {
         super.tearDown();
         try {
             DeleteIndexRequestBuilder builder = ElassandraDaemon.instance.node().client().admin().indices().prepareDelete("*");
-            assertAcked(builder.get());
+            // Embedded Elassandra can start delete-index cleanup but never complete the client future; fail fast here
+            // so the real cleanup issue surfaces instead of consuming the entire randomized suite timeout.
+            assertAcked(builder.get(TimeValue.timeValueSeconds(120)));
 
-            MetaData metaData = client().admin().cluster().prepareState().get().getState().getMetaData();
+            MetaData metaData = client().admin().cluster().prepareState().get(TimeValue.timeValueSeconds(30)).getState().metaData();
             // Hamcrest assertThat throws AssertionError (not Exception). Embedded Cassandra/OpenSearch often leaves
             // default persistent settings or extra keyspaces until full cleanup — log and continue for suite stability.
             try {
@@ -790,6 +792,14 @@ public abstract class ESSingleNodeTestCase extends ESTestCase {
     }
 
     protected IndexService createIndex(String index, CreateIndexRequestBuilder createIndexRequestBuilder) {
+        Settings createIndexSettings = createIndexRequestBuilder.request().settings();
+        if (createIndexSettings.get(IndexMetaData.SETTING_NUMBER_OF_REPLICAS) == null) {
+            createIndexRequestBuilder.setSettings(
+                Settings.builder()
+                    .put(createIndexSettings)
+                    .put(IndexMetaData.SETTING_NUMBER_OF_REPLICAS, 0)
+            );
+        }
         // Default create index waits for active shard copies (ActiveShardsObserver + ClusterStateObserver). With
         // CassandraDiscovery / searchEnabled routing, that step can fail to converge and blocks get() until the
         // suite times out. We only need metadata + routing applied here; yellow/green is enforced below and in ensureGreen.

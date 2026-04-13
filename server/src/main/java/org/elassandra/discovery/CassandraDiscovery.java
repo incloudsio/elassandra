@@ -1038,6 +1038,10 @@ public class CassandraDiscovery extends AbstractLifecycleComponent implements Di
                 // publish local cluster state update (for blocks, nodes or routing update)
                 publishLocalUpdate(clusterChangedEvent, ackListener);
             }
+            // Elasticsearch master ack handling waits for an explicit commit signal in addition to node acks.
+            // Without this, acked cluster-state tasks can complete locally yet leave their client futures hanging
+            // until a separate client-side timeout fires.
+            ackListener.onCommit(TimeValue.timeValueNanos(System.nanoTime() - startTimeNS));
         } catch (Exception e) {
             TimeValue executionTime = TimeValue.timeValueMillis(Math.max(0, TimeValue.nsecToMSec(System.nanoTime() - startTimeNS)));
             StringBuilder sb = new StringBuilder("failed to execute cluster state update in ").append(executionTime)

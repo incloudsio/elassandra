@@ -218,6 +218,270 @@ if ML.exists():
         t = t.replace(needle, repl, 1)
     write_if_changed(ML, t)
 
+MSRV = root / "server/src/main/java/org/opensearch/index/mapper/MapperService.java"
+if MSRV.exists():
+    t = MSRV.read_text(encoding="utf-8")
+    if "ObjectMapper.DEFAULT_KEY" in t:
+        t = t.replace("ObjectMapper.DEFAULT_KEY", '"_key"')
+    if "public static String DISCOVER = \"discover\";" not in t:
+        extra_imports = [
+            ("import com.carrotsearch.hppc.cursors.ObjectCursor;\n", "import com.carrotsearch.hppc.cursors.ObjectCursor;\nimport com.google.common.collect.Iterables;\nimport com.google.common.collect.Maps;\n"),
+            ("import org.apache.logging.log4j.message.ParameterizedMessage;\n", """import org.apache.logging.log4j.message.ParameterizedMessage;
+import org.apache.cassandra.cql3.CQL3Type;
+import org.apache.cassandra.cql3.CQLFragmentParser;
+import org.apache.cassandra.cql3.ColumnIdentifier;
+import org.apache.cassandra.cql3.CqlParser;
+import org.apache.cassandra.cql3.QueryProcessor;
+import org.apache.cassandra.cql3.UntypedResultSet;
+import org.apache.cassandra.cql3.UntypedResultSet.Row;
+import org.apache.cassandra.db.marshal.AbstractType;
+import org.apache.cassandra.db.marshal.ListType;
+import org.apache.cassandra.db.marshal.MapType;
+import org.apache.cassandra.db.marshal.SetType;
+import org.apache.cassandra.db.marshal.UserType;
+import org.apache.cassandra.exceptions.ConfigurationException;
+import org.apache.cassandra.exceptions.SyntaxException;
+import org.apache.cassandra.schema.ColumnMetadata;
+import org.apache.cassandra.schema.KeyspaceMetadata;
+import org.apache.cassandra.schema.Schema;
+import org.apache.cassandra.schema.TableMetadata;
+import org.elassandra.cluster.SchemaManager;
+import org.elassandra.index.ElasticSecondaryIndex;
+"""),
+            ("import java.util.function.Supplier;\n", "import java.util.function.Supplier;\nimport java.util.regex.Pattern;\n"),
+        ]
+        for needle, repl in extra_imports:
+            if needle in t and repl not in t:
+                t = t.replace(needle, repl, 1)
+
+        anchor = """    public String keyspace() {
+        return getIndexMetadata().keyspace();
+    }
+
+    /** Elassandra: legacy per-type mapping names (single-type indices use {@link #SINGLE_MAPPING_NAME}). */
+"""
+        insert = """    public String keyspace() {
+        return getIndexMetadata().keyspace();
+    }
+
+    public void buildNativeOrUdtMapping(Map<String, Object> mapping, final AbstractType<?> type) throws IOException {
+        CQL3Type cql3type = type.asCQL3Type();
+        if (cql3type instanceof CQL3Type.Native) {
+            String esType = SchemaManager.cqlMapping.get(cql3type.toString());
+            if (esType != null) {
+                mapping.put("type", esType);
+            } else {
+                logger.error("CQL type " + cql3type.toString() + " not supported");
+                throw new IOException("CQL type " + cql3type.toString() + " not supported");
+            }
+        } else if (cql3type instanceof CQL3Type.UserDefined) {
+            UserType userType = (UserType) type;
+            mapping.put("type", ObjectMapper.NESTED_CONTENT_TYPE);
+            mapping.put(TypeParsers.CQL_STRUCT, "udt");
+            mapping.put(TypeParsers.CQL_UDT_NAME, userType.getNameAsString());
+            Map<String, Object> properties = Maps.newHashMap();
+            for (int i = 0; i < userType.size(); i++) {
+                Map<String, Object> fieldProps = Maps.newHashMap();
+                buildCollectionMapping(fieldProps, userType.type(i));
+                properties.put(userType.fieldNameAsString(i), fieldProps);
+            }
+            mapping.put("properties", properties);
+        }
+    }
+
+    private void buildCollectionMapping(Map<String, Object> mapping, final AbstractType<?> type) throws IOException {
+        if (type.isCollection()) {
+            if (type instanceof ListType) {
+                mapping.put(TypeParsers.CQL_COLLECTION, "list");
+                buildNativeOrUdtMapping(mapping, ((ListType<?>) type).getElementsType());
+            } else if (type instanceof SetType) {
+                mapping.put(TypeParsers.CQL_COLLECTION, "set");
+                buildNativeOrUdtMapping(mapping, ((SetType<?>) type).getElementsType());
+            } else if (type instanceof MapType) {
+                MapType<?, ?> mtype = (MapType<?, ?>) type;
+                if (mtype.getKeysType().asCQL3Type() == CQL3Type.Native.TEXT && (mtype.getValuesType().isUDT() || !mtype.getValuesType().isCollection())) {
+                    mapping.put(TypeParsers.CQL_COLLECTION, "singleton");
+                    mapping.put(TypeParsers.CQL_STRUCT, "opaque_map");
+                    mapping.put(TypeParsers.CQL_MANDATORY, Boolean.TRUE);
+                    mapping.put("type", ObjectMapper.NESTED_CONTENT_TYPE);
+
+                    Map<String, Object> properties = Maps.newHashMap();
+                    Map<String, Object> fieldProps = Maps.newHashMap();
+                    buildCollectionMapping(fieldProps, mtype.getValuesType());
+                    properties.put("_key", fieldProps);
+                    mapping.put("properties", properties);
+                } else {
+                    throw new IOException("Expecting a map<text,?>");
+                }
+            }
+        } else {
+            mapping.put(TypeParsers.CQL_COLLECTION, "singleton");
+            buildNativeOrUdtMapping(mapping, type);
+        }
+    }
+
+    /**
+     * Mapping property to discover mapping from CQL schema for columns matching the provided regular expression.
+     */
+    public static String DISCOVER = "discover";
+
+    public Map<String, Object> discoverTableMapping(final String type, Map<String, Object> mapping)
+        throws IOException, SyntaxException, ConfigurationException {
+        final String columnRegexp = (String) mapping.get(DISCOVER);
+        final String cfName = SchemaManager.typeToCfName(keyspace(), type);
+        if (columnRegexp != null) {
+            mapping.remove(DISCOVER);
+            Pattern pattern = Pattern.compile(columnRegexp);
+            Map<String, Object> properties = (Map<String, Object>) mapping.get("properties");
+            if (properties == null) {
+                properties = Maps.newHashMap();
+                mapping.put("properties", properties);
+            }
+            String ksName = keyspace();
+            KeyspaceMetadata ksm = Schema.instance.getKeyspaceMetadata(ksName);
+            try {
+                TableMetadata metadata = SchemaManager.getTableMetadata(ksName, cfName);
+                List<String> pkColNames = new ArrayList<String>(metadata.partitionKeyColumns().size() + metadata.clusteringColumns().size());
+                for (ColumnMetadata cd : Iterables.concat(metadata.partitionKeyColumns(), metadata.clusteringColumns())) {
+                    pkColNames.add(cd.name.toString());
+                }
+
+                UntypedResultSet result = QueryProcessor.executeOnceInternal(
+                    "SELECT column_name, type FROM system_schema.columns WHERE keyspace_name=? and table_name=?",
+                    new Object[] { keyspace(), cfName }
+                );
+                for (Row row : result) {
+                    String columnName = row.getString("column_name");
+                    if (row.has("type")
+                        && pattern.matcher(columnName).matches()
+                        && columnName.startsWith("_") == false
+                        && ElasticSecondaryIndex.ES_QUERY.equals(columnName) == false
+                        && ElasticSecondaryIndex.ES_OPTIONS.equals(columnName) == false) {
+                        Map<String, Object> props = (Map<String, Object>) properties.get(columnName);
+                        if (props == null) {
+                            props = Maps.newHashMap();
+                            properties.put(columnName, props);
+                        }
+                        int pkOrder = pkColNames.indexOf(columnName);
+                        if (pkOrder >= 0) {
+                            props.put(TypeParsers.CQL_PRIMARY_KEY_ORDER, pkOrder);
+                            if (pkOrder < metadata.partitionKeyColumns().size()) {
+                                props.put(TypeParsers.CQL_PARTITION_KEY, true);
+                            }
+                        }
+                        ColumnMetadata colDef = metadata.getColumn(new ColumnIdentifier(columnName, true));
+                        if (colDef.isStatic()) {
+                            props.put(TypeParsers.CQL_STATIC_COLUMN, true);
+                        }
+                        if (colDef.clusteringOrder() == ColumnMetadata.ClusteringOrder.DESC) {
+                            props.put(TypeParsers.CQL_CLUSTERING_KEY_DESC, true);
+                        }
+                        CQL3Type.Raw rawType = CQLFragmentParser.parseAny(CqlParser::comparatorType, row.getString("type"), "CQL type");
+                        AbstractType<?> atype = rawType.prepare(ksm.name, ksm.types).getType();
+                        buildCollectionMapping(props, atype);
+                    }
+                }
+                if (logger.isDebugEnabled()) {
+                    logger.debug("mapping {} : {}", cfName, mapping);
+                }
+                return mapping;
+            } catch (IOException | SyntaxException | ConfigurationException e) {
+                logger.warn("Failed to build elasticsearch mapping " + ksName + "." + cfName, e);
+                throw e;
+            }
+        }
+        return mapping;
+    }
+
+    /** Elassandra: legacy per-type mapping names (single-type indices use {@link #SINGLE_MAPPING_NAME}). */
+"""
+        if anchor not in t:
+            print("MapperService.java: keyspace anchor not found (for discover mapping support)", file=sys.stderr)
+            sys.exit(1)
+        t = t.replace(anchor, insert, 1)
+    write_if_changed(MSRV, t)
+
+DMP = root / "server/src/main/java/org/opensearch/index/mapper/DocumentMapperParser.java"
+if DMP.exists():
+    t = DMP.read_text(encoding="utf-8")
+    if "import org.opensearch.common.logging.Loggers;\n" in t:
+        t = t.replace("import org.opensearch.common.logging.Loggers;\n", "import org.apache.logging.log4j.LogManager;\n")
+    if "Loggers.getLogger(DocumentMapperParser.class)" in t:
+        t = t.replace("Loggers.getLogger(DocumentMapperParser.class)", "LogManager.getLogger(DocumentMapperParser.class)")
+    if "discoverTableMapping(mapping.v1(), mapping.v2())" not in t:
+        import_anchors = [
+            ("import org.opensearch.Version;\n", "import org.opensearch.Version;\nimport org.apache.cassandra.exceptions.ConfigurationException;\nimport org.apache.cassandra.exceptions.SyntaxException;\nimport org.apache.logging.log4j.Logger;\n"),
+            ("import org.opensearch.common.compress.CompressedXContent;\n", "import org.opensearch.common.compress.CompressedXContent;\nimport org.apache.logging.log4j.LogManager;\n"),
+            ("import java.util.HashMap;\n", "import java.io.IOException;\nimport java.util.HashMap;\n"),
+        ]
+        for needle, repl in import_anchors:
+            if needle in t and repl not in t:
+                t = t.replace(needle, repl, 1)
+
+        logger_anchor = """    private final Supplier<QueryShardContext> queryShardContextSupplier;
+
+    private final RootObjectMapper.TypeParser rootObjectTypeParser = new RootObjectMapper.TypeParser();
+"""
+        logger_insert = """    private final Supplier<QueryShardContext> queryShardContextSupplier;
+    private static final Logger logger = Loggers.getLogger(DocumentMapperParser.class);
+
+    private final RootObjectMapper.TypeParser rootObjectTypeParser = new RootObjectMapper.TypeParser();
+"""
+        if logger_anchor not in t:
+            print("DocumentMapperParser.java: logger anchor not found", file=sys.stderr)
+            sys.exit(1)
+        t = t.replace(logger_anchor, logger_insert, 1)
+
+        old_tail = """        if (type == null || type.equals(rootName) || mapperService.resolveDocumentType(type).equals(rootName)) {
+            mapping = new Tuple<>(rootName, (Map<String, Object>) root.get(rootName));
+        } else {
+            mapping = new Tuple<>(type, root);
+        }
+        return mapping;
+"""
+        new_tail = """        if (type == null || type.equals(rootName) || mapperService.resolveDocumentType(type).equals(rootName)) {
+            mapping = new Tuple<>(rootName, (Map<String, Object>) root.get(rootName));
+        } else {
+            mapping = new Tuple<>(type, root);
+        }
+
+        try {
+            this.mapperService.discoverTableMapping(mapping.v1(), mapping.v2());
+        } catch (SyntaxException | ConfigurationException | IOException e) {
+            logger.error("Failed to expand mapping", e);
+        }
+        return mapping;
+"""
+        if old_tail not in t:
+            print("DocumentMapperParser.java: extractMapping tail anchor not found", file=sys.stderr)
+            sys.exit(1)
+        t = t.replace(old_tail, new_tail, 1)
+    write_if_changed(DMP, t)
+
+PFM = root / "server/src/main/java/org/opensearch/index/mapper/ParametrizedFieldMapper.java"
+if PFM.exists():
+    t = PFM.read_text(encoding="utf-8")
+    if 'if (parameter == null && propName.startsWith("cql_")) {' not in t:
+        needle = """                } else {
+                    parameter = paramsMap.get(propName);
+                }
+                if (parameter == null) {
+"""
+        repl = """                } else {
+                    parameter = paramsMap.get(propName);
+                }
+                if (parameter == null && propName.startsWith("cql_")) {
+                    iterator.remove();
+                    continue;
+                }
+                if (parameter == null) {
+"""
+        if needle not in t:
+            print("ParametrizedFieldMapper.java: cql_* ignore anchor not found", file=sys.stderr)
+            sys.exit(1)
+        t = t.replace(needle, repl, 1)
+    write_if_changed(PFM, t)
+
 # Stock OpenSearch tests that construct ObjectMapper directly need the Elassandra CQL constructor args.
 FAV = root / "server/src/test/java/org/opensearch/index/mapper/FieldAliasMapperValidationTests.java"
 if FAV.exists():

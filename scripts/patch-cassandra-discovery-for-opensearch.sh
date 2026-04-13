@@ -35,78 +35,49 @@ fi
 perl -i -pe 's/discoverySettings\.getNoMasterBlock\(\)/NoMasterBlockService.NO_MASTER_BLOCK_ALL/g' "$CD"
 
 python3 << PY
+import re
 import sys
 from pathlib import Path
+
 path = Path("$DEST/server/src/main/java/org/elassandra/discovery/CassandraDiscovery.java")
 text = path.read_text(encoding="utf-8")
-old = r'''    @Override
-    public void publish(final ClusterChangedEvent clusterChangedEvent, final AckListener ackListener) {
-        ClusterState previousClusterState = clusterChangedEvent.previousState();
-        ClusterState newClusterState = clusterChangedEvent.state();
+original = text
 
-        long startTimeNS = System.nanoTime();
-        try {
-            if (clusterChangedEvent.schemaUpdate().updated()) {
-                // update and broadcast the metadata through a CQL schema update + ack from participant nodes
-                if (localNode().getId().equals(newClusterState.metadata().clusterUUID())) {
-                    publishAsCoordinator(clusterChangedEvent, ackListener);
-                } else {
-                    publishAsParticipator(clusterChangedEvent, ackListener);
-                }
-            } else {
-                // publish local cluster state update (for blocks, nodes or routing update)
-                publishLocalUpdate(clusterChangedEvent, ackListener);
-            }
-        } catch (Exception e) {
-            TimeValue executionTime = TimeValue.timeValueMillis(Math.max(0, TimeValue.nsecToMSec(System.nanoTime() - startTimeNS)));
-            StringBuilder sb = new StringBuilder("failed to execute cluster state update in ").append(executionTime)
-                    .append(", state:\nversion [")
-                    .append(previousClusterState.version()).
-                    append("], source [").append(clusterChangedEvent.source()).append("]\n");
-            logger.warn(sb.toString(), e);
-            throw new OpenSearchException(e);
-        }
-    }'''
-
-new = r'''    @Override
-    public void publish(
+old_sig = "public void publish(final ClusterChangedEvent clusterChangedEvent, final AckListener ackListener) {"
+new_sig = """public void publish(
         final ClusterChangedEvent clusterChangedEvent,
         final org.opensearch.action.ActionListener<Void> publishListener,
-        final AckListener ackListener) {
-        ClusterState previousClusterState = clusterChangedEvent.previousState();
-        ClusterState newClusterState = clusterChangedEvent.state();
+        final AckListener ackListener) {"""
 
-        long startTimeNS = System.nanoTime();
-        try {
-            if (clusterChangedEvent.schemaUpdate().updated()) {
-                // update and broadcast the metadata through a CQL schema update + ack from participant nodes
-                if (localNode().getId().equals(newClusterState.metadata().clusterUUID())) {
-                    publishAsCoordinator(clusterChangedEvent, ackListener);
-                } else {
-                    publishAsParticipator(clusterChangedEvent, ackListener);
-                }
-            } else {
-                // publish local cluster state update (for blocks, nodes or routing update)
-                publishLocalUpdate(clusterChangedEvent, ackListener);
-            }
-            publishListener.onResponse(null);
-        } catch (Exception e) {
-            TimeValue executionTime = TimeValue.timeValueMillis(Math.max(0, TimeValue.nsecToMSec(System.nanoTime() - startTimeNS)));
-            StringBuilder sb = new StringBuilder("failed to execute cluster state update in ").append(executionTime)
-                    .append(", state:\nversion [")
-                    .append(previousClusterState.version()).
-                    append("], source [").append(clusterChangedEvent.source()).append("]\n");
-            logger.warn(sb.toString(), e);
-            publishListener.onFailure(e);
-            throw new OpenSearchException(e);
-        }
-    }'''
+if new_sig not in text:
+    if old_sig not in text:
+        print("patch-cassandra-discovery: publish() signature not found", file=sys.stderr)
+        sys.exit(1)
+    text = text.replace(old_sig, new_sig, 1)
 
-if old not in text:
-    print("patch-cassandra-discovery: expected publish() block not found", file=sys.stderr)
-    sys.exit(1)
-path.write_text(text.replace(old, new, 1), encoding="utf-8")
-print("Patched publish(...):", path)
+if "publishListener.onResponse(null);" not in text:
+    commit_line = "            ackListener.onCommit(TimeValue.timeValueNanos(System.nanoTime() - startTimeNS));"
+    if commit_line in text:
+        text = text.replace(commit_line, commit_line + "\n            publishListener.onResponse(null);", 1)
+    else:
+        response_line = "            publishListener.onResponse(null);"
+        catch_marker = "        } catch (Exception e) {"
+        if response_line not in text and catch_marker in text:
+            text = text.replace(catch_marker, "            publishListener.onResponse(null);\n" + catch_marker, 1)
+
+failure_line = "            publishListener.onFailure(e);"
+if failure_line not in text:
+    pattern = re.compile(r'(            logger\.warn\(sb\.toString\(\), e\);\n)(            throw new OpenSearchException\(e\);)')
+    text, count = pattern.subn(r'\1            publishListener.onFailure(e);\n\2', text, count=1)
+    if count == 0:
+        print("patch-cassandra-discovery: failed to wire publishListener.onFailure", file=sys.stderr)
+        sys.exit(1)
+
+if text == original:
+    print("CassandraDiscovery publish(...) already OpenSearch-compatible:", path)
+else:
+    path.write_text(text, encoding="utf-8")
+    print("Patched publish(...):", path)
 PY
 
 echo "Patched CassandraDiscovery for OpenSearch: $CD"
