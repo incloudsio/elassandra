@@ -129,8 +129,8 @@ gradle.projectsEvaluated {
         api 'org.slf4j:slf4j-api:1.7.36'
         api "org.apache.httpcomponents:httpclient:${httpclient}"
         api "org.apache.httpcomponents:httpcore:${httpcore}"
-        // Elassandra tests (CompactionTests) use com.codahale.metrics via Cassandra metrics registry
-        api 'com.codahale.metrics:metrics-core:3.0.2'
+        // Cassandra 4.0 metrics extend Dropwizard Snapshot's no-arg base class, which is absent in 3.0.2.
+        api 'io.dropwizard.metrics:metrics-core:3.1.0'
         api 'com.boundary:high-scale-lib:1.0.6'
         api 'com.github.jbellis:jamm:0.3.0'
         api 'org.lz4:lz4-java:1.7.1'
@@ -153,6 +153,11 @@ gradle.projectsEvaluated {
             if (c != null) {
                 c.resolutionStrategy {
                     force 'org.yaml:snakeyaml:1.26'
+                    eachDependency { details ->
+                        if (details.requested.group == 'com.codahale.metrics' && details.requested.name == 'metrics-core') {
+                            details.useTarget 'io.dropwizard.metrics:metrics-core:3.1.0'
+                        }
+                    }
                     if (cn == 'testCompileClasspath') {
                         // OpenSearch pins JNA 5.5.0 (x86-only darwin lib); Apple Silicon needs darwin-aarch64 in 5.12+.
                         force 'net.java.dev.jna:jna:5.13.0'
@@ -166,6 +171,11 @@ gradle.projectsEvaluated {
                 c.resolutionStrategy {
                     force 'org.yaml:snakeyaml:1.26'
                     force "com.google.guava:guava:${guava}"
+                    eachDependency { details ->
+                        if (details.requested.group == 'com.codahale.metrics' && details.requested.name == 'metrics-core') {
+                            details.useTarget 'io.dropwizard.metrics:metrics-core:3.1.0'
+                        }
+                    }
                     if (cn == 'testRuntimeClasspath') {
                         force 'net.java.dev.jna:jna:5.13.0'
                     }

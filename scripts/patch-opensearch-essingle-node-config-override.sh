@@ -31,6 +31,12 @@ insert = """        if (ElassandraDaemon.instance == null) {
             System.out.println("cassandra.config.loader="+System.getProperty("cassandra.config.loader"));
             System.out.println("cassandra.config="+System.getProperty("cassandra.config"));
             System.out.println("cassandra.config.dir="+System.getProperty("cassandra.config.dir"));
+            if (System.getProperty("cassandra-rackdc.properties") == null) {
+                String configDir = System.getProperty("cassandra.config.dir");
+                if (configDir != null) {
+                    System.setProperty("cassandra-rackdc.properties", new java.io.File(configDir, "cassandra-rackdc.properties").toURI().toString());
+                }
+            }
             System.out.println("cassandra-rackdc.properties="+System.getProperty("cassandra-rackdc.properties"));
             System.out.println("cassandra.storagedir="+System.getProperty("cassandra.storagedir"));
             System.out.println("logback.configurationFile="+System.getProperty("logback.configurationFile"));
@@ -56,7 +62,7 @@ insert = """        if (ElassandraDaemon.instance == null) {
                     c.hints_directory = new java.io.File(home, "hints").getPath();
                     c.storage_port = Integer.getInteger("elassandra.test.storage_port", 17100);
                     c.partitioner = "org.apache.cassandra.dht.Murmur3Partitioner";
-                    c.endpoint_snitch = "org.apache.cassandra.locator.SimpleSnitch";
+                    c.endpoint_snitch = "org.apache.cassandra.locator.GossipingPropertyFileSnitch";
                     java.util.Map<String, String> seedParams = java.util.Collections.singletonMap("seeds", "127.0.0.1");
                     c.seed_provider = new org.apache.cassandra.config.ParameterizedClass(
                         "org.apache.cassandra.locator.SimpleSeedProvider",

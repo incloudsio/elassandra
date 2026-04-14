@@ -515,7 +515,7 @@ public final class DocumentParser {
             } else if (dynamic == ObjectMapper.Dynamic.TRUE) {
                 Mapper.Builder builder = context.root().findTemplateBuilder(context, currentFieldName, XContentFieldType.OBJECT);
                 if (builder == null) {
-                    builder = new ObjectMapper.Builder(currentFieldName).enabled(true);
+                    builder = new ObjectMapper.Builder(currentFieldName).enabled(true).cqlCollection(CqlMapper.CqlCollection.SINGLETON);
                 }
                 Mapper.BuilderContext builderContext = new Mapper.BuilderContext(context.indexSettings().getSettings(), context.path());
                 objectMapper = builder.build(builderContext);
@@ -948,7 +948,7 @@ public final class DocumentParser {
                     case TRUE:
                         Mapper.Builder builder = context.root().findTemplateBuilder(context, paths[i], XContentFieldType.OBJECT);
                         if (builder == null) {
-                            builder = new ObjectMapper.Builder(paths[i]).enabled(true);
+                            builder = new ObjectMapper.Builder(paths[i]).enabled(true).cqlCollection(CqlMapper.CqlCollection.SINGLETON);
                         }
                         Mapper.BuilderContext builderContext = new Mapper.BuilderContext(context.indexSettings().getSettings(),
                             context.path());

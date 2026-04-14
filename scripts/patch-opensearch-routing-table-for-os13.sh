@@ -35,6 +35,48 @@ else:
     sys.exit(1)
 PY
 
+python3 - "$RT" <<'PY'
+from pathlib import Path
+import sys
+
+path = Path(sys.argv[1])
+t = path.read_text(encoding="utf-8")
+
+full_old = """        for(ObjectObjectCursor<String, IndexMetadata> entry : clusterState.metadata().getIndices()) {\n            IndexRoutingTable.Builder indexRoutingTableBuilder = new IndexRoutingTable.Builder(entry.value.getIndex(), clusterService, clusterState);\n            if (indexRoutingTableBuilder.shards.size() > 0)\n                indicesRoutingMap.put(indexRoutingTableBuilder.index.getName(), indexRoutingTableBuilder.build());\n        }\n"""
+full_old_fallback = """        for(ObjectObjectCursor<String, IndexMetadata> entry : clusterState.metadata().getIndices()) {\n            IndexRoutingTable.Builder indexRoutingTableBuilder = new IndexRoutingTable.Builder(entry.value.getIndex(), clusterService, clusterState);\n            if (indexRoutingTableBuilder.shards.size() > 0) {\n                indicesRoutingMap.put(indexRoutingTableBuilder.index.getName(), indexRoutingTableBuilder.build());\n            } else {\n                IndexRoutingTable existing = clusterState.routingTable().index(entry.value.getIndex());\n                if (existing != null) {\n                    indicesRoutingMap.put(existing.getIndex().getName(), existing);\n                }\n            }\n        }\n"""
+full_new = """        for(ObjectObjectCursor<String, IndexMetadata> entry : clusterState.metadata().getIndices()) {\n            IndexRoutingTable existing = clusterState.routingTable().index(entry.value.getIndex());\n            try {\n                IndexRoutingTable.Builder indexRoutingTableBuilder = new IndexRoutingTable.Builder(entry.value.getIndex(), clusterService, clusterState);\n                if (indexRoutingTableBuilder.shards.size() > 0) {\n                    indicesRoutingMap.put(indexRoutingTableBuilder.index.getName(), indexRoutingTableBuilder.build());\n                } else if (existing != null) {\n                    indicesRoutingMap.put(existing.getIndex().getName(), existing);\n                }\n            } catch (RuntimeException e) {\n                if (existing == null) {\n                    throw e;\n                }\n                indicesRoutingMap.put(existing.getIndex().getName(), existing);\n            }\n        }\n"""
+
+many_old = """        for(Index index : indices) {\n            IndexRoutingTable.Builder indexRoutingTableBuilder = new IndexRoutingTable.Builder(index, clusterService, clusterState);\n            if (indexRoutingTableBuilder.shards.size() > 0)\n                indicesRoutingMap.put(indexRoutingTableBuilder.index.getName(), indexRoutingTableBuilder.build());\n        }\n"""
+many_old_fallback = """        for(Index index : indices) {\n            IndexRoutingTable.Builder indexRoutingTableBuilder = new IndexRoutingTable.Builder(index, clusterService, clusterState);\n            if (indexRoutingTableBuilder.shards.size() > 0) {\n                indicesRoutingMap.put(indexRoutingTableBuilder.index.getName(), indexRoutingTableBuilder.build());\n            } else {\n                IndexRoutingTable existing = clusterState.routingTable().index(index);\n                if (existing != null) {\n                    indicesRoutingMap.put(existing.getIndex().getName(), existing);\n                }\n            }\n        }\n"""
+many_new = """        for(Index index : indices) {\n            IndexRoutingTable existing = clusterState.routingTable().index(index);\n            try {\n                IndexRoutingTable.Builder indexRoutingTableBuilder = new IndexRoutingTable.Builder(index, clusterService, clusterState);\n                if (indexRoutingTableBuilder.shards.size() > 0) {\n                    indicesRoutingMap.put(indexRoutingTableBuilder.index.getName(), indexRoutingTableBuilder.build());\n                } else if (existing != null) {\n                    indicesRoutingMap.put(existing.getIndex().getName(), existing);\n                }\n            } catch (RuntimeException e) {\n                if (existing == null) {\n                    throw e;\n                }\n                indicesRoutingMap.put(existing.getIndex().getName(), existing);\n            }\n        }\n"""
+
+one_old = """        if (indexMetaData != null) {\n            IndexRoutingTable.Builder indexRoutingTableBuilder = new IndexRoutingTable.Builder(index, clusterService, clusterState);\n            if (indexRoutingTableBuilder.shards.size() > 0)\n                indicesRoutingMap.put(index.getName(), indexRoutingTableBuilder.build());\n        }\n"""
+one_old_fallback = """        if (indexMetaData != null) {\n            IndexRoutingTable.Builder indexRoutingTableBuilder = new IndexRoutingTable.Builder(index, clusterService, clusterState);\n            if (indexRoutingTableBuilder.shards.size() > 0) {\n                indicesRoutingMap.put(index.getName(), indexRoutingTableBuilder.build());\n            } else {\n                IndexRoutingTable existing = clusterState.routingTable().index(index);\n                if (existing != null) {\n                    indicesRoutingMap.put(existing.getIndex().getName(), existing);\n                }\n            }\n        }\n"""
+one_new = """        if (indexMetaData != null) {\n            IndexRoutingTable existing = clusterState.routingTable().index(index);\n            try {\n                IndexRoutingTable.Builder indexRoutingTableBuilder = new IndexRoutingTable.Builder(index, clusterService, clusterState);\n                if (indexRoutingTableBuilder.shards.size() > 0) {\n                    indicesRoutingMap.put(index.getName(), indexRoutingTableBuilder.build());\n                } else if (existing != null) {\n                    indicesRoutingMap.put(existing.getIndex().getName(), existing);\n                }\n            } catch (RuntimeException e) {\n                if (existing == null) {\n                    throw e;\n                }\n                indicesRoutingMap.put(existing.getIndex().getName(), existing);\n            }\n        }\n"""
+
+changed = False
+for old, new in (
+    (full_old, full_new),
+    (full_old_fallback, full_new),
+    (many_old, many_new),
+    (many_old_fallback, many_new),
+    (one_old, one_new),
+    (one_old_fallback, one_new),
+):
+    if old in t:
+        t = t.replace(old, new, 1)
+        changed = True
+
+if changed:
+    path.write_text(t, encoding="utf-8")
+    print("Patched RoutingTable build() to preserve existing routes →", path)
+elif "catch (RuntimeException e)" in t and "IndexRoutingTable existing = clusterState.routingTable().index(entry.value.getIndex());" in t:
+    print("RoutingTable build() route preservation already present:", path)
+else:
+    print("patch-opensearch-routing-table-for-os13: route preservation anchors not found", file=sys.stderr)
+    sys.exit(1)
+PY
+
 [[ -f "$IRT" ]] || exit 0
 python3 - "$IRT" <<'PY'
 from pathlib import Path

@@ -17,9 +17,35 @@ new = "set.add(clusterState.routingTable().shardRoutingTable(index, calculateSca
 if old not in text:
     if new in text:
         print("OperationRouting computeTargetedShards already fixed:", path)
-        raise SystemExit(0)
-    print("patch: expected OperationRouting line not found", file=sys.stderr)
-    sys.exit(1)
-path.write_text(text.replace(old, new, 1), encoding="utf-8")
-print("Patched OperationRouting shardRoutingTable call →", path)
+    else:
+        print("patch: expected OperationRouting line not found", file=sys.stderr)
+        sys.exit(1)
+else:
+    text = text.replace(old, new, 1)
+
+fallback_old = """            final IndexRoutingTable indexRouting = new IndexRoutingTable.Builder(indexMetaData.getIndex(), this.clusterService, clusterState, preference, src).build();
+"""
+fallback_new = """            final IndexRoutingTable.Builder indexRoutingBuilder =
+                new IndexRoutingTable.Builder(indexMetaData.getIndex(), this.clusterService, clusterState, preference, src);
+            final IndexRoutingTable indexRouting;
+            if (indexRoutingBuilder.shards.size() > 0) {
+                indexRouting = indexRoutingBuilder.build();
+            } else {
+                indexRouting = clusterState.routingTable().index(indexMetaData.getIndex());
+                if (indexRouting == null) {
+                    continue;
+                }
+            }
+"""
+if fallback_new not in text:
+    if fallback_old in text:
+        text = text.replace(fallback_old, fallback_new, 1)
+    elif "final IndexRoutingTable indexRouting = indexRoutingTable(clusterState, index);" in text:
+        print("OperationRouting already uses cluster-state routing table:", path)
+    else:
+        print("patch: expected OperationRouting fallback block not found", file=sys.stderr)
+        sys.exit(1)
+
+path.write_text(text, encoding="utf-8")
+print("Patched OperationRouting shard routing fallbacks →", path)
 PY

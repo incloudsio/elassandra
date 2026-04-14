@@ -29,10 +29,7 @@ if ! grep -q 'boolean metaDataChanged()' "$DST"; then
   perl -i -0pe 's/(public boolean metadataChanged\(\) \{\s*return state\.metadata\(\) != previousState\.metadata\(\);\s*\})/$1\n\n    public boolean metaDataChanged() {\n        return metadataChanged();\n    }/s' "$DST"
 fi
 
-# OpenSearch 1.3 removed ClusterStateTaskConfig.SchemaUpdate; keep the Elassandra enum on ClusterChangedEvent.
-perl -ni -e 'print unless /^import org\.opensearch\.cluster\.ClusterStateTaskConfig\.SchemaUpdate;/' "$DST"
-perl -i -0pe '
-  s/public class ClusterChangedEvent \{/public class ClusterChangedEvent {\n\n    public enum SchemaUpdate {\n        NO_UPDATE,\n        UPDATE,\n        UPDATE_ASYNCHRONOUS;\n\n        public boolean updated() {\n            return this.ordinal() != 0;\n        }\n    }\n/s;
-' "$DST"
+# The sidecar now restores ClusterStateTaskConfig.SchemaUpdate, so keep the rewritten import from
+# the Elassandra source rather than re-declaring a duplicate enum on ClusterChangedEvent.
 
 echo "Installed Elassandra ClusterChangedEvent (rewritten) → $DST"

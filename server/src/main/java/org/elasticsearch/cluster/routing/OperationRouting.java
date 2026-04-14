@@ -139,7 +139,17 @@ public class OperationRouting {
         // we use set here and not list since we might get duplicates
         for (String index : concreteIndices) {
             final IndexMetaData indexMetaData = indexMetaData(clusterState, index);
-            final IndexRoutingTable indexRouting = new IndexRoutingTable.Builder(indexMetaData.getIndex(), this.clusterService, clusterState, preference, src).build();
+            final IndexRoutingTable.Builder indexRoutingBuilder =
+                new IndexRoutingTable.Builder(indexMetaData.getIndex(), this.clusterService, clusterState, preference, src);
+            final IndexRoutingTable indexRouting;
+            if (indexRoutingBuilder.shards.size() > 0) {
+                indexRouting = indexRoutingBuilder.build();
+            } else {
+                indexRouting = clusterState.routingTable().index(indexMetaData.getIndex());
+                if (indexRouting == null) {
+                    continue;
+                }
+            }
 
             // ignore routing if types is empty.
             final Set<String> effectiveRouting = routing.get(index);

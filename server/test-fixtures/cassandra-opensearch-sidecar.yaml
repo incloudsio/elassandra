@@ -25,7 +25,10 @@ seed_provider:
     - class_name: org.apache.cassandra.locator.SimpleSeedProvider
       parameters:
           - seeds: "127.0.0.1"
-endpoint_snitch: SimpleSnitch
+# Match the existing test fixture `conf/cassandra-rackdc.properties` (dc=DC1, rack=r1)
+# so tests that create NetworkTopologyStrategy keyspaces with explicit DC names behave
+# like the embedded Elassandra test environment.
+endpoint_snitch: GossipingPropertyFileSnitch
 incremental_backups: false
 auto_snapshot: false
 write_request_timeout_in_ms: 30000

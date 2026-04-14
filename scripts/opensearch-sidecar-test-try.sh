@@ -103,6 +103,8 @@ if [[ "${SKIP_ELASSANDRA_TEST_CASSANDRA_SYS_PROPS:-}" != "1" ]]; then
   rm -rf "${_ABS}/data" "${_ABS}/commitlog" "${_ABS}/saved_caches" "${_ABS}/hints" 2>/dev/null || true
   mkdir -p "${_ABS}/data" "${_ABS}/data/hints" "${_ABS}/commitlog" "${_ABS}/saved_caches" "${_ABS}/hints" 2>/dev/null || true
   _CONFIG_URI=""
+  _CONFIG_DIR=""
+  _RACKDC_URI=""
   if [[ -n "${ELASSANDRA_TEST_CASSANDRA_CONFIG:-}" ]]; then
     _CF="$(cd "$(dirname "${ELASSANDRA_TEST_CASSANDRA_CONFIG}")" && pwd)/$(basename "${ELASSANDRA_TEST_CASSANDRA_CONFIG}")"
     _CONFIG_URI="file://${_CF}"
@@ -112,8 +114,20 @@ if [[ "${SKIP_ELASSANDRA_TEST_CASSANDRA_SYS_PROPS:-}" != "1" ]]; then
   elif [[ -f "$CASS_TEST_ROOT/conf/cassandra.yaml" ]]; then
     _CONFIG_URI="file://${_ABS}/conf/cassandra.yaml"
   fi
+  if [[ -d "$CASS_TEST_ROOT/conf" ]]; then
+    _CONFIG_DIR="$(cd "$CASS_TEST_ROOT/conf" && pwd)"
+    if [[ -f "${_CONFIG_DIR}/cassandra-rackdc.properties" ]]; then
+      _RACKDC_URI="file://${_CONFIG_DIR}/cassandra-rackdc.properties"
+    fi
+  fi
   if [[ -n "$_CONFIG_URI" ]]; then
     export GRADLE_OPTS="${GRADLE_OPTS} -Dcassandra.home=${_ABS} -Dcassandra.config=${_CONFIG_URI}"
+    if [[ -n "$_CONFIG_DIR" ]]; then
+      export GRADLE_OPTS="${GRADLE_OPTS} -Dcassandra.config.dir=${_CONFIG_DIR}"
+    fi
+    if [[ -n "$_RACKDC_URI" ]]; then
+      export GRADLE_OPTS="${GRADLE_OPTS} -Dcassandra-rackdc.properties=${_RACKDC_URI}"
+    fi
     # Init script also reads these if the Gradle daemon drops -D (forked workers still get props).
     export ELASSANDRA_GRADLE_CASSANDRA_HOME="${_ABS}"
     export ELASSANDRA_GRADLE_CASSANDRA_CONFIG="${_CONFIG_URI}"
@@ -165,6 +179,12 @@ if [[ "${SKIP_ELASSANDRA_TEST_CASSANDRA_SYS_PROPS:-}" != "1" ]]; then
   fi
   if [[ -n "${_CONFIG_URI:-}" ]]; then
     GRADLE_EXTRA_D+=("-Dcassandra.config=${_CONFIG_URI}")
+  fi
+  if [[ -n "${_CONFIG_DIR:-}" ]]; then
+    GRADLE_EXTRA_D+=("-Dcassandra.config.dir=${_CONFIG_DIR}")
+  fi
+  if [[ -n "${_RACKDC_URI:-}" ]]; then
+    GRADLE_EXTRA_D+=("-Dcassandra-rackdc.properties=${_RACKDC_URI}")
   fi
 fi
 GRADLE_EXTRA_D+=("-Dtests.jvms=${OPENSEARCH_SIDECAR_TESTS_JVMS}")
