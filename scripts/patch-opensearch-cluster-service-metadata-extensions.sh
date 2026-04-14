@@ -161,7 +161,12 @@ commit_metadata_replacement = """    public void commitMetaData(
                 );
                 if (current != null && current.isEmpty() == false) {
                     long persistedVersion = current.one().getLong("version");
-                    if (persistedVersion <= oldMetaData.version()) {
+                    if (persistedVersion == newMetaData.version()) {
+                        java.util.UUID persistedOwner = readMetaDataOwner(newMetaData.version());
+                        if (owner.equals(persistedOwner)) {
+                            applied = true;
+                        }
+                    } else if (persistedVersion <= oldMetaData.version()) {
                         applied = processWriteConditional(
                             org.apache.cassandra.db.ConsistencyLevel.QUORUM,
                             org.apache.cassandra.db.ConsistencyLevel.SERIAL,
@@ -180,6 +185,12 @@ commit_metadata_replacement = """    public void commitMetaData(
                     | org.apache.cassandra.exceptions.RequestValidationException e
             ) {
                 throw new org.opensearch.OpenSearchException("Failed to reconcile metadata log version", e);
+            }
+        }
+        if (applied == false) {
+            java.util.UUID persistedOwner = readMetaDataOwner(newMetaData.version());
+            if (owner.equals(persistedOwner)) {
+                applied = true;
             }
         }
         if (applied == false) {

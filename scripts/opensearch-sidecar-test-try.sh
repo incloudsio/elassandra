@@ -79,8 +79,6 @@ fi
 
 "$ROOT/scripts/opensearch-sidecar-prepare.sh" "$DEST"
 cd "$DEST"
-# Lucene PathUtilsForTesting + mock FS: stale server/build/testrun/test/temp from a prior run can make createDirectory fail with FileAlreadyExistsException (suite SKIPPED, Gradle worker exit 100). :cleanTest does not remove this tree.
-rm -rf "$DEST/server/build/testrun" 2>/dev/null || true
 export GRADLE_OPTS="${GRADLE_OPTS:-} -Delassandra.cassandra.jar=$JAR"
 
 # Default Cassandra layout for ESSingleNodeTestCase (YamlConfigurationLoader needs a file: URI for cassandra.config).
@@ -98,10 +96,6 @@ else
 fi
 if [[ "${SKIP_ELASSANDRA_TEST_CASSANDRA_SYS_PROPS:-}" != "1" ]]; then
   _ABS="$(cd "$CASS_TEST_ROOT" && pwd)"
-  # Fresh Cassandra data dirs for each side-car run (stale system keyspace / commitlog breaks init and triggers
-  # JVMStabilityInspector → System.exit(100)).
-  rm -rf "${_ABS}/data" "${_ABS}/commitlog" "${_ABS}/saved_caches" "${_ABS}/hints" 2>/dev/null || true
-  mkdir -p "${_ABS}/data" "${_ABS}/data/hints" "${_ABS}/commitlog" "${_ABS}/saved_caches" "${_ABS}/hints" 2>/dev/null || true
   _CONFIG_URI=""
   _CONFIG_DIR=""
   _RACKDC_URI=""
@@ -133,6 +127,20 @@ if [[ "${SKIP_ELASSANDRA_TEST_CASSANDRA_SYS_PROPS:-}" != "1" ]]; then
     export ELASSANDRA_GRADLE_CASSANDRA_CONFIG="${_CONFIG_URI}"
   fi
 fi
+
+reset_sidecar_test_state() {
+  # Lucene PathUtilsForTesting + mock FS: stale server/build/testrun/test/temp from a prior run can make
+  # createDirectory fail with FileAlreadyExistsException (suite SKIPPED, Gradle worker exit 100).
+  rm -rf "$DEST/server/build/testrun" 2>/dev/null || true
+  if [[ "${SKIP_ELASSANDRA_TEST_CASSANDRA_SYS_PROPS:-}" != "1" ]] && [[ -n "${_ABS:-}" ]]; then
+    # Fresh Cassandra data dirs for each side-car run / class. Waves 1-3 execute one Gradle :server:test per class,
+    # so cleaning only once before the loop leaks metadata_log and keyspaces into later classes.
+    rm -rf "${_ABS}/data" "${_ABS}/commitlog" "${_ABS}/saved_caches" "${_ABS}/hints" 2>/dev/null || true
+    mkdir -p "${_ABS}/data" "${_ABS}/data/hints" "${_ABS}/commitlog" "${_ABS}/saved_caches" "${_ABS}/hints" 2>/dev/null || true
+  fi
+}
+
+reset_sidecar_test_state
 
 # Netty reads this as a boolean (true/false), not a CPU count; "1" breaks Booleans.parseBoolean in Netty4Utils.
 # Default false skips pinning runtime processors (test-friendly); set to true to allow Netty to set from availableProcessors.
@@ -210,6 +218,7 @@ if [[ "${OPENSEARCH_SIDECAR_SKIP_CLEAN_TEST:-}" != "1" ]]; then
 fi
 if [[ "${OPENSEARCH_SIDECAR_BATCH_TEST_CLASSES:-}" != "1" ]] && [[ "${OPENSEARCH_SIDECAR_TEST_WAVE:-}" =~ ^[123]$ ]] && [[ ${#CLASS_LIST[@]} -gt 1 ]]; then
   for _cls in "${CLASS_LIST[@]}"; do
+    reset_sidecar_test_state
     "${GRADLE_CMD[@]}" :server:test --tests "$_cls" --no-daemon "$@" || _gradle_rc=$?
     if [[ "$_gradle_rc" -ne 0 ]]; then
       break
@@ -217,6 +226,7 @@ if [[ "${OPENSEARCH_SIDECAR_BATCH_TEST_CLASSES:-}" != "1" ]] && [[ "${OPENSEARCH
     sleep 1
   done
 else
+  reset_sidecar_test_state
   "${GRADLE_CMD[@]}" :server:test "${TEST_ARGS[@]}" --no-daemon "$@" || _gradle_rc=$?
 fi
 set -e
