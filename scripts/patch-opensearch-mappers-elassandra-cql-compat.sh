@@ -6,6 +6,7 @@ set -euo pipefail
 DEST="${1:?OpenSearch clone root}"
 python3 - "$DEST" <<'PY'
 from pathlib import Path
+import re
 import sys
 
 root = Path(sys.argv[1])
@@ -74,6 +75,23 @@ if M.exists():
 TP = root / "server/src/main/java/org/opensearch/index/mapper/TypeParsers.java"
 if TP.exists():
     t = TP.read_text(encoding="utf-8")
+    canonical_cql_constants = """    /** Elassandra mapping extension. */
+    public static final String CQL_MANDATORY = "cql_mandatory";
+    public static final String CQL_COLLECTION = "cql_collection";
+    public static final String CQL_STRUCT = "cql_struct";
+    public static final String CQL_TYPE = "cql_type";
+    public static final String CQL_UDT_NAME = "cql_udt_name";
+    public static final String CQL_PARTITION_KEY = "cql_partition_key";
+    public static final String CQL_STATIC_COLUMN = "cql_static_column";
+    public static final String CQL_CLUSTERING_KEY_DESC = "cql_clustering_key_desc";
+    public static final String CQL_PRIMARY_KEY_ORDER = "cql_primary_key_order";
+"""
+    t = re.sub(
+        r'    /\*\* Elassandra mapping extension\. \*/\n(?:    public static final String CQL_[A-Z_]+ = "cql_[a-z_]+";\n)+',
+        canonical_cql_constants,
+        t,
+        count=1,
+    )
     if "CQL_MANDATORY" not in t:
         needle = '    public static final String INDEX_OPTIONS_OFFSETS = "offsets";\n'
         repl = needle + "\n    /** Elassandra mapping extension. */\n    public static final String CQL_MANDATORY = \"cql_mandatory\";\n"
@@ -81,7 +99,7 @@ if TP.exists():
             print("TypeParsers.java: OFFSETS anchor not found", file=sys.stderr)
             sys.exit(1)
         t = t.replace(needle, repl, 1)
-    if "CQL_UDT_NAME" not in t:
+    if "CQL_COLLECTION" not in t:
         needle = '    public static final String CQL_MANDATORY = "cql_mandatory";\n'
         repl = (
             needle
@@ -97,7 +115,133 @@ if TP.exists():
             print("TypeParsers.java: CQL_MANDATORY anchor not found (for extended CQL keys)", file=sys.stderr)
             sys.exit(1)
         t = t.replace(needle, repl, 1)
+    if "CQL_TYPE" not in t:
+        needle = '    public static final String CQL_STRUCT = "cql_struct";\n'
+        repl = needle + '    public static final String CQL_TYPE = "cql_type";\n'
+        if needle not in t:
+            print("TypeParsers.java: CQL_STRUCT anchor not found (for CQL_TYPE)", file=sys.stderr)
+            sys.exit(1)
+        t = t.replace(needle, repl, 1)
+    if "private static boolean isElassandraCqlField" not in t:
+        needle = """    public static void checkNull(String propName, Object propNode) {
+        if (false == propName.equals("null_value") && propNode == null) {
+            /*
+             * No properties *except* null_value are allowed to have null. So we catch it here and tell the user something useful rather
+             * than send them a null pointer exception later.
+             */
+            throw new MapperParsingException("[" + propName + "] must not have a [null] value");
+        }
+    }
+
+"""
+        repl = """    public static void checkNull(String propName, Object propNode) {
+        if (false == propName.equals("null_value") && propNode == null) {
+            /*
+             * No properties *except* null_value are allowed to have null. So we catch it here and tell the user something useful rather
+             * than send them a null pointer exception later.
+             */
+            throw new MapperParsingException("[" + propName + "] must not have a [null] value");
+        }
+    }
+
+    private static boolean isElassandraCqlField(String propName) {
+        return CQL_MANDATORY.equals(propName)
+            || CQL_COLLECTION.equals(propName)
+            || CQL_STRUCT.equals(propName)
+            || CQL_TYPE.equals(propName)
+            || CQL_UDT_NAME.equals(propName)
+            || CQL_PARTITION_KEY.equals(propName)
+            || CQL_STATIC_COLUMN.equals(propName)
+            || CQL_CLUSTERING_KEY_DESC.equals(propName)
+            || CQL_PRIMARY_KEY_ORDER.equals(propName);
+    }
+
+    private static boolean parseElassandraCqlField(Iterator<Map.Entry<String, Object>> iterator, String propName) {
+        if (isElassandraCqlField(propName)) {
+            iterator.remove();
+            return true;
+        }
+        return false;
+    }
+
+"""
+        if needle not in t:
+            print("TypeParsers.java: checkNull anchor not found (for Elassandra CQL compatibility)", file=sys.stderr)
+            sys.exit(1)
+        t = t.replace(needle, repl, 1)
+    if "parseElassandraCqlField(iterator, propName)" not in t:
+        needle = """            } else if (propName.equals("copy_to")) {
+                if (parserContext.isWithinMultiField()) {
+                    throw new MapperParsingException(
+                        "copy_to in multi fields is not allowed. Found the copy_to in field ["
+                            + name
+                            + "] "
+                            + "which is within a multi field."
+                    );
+                } else {
+                    List<String> copyFields = parseCopyFields(propNode);
+                    FieldMapper.CopyTo.Builder cpBuilder = new FieldMapper.CopyTo.Builder();
+                    copyFields.forEach(cpBuilder::add);
+                    builder.copyTo(cpBuilder.build());
+                }
+                iterator.remove();
+            }
+"""
+        repl = """            } else if (propName.equals("copy_to")) {
+                if (parserContext.isWithinMultiField()) {
+                    throw new MapperParsingException(
+                        "copy_to in multi fields is not allowed. Found the copy_to in field ["
+                            + name
+                            + "] "
+                            + "which is within a multi field."
+                    );
+                } else {
+                    List<String> copyFields = parseCopyFields(propNode);
+                    FieldMapper.CopyTo.Builder cpBuilder = new FieldMapper.CopyTo.Builder();
+                    copyFields.forEach(cpBuilder::add);
+                    builder.copyTo(cpBuilder.build());
+                }
+                iterator.remove();
+            } else if (parseElassandraCqlField(iterator, propName)) {
+                // Elassandra-specific mapping metadata is consumed by forked schema logic, not stock OpenSearch builders.
+            }
+"""
+        if needle not in t:
+            print("TypeParsers.java: parseField anchor not found (for Elassandra CQL compatibility)", file=sys.stderr)
+            sys.exit(1)
+        t = t.replace(needle, repl, 1)
     write_if_changed(TP, t)
+
+DMP = root / "server/src/main/java/org/opensearch/index/mapper/DocumentMapperParser.java"
+if DMP.exists():
+    t = DMP.read_text(encoding="utf-8")
+    if "private static boolean isElassandraCqlField(Object key)" not in t:
+        needle = """    public static void checkNoRemainingFields(Map<?, ?> fieldNodeMap, Version indexVersionCreated, String message) {
+        if (!fieldNodeMap.isEmpty()) {
+            throw new MapperParsingException(message + getRemainingFields(fieldNodeMap));
+        }
+    }
+
+"""
+        repl = """    public static void checkNoRemainingFields(Map<?, ?> fieldNodeMap, Version indexVersionCreated, String message) {
+        if (!fieldNodeMap.isEmpty()) {
+            fieldNodeMap.keySet().removeIf(DocumentMapperParser::isElassandraCqlField);
+            if (!fieldNodeMap.isEmpty()) {
+                throw new MapperParsingException(message + getRemainingFields(fieldNodeMap));
+            }
+        }
+    }
+
+    private static boolean isElassandraCqlField(Object key) {
+        return key != null && key.toString().startsWith("cql_");
+    }
+
+"""
+        if needle not in t:
+            print("DocumentMapperParser.java: checkNoRemainingFields anchor not found (for Elassandra CQL compatibility)", file=sys.stderr)
+            sys.exit(1)
+        t = t.replace(needle, repl, 1)
+    write_if_changed(DMP, t)
 
 OM = root / "server/src/main/java/org/opensearch/index/mapper/ObjectMapper.java"
 if OM.exists():

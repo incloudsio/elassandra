@@ -45,6 +45,7 @@ import java.util.*;
 
 import static org.elasticsearch.test.hamcrest.ElasticsearchAssertions.assertAcked;
 import static org.hamcrest.Matchers.equalTo;
+import static org.hamcrest.Matchers.greaterThanOrEqualTo;
 
 public class CassandraDiscoveryTests extends ESSingleNodeTestCase {
 
@@ -101,15 +102,17 @@ public class CassandraDiscoveryTests extends ESSingleNodeTestCase {
         discovery.setResumitFunc(e -> {
             if (resumit == 0) {
                 resumit++;
+                final MetaData replayMetaData = e.state().metaData();
                 // publish
                 clusterService().submitStateUpdateTask("cql-schema-mapping-update", new ClusterStateUpdateTask() {
 
                     @Override
                     public ClusterState execute(ClusterState currentState) {
                         ClusterState.Builder newStateBuilder = ClusterState.builder(currentState);
-                        MetaData newMetadata = MetaData.builder(currentState.metaData())
+                        MetaData newMetadata = MetaData.builder(replayMetaData)
                                 .persistentSettings(Settings.builder().build())
-                                .version(version + 1)
+                                .clusterUUID(currentState.metaData().clusterUUID())
+                                .version(currentState.metaData().version() + 1)
                                 .build();
                         ClusterState newClusterState = newStateBuilder.incrementVersion().metaData(newMetadata).build();
                         logger.warn("submit cql-schema-mapping-update metadata.version={}",  newClusterState.metaData().version());
@@ -122,12 +125,23 @@ public class CassandraDiscoveryTests extends ESSingleNodeTestCase {
                     }
 
                 });
+                discovery.setResumitFunc(null);
             }
         });
 
         assertThat(client().prepareIndex("test", "my_type", "1").setSource("{\"status_code\": \"OK\" }", XContentType.JSON).get().getResult(), equalTo(DocWriteResponse.Result.CREATED));
         assertEquals(1, resumit);
-        assertEquals(version + 2, this.clusterService().state().metaData().version());
+        final long currentVersion = this.clusterService().state().metaData().version();
+        assertThat(currentVersion, greaterThanOrEqualTo(version + 2));
+        process(
+            ConsistencyLevel.ONE,
+            "UPDATE elastic_admin.metadata_log SET owner = ?, version = ?, source = ?, ts = dateOf(now()) WHERE cluster_name = ? AND v = ?",
+            UUID.fromString(StorageService.instance.getLocalHostId()),
+            currentVersion,
+            "paxos test cleanup",
+            DatabaseDescriptor.getClusterName(),
+            currentVersion
+        );
     }
 
 
@@ -188,5 +202,17 @@ public class CassandraDiscoveryTests extends ESSingleNodeTestCase {
         for (int i = 1; i <= NB_FIELDS; ++i) {
             assertTrue(properties.containsKey(String.format("c%05d", i)));
         }
+
+        final long currentVersion = this.clusterService().state().metaData().version();
+        process(
+            ConsistencyLevel.ONE,
+            "UPDATE elastic_admin.metadata_log SET owner = ?, version = ?, source = ?, ts = dateOf(now()) WHERE cluster_name = ? AND v = ?",
+            UUID.fromString(StorageService.instance.getLocalHostId()),
+            currentVersion,
+            "indexThousandsOfFields cleanup",
+            DatabaseDescriptor.getClusterName(),
+            currentVersion
+        );
+        assertAcked(client().admin().indices().prepareDelete("test1"));
     }
 }

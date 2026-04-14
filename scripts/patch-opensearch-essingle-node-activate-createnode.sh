@@ -2,6 +2,8 @@
 # Embedded tests: activate(..., createNode=true) so ElassandraNode exists; ringReady() must call super.ringReady()
 # for activateAndWaitShards. activate(false,false,...) left node=null and caused worker exit 100 / NPE on client().
 # Also always load MockNioTransportPlugin: nodeSettings() sets transport.type mock-nio but getMockPlugins omitted the plugin when addMockTransportService() is false.
+# Load the geo module plugin too: CassandraDiscoveryTests exercises geo_shape mappings and the sidecar test runtime
+# does not auto-discover module plugins when ElassandraNode is built from an explicit plugin list.
 # getPlugins() must return getMockPlugins() so activate() receives transport + discovery plugins (was emptyList → mock-nio / http errors).
 # After merging env settings, force http.type netty4: prepared env can set http.type to "" which breaks NetworkModule on ElassandraNode (real Node, not MockNode).
 set -euo pipefail
@@ -157,7 +159,58 @@ if "private static Class<? extends Plugin> loadNetty4PluginClass()" not in text:
         text = text.replace(anchor, helper, 1)
         changed = True
 
-if changed or "createNode must be true" in text or "nodeSettings() always sets transport.type" in text or "return getMockPlugins()" in text or "ElassandraNode uses real Node + Netty module" in text or "private static Class<? extends Plugin> loadNetty4PluginClass()" in text:
+if "private static Class<? extends Plugin> loadGeoPluginClass()" not in text:
+    old_geo = (
+        "        // ElassandraNode loads only explicit plugins; register Netty HTTP without a test:framework → modules Gradle edge.\n"
+        "        mocks.add(loadNetty4PluginClass());\n"
+        "        mocks.add(OpenSearchIntegTestCase.TestSeedPlugin.class);\n"
+    )
+    new_geo = (
+        "        // ElassandraNode loads only explicit plugins; register Netty HTTP without a test:framework → modules Gradle edge.\n"
+        "        mocks.add(loadNetty4PluginClass());\n"
+        "        // geo_shape lives in the OpenSearch geo module; explicit plugin loading keeps single-node tests faithful.\n"
+        "        mocks.add(loadGeoPluginClass());\n"
+        "        mocks.add(OpenSearchIntegTestCase.TestSeedPlugin.class);\n"
+    )
+    if old_geo in text:
+        text = text.replace(old_geo, new_geo, 1)
+        changed = True
+    anchor = (
+        "    private static Class<? extends Plugin> loadNetty4PluginClass() {\n"
+        "        try {\n"
+        "            return (Class<? extends Plugin>) Class.forName(\"org.opensearch.transport.Netty4Plugin\");\n"
+        "        } catch (ClassNotFoundException e) {\n"
+        "            throw new IllegalStateException(\"org.opensearch.transport.Netty4Plugin must be on the test runtime classpath\", e);\n"
+        "        }\n"
+        "    }\n"
+        "\n"
+        "    public MockCassandraDiscovery getMockCassandraDiscovery() {\n"
+    )
+    helper = (
+        "    private static Class<? extends Plugin> loadNetty4PluginClass() {\n"
+        "        try {\n"
+        "            return (Class<? extends Plugin>) Class.forName(\"org.opensearch.transport.Netty4Plugin\");\n"
+        "        } catch (ClassNotFoundException e) {\n"
+        "            throw new IllegalStateException(\"org.opensearch.transport.Netty4Plugin must be on the test runtime classpath\", e);\n"
+        "        }\n"
+        "    }\n"
+        "\n"
+        "    @SuppressWarnings(\"unchecked\")\n"
+        "    private static Class<? extends Plugin> loadGeoPluginClass() {\n"
+        "        try {\n"
+        "            return (Class<? extends Plugin>) Class.forName(\"org.opensearch.geo.GeoPlugin\");\n"
+        "        } catch (ClassNotFoundException e) {\n"
+        "            throw new IllegalStateException(\"org.opensearch.geo.GeoPlugin must be on the test runtime classpath\", e);\n"
+        "        }\n"
+        "    }\n"
+        "\n"
+        "    public MockCassandraDiscovery getMockCassandraDiscovery() {\n"
+    )
+    if anchor in text:
+        text = text.replace(anchor, helper, 1)
+        changed = True
+
+if changed or "createNode must be true" in text or "nodeSettings() always sets transport.type" in text or "return getMockPlugins()" in text or "ElassandraNode uses real Node + Netty module" in text or "private static Class<? extends Plugin> loadNetty4PluginClass()" in text or "private static Class<? extends Plugin> loadGeoPluginClass()" in text:
     path.write_text(text, encoding="utf-8")
     print("Patched ESSingleNodeTestCase (Elassandra embedded bootstrap) →", path)
 else:

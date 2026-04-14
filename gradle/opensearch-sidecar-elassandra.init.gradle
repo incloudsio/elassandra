@@ -192,6 +192,8 @@ gradle.projectsEvaluated {
         extraCp.canBeResolved = true
         extraCp.visible = false
         server.dependencies.add(extraCp.name, 'org.jctools:jctools-core:3.3.0')
+        // Embedded single-node tests create mappings with geo_shape; load the lightweight geo module at runtime.
+        server.dependencies.add(extraCp.name, server.dependencies.project(path: ':modules:geo'))
         server.tasks.withType(org.gradle.api.tasks.testing.Test).configureEach { t ->
             // Stale server/build/test (JUnit XML from older layouts) can confuse incremental test state.
             // testrun/ is removed at the start of OpenSearchTestBasePlugin's doFirst (patch-opensearch-test-base-delete-testrun-before-mkdir.sh).

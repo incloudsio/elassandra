@@ -87,6 +87,7 @@ jobs:
           bash -n scripts/patch-opensearch-cluster-service-elassandra-full-stubs.sh
           bash -n scripts/patch-opensearch-cluster-service-create-elastic-admin-keyspace.sh
           bash -n scripts/patch-opensearch-cluster-service-load-global-state.sh
+          bash -n scripts/patch-opensearch-cluster-service-metadata-extensions.sh
           bash -n scripts/install-elassandra-gateway-opensearch-sidecar.sh
           bash -n scripts/patch-opensearch-cluster-service-process-write-conditional.sh
           bash -n scripts/patch-opensearch-operation-routing-shard-routing-fix.sh

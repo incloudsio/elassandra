@@ -239,6 +239,64 @@ def patch_transport_put_mapping(text: str, path: Path) -> str:
     return text
 
 
+def patch_metadata_index_template_service(text: str, path: Path) -> str:
+    return replace_once(
+        text,
+        """                @Override
+                public void onFailure(String source, Exception e) {
+                    listener.onFailure(e);
+                }
+
+                @Override
+                public ClusterState execute(ClusterState currentState) throws Exception {
+""",
+        """                @Override
+                public void onFailure(String source, Exception e) {
+                    listener.onFailure(e);
+                }
+
+                @Override
+                public org.opensearch.cluster.ClusterStateTaskConfig.SchemaUpdate schemaUpdate() {
+                    return org.opensearch.cluster.ClusterStateTaskConfig.SchemaUpdate.UPDATE;
+                }
+
+                @Override
+                public ClusterState execute(ClusterState currentState) throws Exception {
+""",
+        label="MetadataIndexTemplateService schemaUpdate",
+        path=path,
+    )
+
+
+def patch_metadata_create_index_service(text: str, path: Path) -> str:
+    return replace_once(
+        text,
+        """                @Override
+                protected ClusterStateUpdateResponse newResponse(boolean acknowledged) {
+                    return new ClusterStateUpdateResponse(acknowledged);
+                }
+
+                @Override
+                public ClusterState execute(ClusterState currentState) throws Exception {
+""",
+        """                @Override
+                protected ClusterStateUpdateResponse newResponse(boolean acknowledged) {
+                    return new ClusterStateUpdateResponse(acknowledged);
+                }
+
+                @Override
+                public org.opensearch.cluster.ClusterStateTaskConfig.SchemaUpdate schemaUpdate() {
+                    return org.opensearch.cluster.ClusterStateTaskConfig.SchemaUpdate.UPDATE;
+                }
+
+                @Override
+                public ClusterState execute(ClusterState currentState) throws Exception {
+""",
+        label="MetadataCreateIndexService schemaUpdate",
+        path=path,
+    )
+
+
 patch_file("server/src/main/java/org/opensearch/cluster/ClusterStateTaskConfig.java", patch_config)
 patch_file("server/src/main/java/org/opensearch/cluster/ClusterStateTaskExecutor.java", patch_executor)
 patch_file("server/src/main/java/org/opensearch/cluster/ClusterStateUpdateTask.java", patch_state_update_task)
@@ -249,5 +307,13 @@ patch_file("server/src/main/java/org/opensearch/cluster/service/ClusterApplierSe
 patch_file(
     "server/src/main/java/org/opensearch/action/admin/indices/mapping/put/TransportPutMappingAction.java",
     patch_transport_put_mapping,
+)
+patch_file(
+    "server/src/main/java/org/opensearch/cluster/metadata/MetadataIndexTemplateService.java",
+    patch_metadata_index_template_service,
+)
+patch_file(
+    "server/src/main/java/org/opensearch/cluster/metadata/MetadataCreateIndexService.java",
+    patch_metadata_create_index_service,
 )
 PY
