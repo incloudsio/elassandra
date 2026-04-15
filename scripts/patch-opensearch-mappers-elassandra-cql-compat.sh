@@ -326,7 +326,45 @@ if FM.exists():
 RF = root / "server/src/main/java/org/opensearch/index/mapper/RangeFieldMapper.java"
 if RF.exists():
     t = RF.read_text(encoding="utf-8")
-    if "Elassandra CQL UDT field layout" not in t:
+    stub = """    /** Elassandra CQL UDT field layout for range types (fork parity; side-car stub). */
+    public java.util.Map<String, org.apache.cassandra.cql3.CQL3Type.Raw> cqlFieldTypes() {
+        return java.util.Collections.emptyMap();
+    }
+"""
+    real = """    /** Elassandra CQL UDT field layout for range types (fork parity; side-car compat). */
+    public java.util.Map<String, org.apache.cassandra.cql3.CQL3Type.Raw> cqlFieldTypes() {
+        final org.apache.cassandra.cql3.CQL3Type.Raw valueType;
+        switch (fieldType().typeName()) {
+            case "date_range":
+            case "long_range":
+                valueType = org.apache.cassandra.cql3.CQL3Type.Raw.from(org.apache.cassandra.cql3.CQL3Type.Native.BIGINT);
+                break;
+            case "ip_range":
+                valueType = org.apache.cassandra.cql3.CQL3Type.Raw.from(org.apache.cassandra.cql3.CQL3Type.Native.INET);
+                break;
+            case "integer_range":
+                valueType = org.apache.cassandra.cql3.CQL3Type.Raw.from(org.apache.cassandra.cql3.CQL3Type.Native.INT);
+                break;
+            case "float_range":
+                valueType = org.apache.cassandra.cql3.CQL3Type.Raw.from(org.apache.cassandra.cql3.CQL3Type.Native.FLOAT);
+                break;
+            case "double_range":
+                valueType = org.apache.cassandra.cql3.CQL3Type.Raw.from(org.apache.cassandra.cql3.CQL3Type.Native.DOUBLE);
+                break;
+            default:
+                throw new IllegalStateException("Unsupported range type [" + fieldType().typeName() + "]");
+        }
+        java.util.LinkedHashMap<String, org.apache.cassandra.cql3.CQL3Type.Raw> fields = new java.util.LinkedHashMap<>();
+        fields.put(org.opensearch.index.query.RangeQueryBuilder.FROM_FIELD.getPreferredName(), valueType);
+        fields.put(org.opensearch.index.query.RangeQueryBuilder.TO_FIELD.getPreferredName(), valueType);
+        fields.put("include_lower", org.apache.cassandra.cql3.CQL3Type.Raw.from(org.apache.cassandra.cql3.CQL3Type.Native.BOOLEAN));
+        fields.put("include_upper", org.apache.cassandra.cql3.CQL3Type.Raw.from(org.apache.cassandra.cql3.CQL3Type.Native.BOOLEAN));
+        return fields;
+    }
+"""
+    if stub in t:
+        t = t.replace(stub, real, 1)
+    elif "Elassandra CQL UDT field layout" not in t:
         needle = """        @Override
         public BytesRef binaryValue() {
             try {
@@ -348,10 +386,7 @@ if RF.exists():
         }
     }
 
-    /** Elassandra CQL UDT field layout for range types (fork parity; side-car stub). */
-    public java.util.Map<String, org.apache.cassandra.cql3.CQL3Type.Raw> cqlFieldTypes() {
-        return java.util.Collections.emptyMap();
-    }
+""" + real + """
 }
 """
         if needle not in t:

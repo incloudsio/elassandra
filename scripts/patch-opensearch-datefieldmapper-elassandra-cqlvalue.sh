@@ -13,6 +13,42 @@ import sys
 path = Path(sys.argv[1])
 text = path.read_text(encoding="utf-8")
 
+parse_block = """        protected DateMathParser dateMathParser() {
+            return dateMathParser;
+        }
+
+        private boolean isTimeuuid() {
+            String cqlType = meta().get(TypeParsers.CQL_TYPE);
+            return cqlType != null && "timeuuid".equalsIgnoreCase(cqlType);
+        }
+
+        // Visible for testing.
+        public long parse(String value) {
+            if (isTimeuuid()) {
+                return resolution.convert(Instant.ofEpochMilli(org.apache.cassandra.utils.UUIDGen.unixTimestamp(java.util.UUID.fromString(value))));
+            }
+            return resolution.convert(DateFormatters.from(dateTimeFormatter().parse(value), dateTimeFormatter().locale()).toInstant());
+        }
+"""
+
+parse_block_pattern = re.compile(
+    r"""        protected DateMathParser dateMathParser\(\) \{
+            return dateMathParser;
+        \}
+
+        // Visible for testing\.
+        public long parse\(String value\) \{
+.*?
+        \}
+""",
+    re.S,
+)
+if "private boolean isTimeuuid()" not in text:
+    if not parse_block_pattern.search(text):
+        print(f"DateFieldMapper parse(String) anchor missing: {path}", file=sys.stderr)
+        sys.exit(1)
+    text = parse_block_pattern.sub(parse_block, text, count=1)
+
 value_block = """        @Override
         public Object valueForDisplay(Object value) {
             if (value == null) {
@@ -41,6 +77,9 @@ value_block = """        @Override
         public Object cqlValue(Object value) {
             if (value == null) {
                 return null;
+            }
+            if (isTimeuuid()) {
+                return value instanceof java.util.UUID ? value : java.util.UUID.fromString(value.toString());
             }
             if (value instanceof java.util.Date) {
                 return value;
