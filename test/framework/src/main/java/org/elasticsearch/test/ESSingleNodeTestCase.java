@@ -106,7 +106,7 @@ public abstract class ESSingleNodeTestCase extends ESTestCase {
      * Captured when this class loads (after parent/Lucene static init). RandomizedRunner compares the JVM default
      * uncaught handler at suite end; CassandraDaemon replaces it during startup — restore after init, in {@code setUp}, and in {@link #tearDownClass()}.
      */
-    private static final Thread.UncaughtExceptionHandler UNCAUGHT_BEFORE_ELASSANDRA_TEST =
+    private static volatile Thread.UncaughtExceptionHandler uncaughtBeforeElassandraTest =
         Thread.getDefaultUncaughtExceptionHandler();
 
     private static final Semaphore testMutex = new Semaphore(1);
@@ -290,6 +290,10 @@ public abstract class ESSingleNodeTestCase extends ESTestCase {
         );
     }
 
+    private static void restoreDefaultUncaughtExceptionHandler() {
+        Thread.setDefaultUncaughtExceptionHandler(uncaughtBeforeElassandraTest);
+    }
+
     /**
      * {@link com.carrotsearch.randomizedtesting.ThreadLeakControl} calls {@code checkZombies()} at the start of each
      * test {@link org.junit.runners.model.Statement} <em>before</em> {@code @Before} — too early for instance hooks.
@@ -423,7 +427,7 @@ public abstract class ESSingleNodeTestCase extends ESTestCase {
                 Thread.currentThread().interrupt();
                 throw new RuntimeException(e);
             }
-            Thread.setDefaultUncaughtExceptionHandler(UNCAUGHT_BEFORE_ELASSANDRA_TEST);
+            restoreDefaultUncaughtExceptionHandler();
         }
     }
 
@@ -599,7 +603,7 @@ public abstract class ESSingleNodeTestCase extends ESTestCase {
         // Always wait: static init may have created the node via activate() before the first @Before, so we cannot
         // rely on startNode() having run. Do not duplicate wait inside startNode — one place avoids long hangs when stuck.
         waitUntilMasterAndGatewayRecovered();
-        Thread.setDefaultUncaughtExceptionHandler(UNCAUGHT_BEFORE_ELASSANDRA_TEST);
+        restoreDefaultUncaughtExceptionHandler();
         ensureDelegatingExitTraceSecurityManager();
     }
 
@@ -644,7 +648,7 @@ public abstract class ESSingleNodeTestCase extends ESTestCase {
             //the seed can be created within this if as it will either be executed before every test method or will never be.
             startNode(random().nextLong());
         }
-        Thread.setDefaultUncaughtExceptionHandler(UNCAUGHT_BEFORE_ELASSANDRA_TEST);
+        restoreDefaultUncaughtExceptionHandler();
     }
 
     /** Resets {@link RandomizedRunner}'s static {@code zombieMarker} via reflection; see static class initializer. */
@@ -662,16 +666,17 @@ public abstract class ESSingleNodeTestCase extends ESTestCase {
 
     @BeforeClass
     public static synchronized void setUpClass() throws Exception {
+        uncaughtBeforeElassandraTest = Thread.getDefaultUncaughtExceptionHandler();
         clearRandomizedZombieMarker();
     }
 
     @AfterClass
     public static void tearDownClass() throws IOException {
-        Thread.setDefaultUncaughtExceptionHandler(UNCAUGHT_BEFORE_ELASSANDRA_TEST);
+        restoreDefaultUncaughtExceptionHandler();
         try {
             stopNode();
         } finally {
-            Thread.setDefaultUncaughtExceptionHandler(UNCAUGHT_BEFORE_ELASSANDRA_TEST);
+            restoreDefaultUncaughtExceptionHandler();
         }
     }
 

@@ -10,7 +10,7 @@ if [[ ! -f "$FM" ]]; then
   echo "Missing $FM" >&2
   exit 1
 fi
-if grep -q 'Elassandra: createField for secondary index' "$FM"; then
+if grep -q 'parseCreateField(externalContext);' "$FM"; then
   echo "FieldMapper already patched: $FM"
   exit 0
 fi
@@ -23,6 +23,44 @@ text = path.read_text(encoding="utf-8")
 
 if "import java.util.Optional;" not in text:
     text = text.replace("import java.util.Objects;\n", "import java.util.Objects;\nimport java.util.Optional;\n", 1)
+
+old_block = """    /**
+     * Elassandra: createField for secondary index / CQL document materialization (fork parity).
+     */
+    public final void createField(ParseContext context, Object value) throws IOException {
+        createField(context, value, Optional.empty());
+    }
+
+    /**
+     * Elassandra: createField for secondary index / CQL document materialization (fork parity).
+     */
+    public void createField(ParseContext context, Object value, Optional<String> keyName) throws IOException {
+        multiFields.create(this, context, value);
+    }
+"""
+
+new_block = """    /**
+     * Elassandra: createField for secondary index / CQL document materialization (fork parity).
+     */
+    public final void createField(ParseContext context, Object value) throws IOException {
+        createField(context, value, Optional.empty());
+    }
+
+    /**
+     * Elassandra: createField for secondary index / CQL document materialization (fork parity).
+     */
+    public void createField(ParseContext context, Object value, Optional<String> keyName) throws IOException {
+        if (this instanceof MetadataFieldMapper) {
+            return;
+        }
+        ParseContext externalContext = context.createExternalValueContext(value);
+        parseCreateField(externalContext);
+        multiFields.parse(this, externalContext);
+    }
+"""
+
+if old_block in text:
+    text = text.replace(old_block, new_block, 1)
 
 needle = """    protected final void createFieldNamesField(ParseContext context) {
         assert fieldType().hasDocValues() == false : \"_field_names should only be used when doc_values are turned off\";
@@ -58,16 +96,22 @@ insert = """    protected final void createFieldNamesField(ParseContext context)
      * Elassandra: createField for secondary index / CQL document materialization (fork parity).
      */
     public void createField(ParseContext context, Object value, Optional<String> keyName) throws IOException {
-        multiFields.create(this, context, value);
+        if (this instanceof MetadataFieldMapper) {
+            return;
+        }
+        ParseContext externalContext = context.createExternalValueContext(value);
+        parseCreateField(externalContext);
+        multiFields.parse(this, externalContext);
     }
 
     @Override
     public Iterator<Mapper> iterator() {"""
 
-if needle not in text:
+if old_block not in text and new_block not in text and needle not in text:
     print("FieldMapper.java: anchor not found", file=sys.stderr)
     sys.exit(1)
-text = text.replace(needle, insert, 1)
+if new_block not in text:
+    text = text.replace(needle, insert, 1)
 
 # MultiFields.parse block — append create() after parse()
 needle2 = """        public void parse(FieldMapper mainField, ParseContext context) throws IOException {

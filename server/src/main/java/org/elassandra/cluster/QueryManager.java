@@ -524,7 +524,7 @@ public class QueryManager {
     private static ConsistencyLevel activeShardsToCassandraConsistencyLevel(
         org.elasticsearch.action.support.ActiveShardCount activeShardCount
     ) {
-        return ConsistencyLevel.LOCAL_QUORUM;
+        return activeShardCount.toCassandraConsistencyLevel();
     }
 
     // TODO: return raw values if no mapper found.

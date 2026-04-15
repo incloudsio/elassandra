@@ -147,6 +147,11 @@ reset_sidecar_test_state
 export OPENSEARCH_NETTY_PROCESSORS="${OPENSEARCH_NETTY_PROCESSORS:-false}"
 export GRADLE_OPTS="${GRADLE_OPTS} -Dopensearch.set.netty.runtime.available.processors=${OPENSEARCH_NETTY_PROCESSORS}"
 
+# Embedded Cassandra indexes documents from background mutation threads; OpenSearch mock engine modules assume
+# RandomizedRunner-managed test threads and can throw when enabled here. Keep them off by default for sidecar runs.
+OPENSEARCH_SIDECAR_ENABLE_MOCK_MODULES="${OPENSEARCH_SIDECAR_ENABLE_MOCK_MODULES:-false}"
+export GRADLE_OPTS="${GRADLE_OPTS} -Dtests.enable_mock_modules=${OPENSEARCH_SIDECAR_ENABLE_MOCK_MODULES}"
+
 # Embedded Cassandra storage_port; default 17100 avoids conflict with a system Cassandra on 7000.
 ELASSANDRA_TEST_STORAGE_PORT="${ELASSANDRA_TEST_STORAGE_PORT:-17100}"
 export GRADLE_OPTS="${GRADLE_OPTS} -Delassandra.test.storage_port=${ELASSANDRA_TEST_STORAGE_PORT}"
@@ -169,14 +174,23 @@ fi
 
 TEST_ARGS=()
 CLASS_LIST=()
-IFS=',' read -ra _PAT_ARR <<< "$PATTERN"
-for _c in "${_PAT_ARR[@]}"; do
-  _t="${_c#"${_c%%[![:space:]]*}"}"
-  _t="${_t%"${_t##*[![:space:]]}"}"
-  [[ -z "$_t" ]] && continue
-  CLASS_LIST+=("$_t")
-  TEST_ARGS+=(--tests "$_t")
-done
+if [[ "$PATTERN" == "org.elassandra.*" ]] && [[ "${OPENSEARCH_SIDECAR_BATCH_TEST_CLASSES:-}" != "1" ]]; then
+  for _src in "$ROOT"/server/src/test/java/org/elassandra/*Tests.java; do
+    [[ -e "$_src" ]] || continue
+    _cls="org.elassandra.$(basename "${_src%.java}")"
+    CLASS_LIST+=("$_cls")
+    TEST_ARGS+=(--tests "$_cls")
+  done
+else
+  IFS=',' read -ra _PAT_ARR <<< "$PATTERN"
+  for _c in "${_PAT_ARR[@]}"; do
+    _t="${_c#"${_c%%[![:space:]]*}"}"
+    _t="${_t%"${_t##*[![:space:]]}"}"
+    [[ -z "$_t" ]] && continue
+    CLASS_LIST+=("$_t")
+    TEST_ARGS+=(--tests "$_t")
+  done
+fi
 
 # Pass -D on the gradlew command line so the Gradle JVM (and init.gradle System.getProperty) always sees
 # cassandra.*; GRADLE_OPTS alone is not reliably applied to the build JVM on all platforms.
@@ -197,6 +211,7 @@ if [[ "${SKIP_ELASSANDRA_TEST_CASSANDRA_SYS_PROPS:-}" != "1" ]]; then
 fi
 GRADLE_EXTRA_D+=("-Dtests.jvms=${OPENSEARCH_SIDECAR_TESTS_JVMS}")
 GRADLE_EXTRA_D+=("-Delassandra.test.storage_port=${ELASSANDRA_TEST_STORAGE_PORT:-17100}")
+GRADLE_EXTRA_D+=("-Dtests.enable_mock_modules=${OPENSEARCH_SIDECAR_ENABLE_MOCK_MODULES}")
 # RandomizedTesting suite timeout (ms); "!" forces override of @TimeoutSuite. Default 5m unless disabled via 0.
 _OPENSEARCH_SUITE_TO="${OPENSEARCH_SIDECAR_SUITE_TIMEOUT_MS:-300000}"
 if [[ "${_OPENSEARCH_SUITE_TO}" != "0" ]]; then
@@ -207,16 +222,15 @@ fi
 # method, set OPENSEARCH_SIDECAR_SKIP_CLEAN_TEST=1 to skip clean and shorten each round (still compiles if sources changed).
 # (Do not use an empty bash array with set -u — "${_CLEAN[@]}" is "unbound" when _CLEAN=().)
 #
-# Waves 1–3 list multiple test classes; the embedded Elassandra/OpenSearch singleton in one JVM often breaks between
-# classes (cluster blocks, master discovery). Run one Gradle :server:test per class unless
-# OPENSEARCH_SIDECAR_BATCH_TEST_CLASSES=1 (old single-invocation behavior). Wave 4 uses org.elassandra.* — keep one run.
+# Waves 1–4 can leak embedded Cassandra/OpenSearch singleton state, keyspaces and mutation work across class boundaries.
+# Run one Gradle :server:test per class unless OPENSEARCH_SIDECAR_BATCH_TEST_CLASSES=1 (old single-invocation behavior).
 set +e
 _gradle_rc=0
 GRADLE_CMD=(./gradlew "${GRADLE_EXTRA_D[@]}" -I "$INIT_GRADLE")
 if [[ "${OPENSEARCH_SIDECAR_SKIP_CLEAN_TEST:-}" != "1" ]]; then
   GRADLE_CMD+=(:server:cleanTest)
 fi
-if [[ "${OPENSEARCH_SIDECAR_BATCH_TEST_CLASSES:-}" != "1" ]] && [[ "${OPENSEARCH_SIDECAR_TEST_WAVE:-}" =~ ^[123]$ ]] && [[ ${#CLASS_LIST[@]} -gt 1 ]]; then
+if [[ "${OPENSEARCH_SIDECAR_BATCH_TEST_CLASSES:-}" != "1" ]] && [[ "${OPENSEARCH_SIDECAR_TEST_WAVE:-}" =~ ^[1234]$ ]] && [[ ${#CLASS_LIST[@]} -gt 1 ]]; then
   for _cls in "${CLASS_LIST[@]}"; do
     reset_sidecar_test_state
     "${GRADLE_CMD[@]}" :server:test --tests "$_cls" --no-daemon "$@" || _gradle_rc=$?

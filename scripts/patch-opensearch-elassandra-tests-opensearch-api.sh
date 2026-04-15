@@ -23,13 +23,7 @@ import sys
 root = Path(sys.argv[1])
 for path in root.rglob("*.java"):
     text = path.read_text(encoding="utf-8")
-    # Avoid double-.value
-    def repl(m):
-        s = m.group(0)
-        if ".getTotalHits().value" in s:
-            return s
-        return s.replace(".getTotalHits()", ".getTotalHits().value", 1)
-    new = re.sub(r"\.getHits\(\)\.getTotalHits\(\)(?!\.value)", repl, text)
+    new = re.sub(r"\.getTotalHits\(\)(?!\.value)", ".getTotalHits().value", text)
     if new != text:
         path.write_text(new, encoding="utf-8")
         print("Patched TotalHits.value in", path)

@@ -169,7 +169,10 @@ if TP.exists():
             print("TypeParsers.java: checkNull anchor not found (for Elassandra CQL compatibility)", file=sys.stderr)
             sys.exit(1)
         t = t.replace(needle, repl, 1)
-    if "parseElassandraCqlField(iterator, propName)" not in t:
+    if (
+        "parseElassandraCqlField(iterator, propName)" not in t
+        and "parseElassandraCqlField(builder, iterator, propName, propNode)" not in t
+    ):
         needle = """            } else if (propName.equals("copy_to")) {
                 if (parserContext.isWithinMultiField()) {
                     throw new MapperParsingException(
@@ -252,6 +255,37 @@ if OM.exists():
             "public class ObjectMapper extends Mapper implements Cloneable, CqlMapper {",
             1,
         )
+    if "public boolean hasField()" not in t:
+        needle = """    public boolean isEnabled() {
+        return this.enabled.value();
+    }
+
+    public Mapper getMapper(String field) {
+        return mappers.get(field);
+    }
+"""
+        repl = """    public boolean isEnabled() {
+        return this.enabled.value();
+    }
+
+    @Override
+    public boolean hasField() {
+        for (Mapper mapper : mappers.values()) {
+            if (mapper.hasField()) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    public Mapper getMapper(String field) {
+        return mappers.get(field);
+    }
+"""
+        if needle not in t:
+            print("ObjectMapper.java: hasField anchor not found", file=sys.stderr)
+            sys.exit(1)
+        t = t.replace(needle, repl, 1)
     write_if_changed(OM, t)
 
 FM = root / "server/src/main/java/org/opensearch/index/mapper/FieldMapper.java"
@@ -263,7 +297,7 @@ if FM.exists():
             "public abstract class FieldMapper extends Mapper implements Cloneable, CqlMapper {",
             1,
         )
-    if "Elassandra CQL column type" not in t:
+    if "Elassandra CQL column type" not in t and "Elassandra CQL metadata helpers." not in t:
         needle = """        public List<String> copyToFields() {
             return copyToFields;
         }
