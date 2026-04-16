@@ -99,7 +99,9 @@ public class SizeFieldMapper extends MetadataFieldMapper {
             return;
         }
         final int value = context.sourceToParse().source().length();
-        context.doc().addAll(NumberType.INTEGER.createFields(name(), value, true, true, true));
+        for (org.apache.lucene.document.Field f : NumberType.INTEGER.createFields(name(), value, true, true, true)) {
+            context.doc().add(f);
+        }
     }
 
     @Override

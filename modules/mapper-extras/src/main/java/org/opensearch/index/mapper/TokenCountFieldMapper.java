@@ -172,7 +172,9 @@ public class TokenCountFieldMapper extends ParametrizedFieldMapper {
             tokenCount = countPositions(analyzer, name(), value, enablePositionIncrements);
         }
 
-        context.doc().addAll(NumberFieldMapper.NumberType.INTEGER.createFields(fieldType().name(), tokenCount, index, hasDocValues, store));
+        for (org.apache.lucene.document.Field f : NumberFieldMapper.NumberType.INTEGER.createFields(fieldType().name(), tokenCount, index, hasDocValues, store)) {
+            context.doc().add(f);
+        }
     }
 
     /**

@@ -426,7 +426,9 @@ public class ScaledFloatFieldMapper extends ParametrizedFieldMapper {
         long scaledValue = Math.round(doubleValue * scalingFactor);
 
         List<Field> fields = NumberFieldMapper.NumberType.LONG.createFields(fieldType().name(), scaledValue, indexed, hasDocValues, stored);
-        context.doc().addAll(fields);
+        for (org.apache.lucene.document.Field f : fields) {
+            context.doc().add(f);
+        }
 
         if (hasDocValues == false && (indexed || stored)) {
             createFieldNamesField(context);
