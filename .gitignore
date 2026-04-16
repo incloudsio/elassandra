@@ -74,6 +74,11 @@ docker
 # Allow tracked CI Docker assets (the bare `docker` rule above matches any path segment `docker`)
 !ci/docker/
 !ci/docker/**
+# OpenSearch buildSrc: package org.opensearch.gradle.docker (must not be excluded from git)
+!buildSrc/src/main/java/org/opensearch/gradle/docker/
+!buildSrc/src/main/java/org/opensearch/gradle/docker/**
+!buildSrc/src/test/java/org/opensearch/gradle/docker/
+!buildSrc/src/test/java/org/opensearch/gradle/docker/**
 *.rej
 *.orig
 
