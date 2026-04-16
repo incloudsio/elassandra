@@ -43,7 +43,7 @@ jobs:
       - name: Check Cassandra version vs submodule
         run: ./scripts/check-cassandra-submodule.sh
       - name: Assemble
-        run: ./gradlew assemble --info -x docs:build
+        run: ./gradlew assemble --info
       - name: SonarCloud (optional)
         continue-on-error: true
         env:
@@ -51,7 +51,7 @@ jobs:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
         run: |
           if [ -n "${SONAR_TOKEN:-}" ]; then
-            ./gradlew sonarqube --info -x docs:build
+            ./gradlew sonarqube --info
           else
             echo "SONAR_TOKEN not set; skipping SonarCloud."
           fi
