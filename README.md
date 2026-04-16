@@ -14,6 +14,20 @@ The **`modernization/cassandra4-opensearch13`** branch embeds **Elasticsearch 6.
 
 Developer references: [RELEASING.md](RELEASING.md) and `docs/elassandra/source/` (`migration.rst`, `developer/cassandra_fork_inventory.rst`, `developer/cassandra_40_rebase.rst`, `developer/cassandra_40_jvm_port.rst`, `developer/opensearch_porting_guide.rst`). **Scripts:** `scripts/export-cassandra-elassandra-patches.sh`, `scripts/bootstrap-cassandra-40-worktree.sh`, `scripts/check-cassandra-submodule.sh`, `scripts/use-cassandra-40-submodule.sh`, `scripts/clone-opensearch-upstream.sh`, `scripts/opensearch-port-bootstrap.sh`, `scripts/opensearch-sidecar-prepare.sh`, `scripts/opensearch-sidecar-compile-try.sh`, `scripts/opensearch-sidecar-test-try.sh` (optional `:server:test` probe; see `server/OPENSEARCH_PORT.md`).
 
+### Embedded OpenSearch 1.3 Sidecar Status
+
+The current sidecar stabilization batch has restored and revalidated the `TimeuuidTests`, `SnapshotTests` drop-on-delete flow, `RangeFieldTests`, and a small supported subset of `CqlTypesTests`. Regression Waves 1 through 4 are currently green for this branch after those restores.
+
+The following compatibility buckets remain intentionally unresolved and deferred:
+
+* `TokenRangesBisetCacheTests`: OpenSearch 1.3 sidecar still lacks the token-range request and stats plumbing needed to restore the cache assertions honestly.
+* `TruncateTests.testNestedTruncate`: nested truncate still fails with a Cassandra-side `TRUNCATE` timeout, so this is not currently a safe Lucene/OpenSearch-side fix.
+* Remaining `CqlTypesTests`: only the clearly-supported subset was restored; the rest still need mapper, serializer, or feature-parity work.
+* `TimeDisorderedTests`: wide-row tombstone semantics remain correctness-sensitive and are deferred.
+* `CompletionTests`: suggester parity remains a broader feature gap.
+* `CompositeTests`: composite-key, static-column, and flush-behavior stability remains incomplete.
+* `PartitionedIndexTests`: virtual-index and partition-function support still looks like missing feature support rather than a narrow bug.
+
 ## What Elassandra is (today)
 
 Elassandra is an [Apache Cassandra](https://cassandra.apache.org/) distribution that embeds an [Elasticsearch](https://github.com/elastic/elasticsearch) 6.8 search engine in each node.
