@@ -155,13 +155,18 @@ def patch_master_service(text: str, path: Path) -> str:
         label="MasterService SchemaUpdate import",
         path=path,
     )
-    text = replace_once(
-        text,
-        """import java.util.Arrays;\nimport java.util.HashMap;\nimport java.util.Collections;\nimport java.util.List;\n""",
-        """import java.util.Arrays;\nimport java.util.Collection;\nimport java.util.Collections;\nimport java.util.HashMap;\nimport java.util.List;\n""",
-        label="MasterService Collection import",
-        path=path,
-    )
+    # OpenSearch 1.3.20: java.util block is Arrays → Collections → List (no HashMap).
+    # Older forks used Arrays → HashMap → Collections → List. Accept both.
+    _util_desired = """import java.util.Arrays;\nimport java.util.Collection;\nimport java.util.Collections;\nimport java.util.HashMap;\nimport java.util.List;\n"""
+    if _util_desired not in text:
+        _util_upstream = """import java.util.Arrays;\nimport java.util.Collections;\nimport java.util.List;\n"""
+        _util_legacy = """import java.util.Arrays;\nimport java.util.HashMap;\nimport java.util.Collections;\nimport java.util.List;\n"""
+        if _util_upstream in text:
+            text = text.replace(_util_upstream, _util_desired, 1)
+        elif _util_legacy in text:
+            text = text.replace(_util_legacy, _util_desired, 1)
+        else:
+            raise SystemExit(f"{path}: anchor not found for MasterService Collection import")
     text = replace_once(
         text,
         """                ClusterChangedEvent clusterChangedEvent = new ClusterChangedEvent(summary, newClusterState, previousClusterState);\n""",
