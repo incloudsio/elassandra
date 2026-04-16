@@ -20,7 +20,7 @@ path = Path(sys.argv[1])
 text = path.read_text(encoding="utf-8")
 anchor = (
     "    public boolean hasMetaDataTable() {\n"
-    "        KeyspaceMetadata ksm = Schema.instance.getKeyspaceMetadata(getElasticAdminKeyspaceName());\n"
+    "        org.apache.cassandra.schema.KeyspaceMetadata ksm = org.apache.cassandra.schema.Schema.instance.getKeyspaceMetadata(getElasticAdminKeyspaceName());\n"
     "        return ksm != null && ksm.getTableOrViewNullable(ELASTIC_ADMIN_METADATA_TABLE) != null;\n"
     "    }\n\n"
     "    /** Block until local shards are started ({@link CassandraShardStartedBarrier}). */\n"
@@ -31,7 +31,7 @@ if anchor not in text:
     sys.exit(1)
 insert = (
     "    public boolean hasMetaDataTable() {\n"
-    "        KeyspaceMetadata ksm = Schema.instance.getKeyspaceMetadata(getElasticAdminKeyspaceName());\n"
+    "        org.apache.cassandra.schema.KeyspaceMetadata ksm = org.apache.cassandra.schema.Schema.instance.getKeyspaceMetadata(getElasticAdminKeyspaceName());\n"
     "        return ksm != null && ksm.getTableOrViewNullable(ELASTIC_ADMIN_METADATA_TABLE) != null;\n"
     "    }\n\n"
     "    /**\n"

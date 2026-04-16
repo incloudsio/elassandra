@@ -112,9 +112,11 @@ insert = """    public java.util.UUID readMetaDataOwner(long version) {
     }
 
     public boolean hasMetaDataTable() {
-        return false;
+        org.apache.cassandra.schema.KeyspaceMetadata ksm = org.apache.cassandra.schema.Schema.instance.getKeyspaceMetadata(getElasticAdminKeyspaceName());
+        return ksm != null && ksm.getTableOrViewNullable(ELASTIC_ADMIN_METADATA_TABLE) != null;
     }
 
+    /** Block until local shards are started ({@link CassandraShardStartedBarrier}). */
     public void blockUntilShardsStarted() {
     }
 
