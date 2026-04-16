@@ -43,10 +43,11 @@ Start a docker-based Elassandra cluster using docker-compose file **ci/docker-co
           memlock: -1
         mem_limit: 2000m
 
-      kibana:
-        image: docker.elastic.co/kibana/kibana-oss:6.8.4
+      dashboards:
+        image: opensearchproject/opensearch-dashboards:1.3.20
         environment:
-          - "ELASTICSEARCH_URL=http://seed_node:9200"
+          - 'OPENSEARCH_HOSTS=["http://seed_node:9200"]'
+          - "DISABLE_SECURITY_DASHBOARDS_PLUGIN=true"
         ports:
           - "5601:5601"
         mem_limit: 500m
@@ -75,13 +76,13 @@ Check the cassandra nodes status:
 Import sample data
 ------------------
 
-After about 35 secondes to start Elassandra on node0, you should have access to kibana at http://localhost:5601, and you can insert sample data and browse sample dashboards.
+After about 35 secondes to start Elassandra on node0, you should have access to OpenSearch Dashboards at http://localhost:5601, and you can insert sample data and browse sample dashboards.
 
 .. image:: images/kibana-sample-data.png
 
 .. image:: images/kibana-sample-dashboard.png
 
-View the kibana sample data in Cassandra:
+View the sample dashboard data in Cassandra:
 
 .. code::
 
