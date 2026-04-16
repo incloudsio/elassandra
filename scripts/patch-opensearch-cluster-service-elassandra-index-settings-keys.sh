@@ -14,11 +14,11 @@ import sys
 path = Path(sys.argv[1])
 text = path.read_text(encoding="utf-8")
 
-# Normalize the Elassandra index-settings block after SETTING_SYSTEM_SYNCHRONOUS_REFRESH.
 marker = '    public static final String SETTING_SYSTEM_SYNCHRONOUS_REFRESH = "es.synchronous_refresh";\n'
 tail = '    public static final String SETTING_SYSTEM_TOKEN_RANGES_QUERY_EXPIRE = "es.token_ranges_query_expire_minutes";\n'
-if marker not in text or tail not in text:
-    print("patch-opensearch-cluster-service-elassandra-index-settings-keys: marker not found", file=sys.stderr)
+
+if marker not in text:
+    print("patch-opensearch-cluster-service-elassandra-index-settings-keys: SETTING_SYSTEM_SYNCHRONOUS_REFRESH not found", file=sys.stderr)
     raise SystemExit(1)
 
 block = """
@@ -40,13 +40,21 @@ block = """
 """
 
 start = text.index(marker) + len(marker)
-end = text.index(tail, start)
-current = text[start:end]
-if current == block:
-    print("ClusterService index-settings keys already present:", path)
-    raise SystemExit(0)
 
-text = text[:start] + block + text[end:]
+if tail in text:
+    end = text.index(tail, start)
+    current = text[start:end]
+    if current == block:
+        print("ClusterService index-settings keys already present:", path)
+        raise SystemExit(0)
+    text = text[:start] + block + text[end:]
+else:
+    full_block = block + tail
+    if block.strip() in text:
+        print("ClusterService index-settings keys already present:", path)
+        raise SystemExit(0)
+    text = text[:start] + full_block + text[start:]
+
 path.write_text(text, encoding="utf-8")
 print("Normalized ElassandraIndexSettings ClusterService keys:", path)
 PY

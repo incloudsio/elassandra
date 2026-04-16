@@ -118,7 +118,7 @@ insert = """    public java.util.UUID readMetaDataOwner(long version) {
     public void blockUntilShardsStarted() {
     }
 
-    public static final String SETTING_SYSTEM_TOKEN_RANGES_QUERY_EXPIRE = "es.token_ranges_query_expire";
+    public static final String SETTING_SYSTEM_TOKEN_RANGES_QUERY_EXPIRE = "es.token_ranges_query_expire_minutes";
 
     public static String buildIndexName(String cfsName) {
         return cfsName;
