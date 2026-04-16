@@ -1,4 +1,12 @@
 /*
+ * SPDX-License-Identifier: Apache-2.0
+ *
+ * The OpenSearch Contributors require contributions made to
+ * this file be licensed under the Apache-2.0 license or a
+ * compatible open source license.
+ */
+
+/*
  * Licensed to Elasticsearch under one or more contributor
  * license agreements. See the NOTICE file distributed with
  * this work for additional information regarding copyright
@@ -17,6 +25,11 @@
  * under the License.
  */
 
+/*
+ * Modifications Copyright OpenSearch Contributors. See
+ * GitHub history for details.
+ */
+
 package org.apache.lucene.index;
 
 import java.io.IOException;
@@ -26,6 +39,7 @@ import java.io.IOException;
  */
 public class OneMergeHelper {
     private OneMergeHelper() {}
+
     public static String getSegmentName(MergePolicy.OneMerge merge) {
         return merge.info != null ? merge.info.info.name : "_na_";
     }
@@ -37,25 +51,22 @@ public class OneMergeHelper {
         if (thread instanceof ConcurrentMergeScheduler.MergeThread) {
             return ((ConcurrentMergeScheduler.MergeThread) thread).rateLimiter.getMBPerSec();
         }
-        assert false: "this is not merge thread";
+        assert false : "this is not merge thread";
         return Double.POSITIVE_INFINITY;
     }
 
     /**
      * Returns total bytes written by this merge.
      **/
-    public static long getTotalBytesWritten(Thread thread,
-                                            MergePolicy.OneMerge merge) throws IOException {
+    public static long getTotalBytesWritten(Thread thread, MergePolicy.OneMerge merge) throws IOException {
         /**
          * TODO: The number of bytes written during the merge should be accessible in OneMerge.
          */
         if (thread instanceof ConcurrentMergeScheduler.MergeThread) {
-            return ((ConcurrentMergeScheduler.MergeThread) thread).rateLimiter
-                .getTotalBytesWritten();
+            return ((ConcurrentMergeScheduler.MergeThread) thread).rateLimiter.getTotalBytesWritten();
         }
-        assert false: "this is not merge thread";
+        assert false : "this is not merge thread";
         return merge.totalBytesSize();
     }
-
 
 }

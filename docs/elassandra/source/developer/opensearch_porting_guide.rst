@@ -3,9 +3,9 @@
 OpenSearch 1.3.x porting guide (codebase map)
 =============================================
 
-This repository currently ships a **fork of Elasticsearch 6.8.4** integrated with Cassandra.
-The modernization target is **OpenSearch 1.3.x** (Elasticsearch 7.10 lineage): new Gradle layout,
-``org.opensearch.*`` packages, and different node/bootstrap APIs.
+This repository now ships an **OpenSearch 1.3.x**-based Elassandra integration on top of Cassandra 4.0.
+Use this guide when rebasing to a newer OpenSearch tag or when replaying the Elassandra-specific delta
+onto a fresh upstream checkout in the side-car harness.
 
 Recommended approach
 --------------------
@@ -93,11 +93,10 @@ Target version pins for the side-car (from ``buildSrc/version.properties``):
 Bootstrap and process model
 ---------------------------
 
-* **Current:** ``org.apache.cassandra.service.ElassandraDaemon`` extends ``CassandraDaemon``, calls
-  ``org.elasticsearch.bootstrap.Bootstrap`` and ``org.elasticsearch.node.Node``.
-* **Target:** Same class location in the **Cassandra** fork; update imports to
-  ``org.opensearch.bootstrap.Bootstrap`` and ``org.opensearch.node.Node``, and reconcile
-  ``Node`` construction / validation hooks with OpenSearch 1.3.
+* **Merged baseline:** ``org.apache.cassandra.service.ElassandraDaemon`` in the Cassandra fork extends
+  ``CassandraDaemon`` and calls ``org.opensearch.bootstrap.Bootstrap`` / ``org.opensearch.node.Node``.
+* **Future rebases:** Keep the same class location in the **Cassandra** fork and reconcile
+  ``Node`` construction / validation hooks with the target OpenSearch version.
 
 Cluster state, gateway, discovery
 ---------------------------------

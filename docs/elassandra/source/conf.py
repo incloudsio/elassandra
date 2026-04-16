@@ -65,9 +65,9 @@ author = u'Elassandra.org'
 # built documents.
 #
 # The short X.Y version.
-version = u'6.8.4.16'
+version = u'4.0.20-1.3.20.1'
 # The full version, including alpha/beta/rc tags.
-release = u'6.8.4.16'
+release = u'4.0.20-1.3.20.1'
 
 tgz_url = "https://github.com/incloudsio/elassandra/releases/download/v{0}/elassandra-{0}.tar.gz".format(release)
 deb_url = "https://github.com/incloudsio/elassandra/releases/download/v{0}/elassandra-{0}.deb".format(release)

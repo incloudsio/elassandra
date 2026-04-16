@@ -82,11 +82,13 @@ cd "$DEST"
 export GRADLE_OPTS="${GRADLE_OPTS:-} -Delassandra.cassandra.jar=$JAR"
 
 # Default Cassandra layout for ESSingleNodeTestCase (YamlConfigurationLoader needs a file: URI for cassandra.config).
-# Prefer server/src/test/resources (minimal yaml known to load with the Elassandra Cassandra jar in :server:test).
+# Prefer the real server/cassandra tree after the main-repo cutover, then fall back to the legacy minimal fixture.
 # Use ELASSANDRA_TEST_CASSANDRA_HOME=distribution/src only when validating package-shaped config.
 # Override with ELASSANDRA_TEST_CASSANDRA_HOME or skip with SKIP_ELASSANDRA_TEST_CASSANDRA_SYS_PROPS=1.
 if [[ -n "${ELASSANDRA_TEST_CASSANDRA_HOME:-}" ]]; then
   CASS_TEST_ROOT="$ELASSANDRA_TEST_CASSANDRA_HOME"
+elif [[ -f "$ROOT/server/cassandra/conf/cassandra.yaml" ]]; then
+  CASS_TEST_ROOT="$ROOT/server/cassandra"
 elif [[ -f "$ROOT/server/src/test/resources/conf/cassandra.yaml" ]]; then
   CASS_TEST_ROOT="$ROOT/server/src/test/resources"
 elif [[ -f "$ROOT/distribution/src/conf/cassandra.yaml" ]]; then

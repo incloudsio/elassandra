@@ -1,30 +1,28 @@
 # How to contribute
 
-Elassandra is based on a fork of Elasticsearch acting as a plugin for Apache Cassandra :
-* The **ElassandraDaemon** class override the **CassandraDaemon** class in order to manage Elasticsearch internal services.
-* The **ElasticSecondaryIndex** class implements the Cassandra **Index** interface to write in Elasticsearch indices.
+Elassandra now ships an OpenSearch 1.3.x-based search engine integrated directly into Apache Cassandra 4.0.x:
+* The **ElassandraDaemon** class extends **CassandraDaemon** in the Cassandra fork and manages OpenSearch bootstrap and node lifecycle.
+* The **ElasticSecondaryIndex** class implements the Cassandra **Index** interface and writes into OpenSearch indices.
 
 ![Elassandra class inheritance](/docs/elassandra/source/images/elassandra-inheritance.png)
 
-To achieve these operations, both Cassandra and Elasticsearch requires some modifications located in two forks:
+To achieve these operations, the project carries two coordinated codebases:
 
-A fork of [Apache Cassandra](http://git-wip-us.apache.org/repos/asf/cassandra.git) including slight modifications, maintained at [incloudsio/cassandra](https://github.com/incloudsio/cassandra) (see `server/cassandra` submodule).
+A fork of [Apache Cassandra](http://git-wip-us.apache.org/repos/asf/cassandra.git) including the Elassandra bootstrap and indexing hooks, maintained at [incloudsio/cassandra](https://github.com/incloudsio/cassandra) (see `server/cassandra` submodule).
 
-A fork of Elasticsearch 5.5.0 (aka Strapdata-Elasticsearch, branch *${version}-strapdata*) including modifications in :
-* Cluster state management ([org.elassandra.cluster.InternalCassandraClusterService](/core/src/main/java/org/elassandra/cluster/InternalCassandraClusterService.java) override a modified [org.elasticsearch.cluster.service.InternalClusterService](/core/src/main/java/org/elasticsearch/cluster/service/InternalClusterService.java))
-* Gateway to retrieve Elasticsearch metadata on startup (see [org.elassandra.gateway](/core/src/main/java/org/elassandra/gateway/CassandraGatewayService.java))
-* Discovery to manage alive cluster members (see [org.elassandra.discovery.CassandraDiscovery](/core/src/main/java/org/elassandra/discovery/CassandraDiscovery.java))
-* Fields mappers to manage CQL mapping and Lucene field factory (see [org.elasticsearch.index.mapper.core](/core/src/main/java/org/elasticsearch/index/mapper/core))
-* Search requests routing (see [org.elassandra.cluster.routing](/core/src/main/java/org/elassandra/cluster/routing))
+The merged **OpenSearch 1.3.x** server tree in this repository, plus the Elassandra bridge code under `server/src/main/java/org/elassandra`, including modifications in:
+* Cluster state management and discovery (see [org.elassandra.discovery](/server/src/main/java/org/elassandra/discovery))
+* Gateway and bootstrap integration (see [org.elassandra.gateway](/server/src/main/java/org/elassandra/gateway) and [org.apache.cassandra.service.ElassandraDaemon](/server/cassandra/src/java/org/apache/cassandra/service/ElassandraDaemon.java))
+* Field mappers and CQL mapping support (see [org.opensearch.index.mapper](/server/src/main/java/org/opensearch/index/mapper) and [org.elassandra.index](/server/src/main/java/org/elassandra/index))
+* Search request routing and token-aware execution (see [org.elassandra.cluster.routing](/server/src/main/java/org/elassandra/cluster/routing))
 
-As shown below, forked Cassandra and Elasticsearch projects can change independently and changes can be rebased periodically into Strapdata-Cassandra or Elassandra (aka Strapdata-Elasticsearch).
+As shown below, the Cassandra fork and the OpenSearch-based server tree can evolve independently and are periodically rebased together for Elassandra.
 
 ![Elassandra developpement process](/docs/elassandra/source/images/elassandra-devprocess.png)
 
 Elassandra depends on the Cassandra fork published as **`io.inclouds.cassandra`** (see **buildSrc/version.properties** and [incloudsio/cassandra](https://github.com/incloudsio/cassandra)):
-* Elassandra version 5+ **core/pom.xml** includes a Maven dependency on that artifact.
-* Elassandra version 6+ **buildSrc/version.properties** includes the Gradle dependency.
-* The **server/cassandra** git submodule points at [incloudsio/cassandra](https://github.com/incloudsio/cassandra) (branch **`cassandra-3.11.9-elassandra`** for the current line).
+* **buildSrc/version.properties** carries the pinned Cassandra and OpenSearch versions for this branch.
+* The **server/cassandra** git submodule points at [incloudsio/cassandra](https://github.com/incloudsio/cassandra) and should match `cassandra=` from `buildSrc/version.properties`.
 
 Contributors may open issues or pull requests on **[Elassandra](https://github.com/incloudsio/elassandra)** and, for Cassandra-fork–specific changes, on **[incloudsio/cassandra](https://github.com/incloudsio/cassandra)**.
 
@@ -44,39 +42,30 @@ You're welcome to open an issue on https://github.com/incloudsio/elassandra for 
 
 ## Contributing code and documentation changes
 
-Contributors can clone repositories and follow guidelines from Elasticsearch and Cassandra :
-* [Contributing to the elasticsearch codebase](https://github.com/elastic/elasticsearch/blob/2.4/CONTRIBUTING.md#contributing-to-the-elasticsearch-codebase)
+Contributors can clone repositories and follow guidelines from OpenSearch and Cassandra :
+* [Contributing to the OpenSearch codebase](https://github.com/opensearch-project/OpenSearch/blob/main/CONTRIBUTING.md)
 * [Cassandra How To Contribute](https://wiki.apache.org/cassandra/HowToContribute)
 
 When cloning Elassandra, use **git clone --recurse-submodules https://github.com/incloudsio/elassandra** to fetch the **server/cassandra** submodule ([incloudsio/cassandra](https://github.com/incloudsio/cassandra)) and ensure the submodule commit matches **buildSrc/version.properties** (`cassandra=`) and `./scripts/check-cassandra-submodule.sh`. You may use your own Cassandra branch if it includes the Elassandra-required changes; see the [Cassandra fork inventory](docs/elassandra/source/developer/cassandra_fork_inventory.rst).
 
-If you cloned without **--recurse-submodules**, run **git submodule update --init** and check out the branch recorded by this repository (e.g. **cassandra-3.11.9-elassandra**).
+If you cloned without **--recurse-submodules**, run **git submodule update --init** and check out the branch recorded by this repository.
 
-Then, to build from sources: 
+Then, to build from sources:
 
-* Elassandra v5.x:
+* Current OpenSearch 1.3 / Cassandra 4.0 line:
 
-      gradle clean assemble -Dbuild.snapshot=false
-    
-    
-* Elassandra v6.2.x:
-      
-      export JAVA_HOME=/path/to/jdk-10
-      export CASSANDRA_JAVA_HOME=/path/to/jdk-8
-      ./gradlew clean assemble -Dbuild.snapshot=false
-
-* Elassandra v6.8.x:
-      
-      export JAVA8_HOME=/path/to/jdk-8
-      export JAVA9_HOME=/path/to/jdk-9
       export JAVA11_HOME=/path/to/jdk-11
-      # Optional legacy alias if you do not set JAVA11_HOME:
-      # export JAVA12_HOME=/path/to/jdk-11
+      export JAVA12_HOME=/path/to/jdk-11
       export JAVA_HOME=/path/to/jdk-11
-      export CASSANDRA_JAVA_HOME=/path/to/jdk-8
       ./gradlew clean assemble -Dbuild.snapshot=false
+
+* To exercise the side-car rebase harness against upstream OpenSearch:
+
+      export JAVA_HOME=/path/to/jdk-11
+      ./scripts/opensearch-sidecar-compile-try.sh
+      ./scripts/opensearch-sidecar-test-try.sh
       
-Note: For elassandra v6.X, javadoc task failed due to [https://bugs.java.com/bugdatabase/view_bug.do?bug_id=8194281](https://bugs.java.com/bugdatabase/view_bug.do?bug_id=8194281).
+For repository-specific porting context, see `server/OPENSEARCH_PORT.md` and the developer docs under `docs/elassandra/source/developer/`.
 
 Elassandra documentation is based on [sphinx](http://www.sphinx-doc.org/en/stable/rest.html) and published on [readthedoc.org](https://readthedocs.org/). 
 Source RestructuredText files are located under [docs/elassandra](docs/elassandra) in this repository.
@@ -86,7 +75,7 @@ To build the documentation, just run **make html** from the *${project.dir}/docs
 
 1. Test you changes
 
-You can build Elassandra single-node unit tests mixing Elasticsearch and Cassandra CQL/nodetool requests. 
+You can build Elassandra single-node unit tests mixing OpenSearch and Cassandra CQL/nodetool requests.
 See [Elassandra Testing](http://doc.elassandra.io/en/latest/testing.html) documentation and 
 existing Elassandra unit tests under `server/src/test/java/org/elassandra` and related trees.
 For multi-node testing, you can use [ecm](https://github.com/strapdata/ecm) (historical fork of [ccm](https://github.com/pcmanus/ccm)) 
@@ -94,7 +83,7 @@ running Elassandra.
 
 2. Rebase your changes
 
-Like with Elasticsearch, update your local repository with the most recent code from the main Elassandra repository, 
+Like with OpenSearch, update your local repository with the most recent code from the main Elassandra repository, 
 and rebase your branch on top of the latest master branch. We prefer your initial changes to be squashed into a single 
 commit. Later, if we ask you to make changes, add them as separate commits. This makes them easier to review. 
 As a final step before merging we will either ask you to squash all commits yourself or we'll do it for you.

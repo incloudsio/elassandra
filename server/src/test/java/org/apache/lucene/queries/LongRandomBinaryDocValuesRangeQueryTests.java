@@ -1,4 +1,12 @@
 /*
+ * SPDX-License-Identifier: Apache-2.0
+ *
+ * The OpenSearch Contributors require contributions made to
+ * this file be licensed under the Apache-2.0 license or a
+ * compatible open source license.
+ */
+
+/*
  * Licensed to Elasticsearch under one or more contributor
  * license agreements. See the NOTICE file distributed with
  * this work for additional information regarding copyright
@@ -16,10 +24,15 @@
  * specific language governing permissions and limitations
  * under the License.
  */
+/*
+ * Modifications Copyright OpenSearch Contributors. See
+ * GitHub history for details.
+ */
+
 package org.apache.lucene.queries;
 
 import org.apache.lucene.util.TestUtil;
-import org.elasticsearch.index.mapper.RangeFieldMapper;
+import org.opensearch.index.mapper.RangeType;
 
 public class LongRandomBinaryDocValuesRangeQueryTests extends BaseRandomBinaryDocValuesRangeQueryTestCase {
 
@@ -29,8 +42,8 @@ public class LongRandomBinaryDocValuesRangeQueryTests extends BaseRandomBinaryDo
     }
 
     @Override
-    protected RangeFieldMapper.RangeType rangeType() {
-        return RangeFieldMapper.RangeType.LONG;
+    protected RangeType rangeType() {
+        return RangeType.LONG;
     }
 
     @Override
@@ -81,7 +94,7 @@ public class LongRandomBinaryDocValuesRangeQueryTests extends BaseRandomBinaryDo
         @Override
         protected void setMin(int dim, Object val) {
             assert dim == 0;
-            long v = (Long)val;
+            long v = (Long) val;
             if (min < v) {
                 max = v;
             } else {
@@ -97,7 +110,7 @@ public class LongRandomBinaryDocValuesRangeQueryTests extends BaseRandomBinaryDo
         @Override
         protected void setMax(int dim, Object val) {
             assert dim == 0;
-            long v = (Long)val;
+            long v = (Long) val;
             if (max > v) {
                 min = v;
             } else {
@@ -107,13 +120,13 @@ public class LongRandomBinaryDocValuesRangeQueryTests extends BaseRandomBinaryDo
 
         @Override
         protected boolean isDisjoint(Range o) {
-            LongTestRange other = (LongTestRange)o;
+            LongTestRange other = (LongTestRange) o;
             return this.min > other.max || this.max < other.min;
         }
 
         @Override
         protected boolean isWithin(Range o) {
-            LongTestRange other = (LongTestRange)o;
+            LongTestRange other = (LongTestRange) o;
             if ((this.min >= other.min && this.max <= other.max) == false) {
                 // not within:
                 return false;

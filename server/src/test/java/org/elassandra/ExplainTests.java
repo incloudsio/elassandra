@@ -20,16 +20,16 @@ import com.carrotsearch.randomizedtesting.annotations.ThreadLeakScope.Scope;
 import com.carrotsearch.randomizedtesting.annotations.ThreadLeakZombies;
 import com.carrotsearch.randomizedtesting.annotations.ThreadLeakZombies.Consequence;
 import org.apache.cassandra.db.ConsistencyLevel;
-import org.elasticsearch.action.search.SearchResponse;
-import org.elasticsearch.common.xcontent.XContentBuilder;
-import org.elasticsearch.common.xcontent.XContentFactory;
-import org.elasticsearch.index.query.QueryBuilders;
-import org.elasticsearch.test.ESSingleNodeTestCase;
+import org.opensearch.action.search.SearchResponse;
+import org.opensearch.common.xcontent.XContentBuilder;
+import org.opensearch.common.xcontent.XContentFactory;
+import org.opensearch.index.query.QueryBuilders;
+import org.opensearch.test.OpenSearchSingleNodeTestCase;
 import org.junit.Test;
 
 import java.util.Locale;
 
-import static org.elasticsearch.test.hamcrest.ElasticsearchAssertions.assertAcked;
+import static org.opensearch.test.hamcrest.OpenSearchAssertions.assertAcked;
 import static org.hamcrest.Matchers.equalTo;
 
 /**
@@ -39,7 +39,7 @@ import static org.hamcrest.Matchers.equalTo;
 //gradle :server:test -Dtests.seed=65E2CF27F286CC89 -Dtests.class=org.elassandra.ExplainTests -Dtests.security.manager=false -Dtests.locale=en-PH -Dtests.timezone=America/Coral_Harbour
 @ThreadLeakScope(Scope.NONE)
 @ThreadLeakZombies(Consequence.CONTINUE)
-public class ExplainTests extends ESSingleNodeTestCase {
+public class ExplainTests extends OpenSearchSingleNodeTestCase {
 
     @Test
     public void testExplain() throws Exception {
@@ -65,7 +65,7 @@ public class ExplainTests extends ESSingleNodeTestCase {
         long N = 10;
         for(int i=0; i < N; i++)
             process(ConsistencyLevel.ONE, String.format(Locale.ROOT, "INSERT INTO %s.t1 (id, f1) VALUES ('%d',%d)", index, i, i));
-        assertThat(client().prepareSearch().setIndices(index).setQuery(QueryBuilders.termQuery("f1", 1)).get().getHits().getTotalHits(), equalTo(1L));
+        assertThat(client().prepareSearch().setIndices(index).setQuery(QueryBuilders.termQuery("f1", 1)).get().getHits().getTotalHits().value, equalTo(1L));
         assertThat(client().prepareExplain(index, "t1", "1").setQuery(QueryBuilders.termQuery("f1", 1)).get().hasExplanation(), equalTo(true));
     }
 

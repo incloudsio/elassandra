@@ -16,7 +16,7 @@
 package org.elassandra.gateway;
 
 
-import org.elasticsearch.common.inject.AbstractModule;
+import org.opensearch.common.inject.AbstractModule;
 
 public class CassandraGatewayModule extends AbstractModule {
 

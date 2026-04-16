@@ -15,15 +15,16 @@
  */
 package org.elassandra;
 
+import org.apache.cassandra.config.DatabaseDescriptor;
 import org.apache.cassandra.cql3.UntypedResultSet;
 import org.apache.cassandra.db.ConsistencyLevel;
 import org.apache.cassandra.db.SystemKeyspace;
 import org.apache.cassandra.db.marshal.UTF8Type;
 import org.apache.cassandra.service.StorageService;
-import org.elasticsearch.cluster.metadata.IndexMetaData;
-import org.elasticsearch.common.settings.Settings;
-import org.elasticsearch.index.query.QueryBuilders;
-import org.elasticsearch.test.ESSingleNodeTestCase;
+import org.opensearch.cluster.metadata.IndexMetadata;
+import org.opensearch.common.settings.Settings;
+import org.opensearch.index.query.QueryBuilders;
+import org.opensearch.test.OpenSearchSingleNodeTestCase;
 import org.junit.Test;
 
 import java.util.Collections;
@@ -32,7 +33,7 @@ import java.util.Map;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
-import static org.elasticsearch.test.hamcrest.ElasticsearchAssertions.assertAcked;
+import static org.opensearch.test.hamcrest.OpenSearchAssertions.assertAcked;
 import static org.hamcrest.Matchers.equalTo;
 
 /**
@@ -42,7 +43,7 @@ import static org.hamcrest.Matchers.equalTo;
  *
  */
 //gradle :server:test -Dtests.seed=65E2CF27F286CC89 -Dtests.class=org.elassandra.IndexBuildTests -Dtests.security.manager=false -Dtests.locale=en-PH -Dtests.timezone=America/Coral_Harbour
-public class IndexBuildTests extends ESSingleNodeTestCase {
+public class IndexBuildTests extends OpenSearchSingleNodeTestCase {
     static long N = 10;
 
     private String randomIndexName(String prefix) {
@@ -59,7 +60,7 @@ public class IndexBuildTests extends ESSingleNodeTestCase {
 
     private void assertSearchHitCount(String index, long expected) throws Exception {
         assertBusy(() -> assertThat(
-            client().prepareSearch().setIndices(index).setTypes("t1").setQuery(QueryBuilders.matchAllQuery()).get().getHits().getTotalHits(),
+            client().prepareSearch().setIndices(index).setTypes("t1").setQuery(QueryBuilders.matchAllQuery()).get().getHits().getTotalHits().value,
             equalTo(expected)
         ));
     }
@@ -134,7 +135,7 @@ public class IndexBuildTests extends ESSingleNodeTestCase {
     @Test
     public void indexWithReplicationMap() throws Exception {
         String indexName = "test_rep";
-        createIndex(indexName, Settings.builder().putList(IndexMetaData.SETTING_REPLICATION, "DC1:1","DC2:2").build());
+        createIndex(indexName, Settings.builder().putList(IndexMetadata.SETTING_REPLICATION, "DC1:1","DC2:2").build());
         ensureGreen(indexName);
         UntypedResultSet rs = process(ConsistencyLevel.ONE, "SELECT replication FROM system_schema.keyspaces WHERE keyspace_name = ?", indexName);
         Map<String, String> replication = rs.one().getMap("replication", UTF8Type.instance, UTF8Type.instance);
@@ -147,7 +148,15 @@ public class IndexBuildTests extends ESSingleNodeTestCase {
     @Test
     public void testDelayedIndexBuild() throws Exception {
         String index = randomIndexName("test");
-        process(ConsistencyLevel.ONE,"CREATE KEYSPACE IF NOT EXISTS " + index + " WITH REPLICATION = { 'class' : 'NetworkTopologyStrategy', 'DC1':'1' }");
+        process(
+            ConsistencyLevel.ONE,
+            String.format(
+                Locale.ROOT,
+                "CREATE KEYSPACE IF NOT EXISTS %s WITH REPLICATION = { 'class' : 'NetworkTopologyStrategy', '%s':'1' }",
+                index,
+                DatabaseDescriptor.getLocalDataCenter()
+            )
+        );
         process(ConsistencyLevel.ONE,"CREATE TABLE IF NOT EXISTS " + index + ".t1 ( a int,b text, primary key (a) )");
         int i=0;
         for(int j=0 ; j < N; j++) {

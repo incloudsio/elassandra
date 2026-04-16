@@ -1,4 +1,15 @@
 /*
+ * SPDX-License-Identifier: Apache-2.0
+ *
+ * The OpenSearch Contributors require contributions made to
+ * this file be licensed under the Apache-2.0 license or a
+ * compatible open source license.
+ *
+ * Modifications Copyright OpenSearch Contributors. See
+ * GitHub history for details.
+ */
+
+/*
  * Licensed to Elasticsearch under one or more contributor
  * license agreements. See the NOTICE file distributed with
  * this work for additional information regarding copyright
@@ -17,63 +28,84 @@
  * under the License.
  */
 
-esplugin {
+import org.opensearch.gradle.info.BuildParams
+
+apply plugin: 'opensearch.yaml-rest-test'
+
+opensearchplugin {
   description 'Ingest processor that uses Apache Tika to extract contents'
-  classname 'org.elasticsearch.ingest.attachment.IngestAttachmentPlugin'
+  classname 'org.opensearch.ingest.attachment.IngestAttachmentPlugin'
 }
 
 versions << [
-  'tika': '1.19.1',
-  'pdfbox': '2.0.12',
-  'poi': '4.0.0',
-  'mime4j': '0.8.2'
+  'tika'  : '2.5.0',
+  'pdfbox': '2.0.25',
+  'poi'   : '5.2.2',
+  'mime4j': '0.8.11'
 ]
 
 dependencies {
   // mandatory for tika
-  compile "org.apache.tika:tika-core:${versions.tika}"
-  // build against Jackson 2.9.5, but still works on our current version
-  compile "org.apache.tika:tika-parsers:${versions.tika}"
-  compile 'org.tukaani:xz:1.8'
-  compile 'commons-io:commons-io:2.6'
-  compile "org.slf4j:slf4j-api:${versions.slf4j}"
+  api "org.apache.tika:tika-core:${versions.tika}"
+  api "org.apache.tika:tika-parsers:${versions.tika}"
+  // Required for the various document parsers
+  api "org.apache.tika:tika-parsers-standard-package:${versions.tika}"
+  // Required for language detection
+  api "org.apache.tika:tika-langdetect-optimaize:${versions.tika}"
+  // Optimaize libraries/dependencies
+  runtimeOnly "com.optimaize.languagedetector:language-detector:0.6"
+  runtimeOnly "com.google.guava:guava:${versions.guava}"
+  // Other dependencies
+  api 'org.tukaani:xz:1.9'
+  api 'commons-io:commons-io:2.16.0'
+  api "org.slf4j:slf4j-api:${versions.slf4j}"
 
   // character set detection
-  compile 'com.googlecode.juniversalchardet:juniversalchardet:1.0.3'
+  api 'com.googlecode.juniversalchardet:juniversalchardet:1.0.3'
 
   // external parser libraries
   // HTML
-  compile 'org.ccil.cowan.tagsoup:tagsoup:1.2.1'
+  api 'org.ccil.cowan.tagsoup:tagsoup:1.2.1'
   // Adobe PDF
-  compile "org.apache.pdfbox:pdfbox:${versions.pdfbox}"
-  compile "org.apache.pdfbox:fontbox:${versions.pdfbox}"
-  compile "org.apache.pdfbox:jempbox:1.8.16"
-  compile "commons-logging:commons-logging:${versions.commonslogging}"
-  compile "org.bouncycastle:bcmail-jdk15on:${versions.bouncycastle}"
-  compile "org.bouncycastle:bcprov-jdk15on:${versions.bouncycastle}"
-  compile "org.bouncycastle:bcpkix-jdk15on:${versions.bouncycastle}"
+  api "org.apache.pdfbox:pdfbox:${versions.pdfbox}"
+  api "org.apache.pdfbox:fontbox:${versions.pdfbox}"
+  api "org.apache.pdfbox:jempbox:1.8.16"
+  api "commons-logging:commons-logging:${versions.commonslogging}"
+  api "org.bouncycastle:bcmail-jdk15to18:${versions.bouncycastle}"
+  api "org.bouncycastle:bcprov-jdk15to18:${versions.bouncycastle}"
+  api "org.bouncycastle:bcpkix-jdk15to18:${versions.bouncycastle}"
   // OpenOffice
-  compile "org.apache.poi:poi-ooxml:${versions.poi}"
-  compile "org.apache.poi:poi:${versions.poi}"
-  compile "org.apache.poi:poi-ooxml-schemas:${versions.poi}"
-  compile "commons-codec:commons-codec:${versions.commonscodec}"
-  compile 'org.apache.xmlbeans:xmlbeans:3.0.1'
-  compile 'org.apache.commons:commons-collections4:4.1'
+  api "org.apache.poi:poi-ooxml:${versions.poi}"
+  api "org.apache.poi:poi:${versions.poi}"
+  api "org.apache.poi:poi-ooxml-lite:${versions.poi}"
+  api "commons-codec:commons-codec:${versions.commonscodec}"
+  api 'org.apache.xmlbeans:xmlbeans:5.0.2'
+  api 'org.apache.commons:commons-collections4:4.1'
   // MS Office
-  compile "org.apache.poi:poi-scratchpad:${versions.poi}"
+  api "org.apache.poi:poi-scratchpad:${versions.poi}"
   // Apple iWork
-  compile 'org.apache.commons:commons-compress:1.18'
+  api 'org.apache.commons:commons-compress:1.21'
   // Outlook documents
-  compile "org.apache.james:apache-mime4j-core:${versions.mime4j}"
-  compile "org.apache.james:apache-mime4j-dom:${versions.mime4j}"
+  api "org.apache.james:apache-mime4j-core:${versions.mime4j}"
+  api "org.apache.james:apache-mime4j-dom:${versions.mime4j}"
+  // EPUB books
+  api 'org.apache.commons:commons-lang3:3.9'
+  // Microsoft Word files with visio diagrams
+  api 'org.apache.commons:commons-math3:3.6.1'
+  // POIs dependency
+  api 'com.zaxxer:SparseBitSet:1.2'
 }
 
-// TODO: stop using LanguageIdentifier...
-compileJava.options.compilerArgs << "-Xlint:-deprecation"
+restResources {
+  restApi {
+    includeCore '_common', 'cluster', 'nodes', 'ingest', 'index', 'get'
+  }
+}
 
-
-dependencyLicenses {
+tasks.named("dependencyLicenses").configure {
   mapping from: /apache-mime4j-.*/, to: 'apache-mime4j'
+  mapping from: /tika-.*/, to: 'tika-parsers'
+  mapping from: /poi-ooxml-.*/, to: 'poi-ooxml'
 }
 
 forbiddenPatterns {
@@ -84,12 +116,30 @@ forbiddenPatterns {
   exclude '**/*.vsdx'
 }
 
-thirdPartyAudit{ 
-    ignoreMissingClasses()
+thirdPartyAudit {
+  ignoreMissingClasses()
+  ignoreViolations(
+    'com.google.common.cache.Striped64',
+    'com.google.common.cache.Striped64$1',
+    'com.google.common.cache.Striped64$Cell',
+    'com.google.common.hash.LittleEndianByteArray$UnsafeByteArray',
+    'com.google.common.hash.LittleEndianByteArray$UnsafeByteArray$1',
+    'com.google.common.hash.LittleEndianByteArray$UnsafeByteArray$2',
+    'com.google.common.hash.Striped64',
+    'com.google.common.hash.Striped64$1',
+    'com.google.common.hash.Striped64$Cell',
+    'com.google.common.primitives.UnsignedBytes$LexicographicalComparatorHolder$UnsafeComparator',
+    'com.google.common.primitives.UnsignedBytes$LexicographicalComparatorHolder$UnsafeComparator$1',
+    'com.google.common.util.concurrent.AbstractFuture$UnsafeAtomicHelper',
+    'com.google.common.util.concurrent.AbstractFuture$UnsafeAtomicHelper$1'
+  )
 }
 
-if (project.inFipsJvm) {
-    // FIPS JVM includes manny classes from bouncycastle which count as jar hell for the third party audit,
-    // rather than provide a long list of exclusions, disable the check on FIPS.
-    thirdPartyAudit.enabled = false
+if (BuildParams.inFipsJvm) {
+  // FIPS JVM includes many classes from bouncycastle which count as jar hell for the third party audit,
+  // rather than provide a long list of exclusions, disable the check on FIPS.
+  jarHell.enabled = false
+  test.enabled = false
+  yamlRestTest.enabled = false;
+  testingConventions.enabled = false;
 }

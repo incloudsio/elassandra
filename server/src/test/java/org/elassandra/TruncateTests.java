@@ -16,20 +16,20 @@
 package org.elassandra;
 
 import org.apache.cassandra.db.ConsistencyLevel;
-import org.elasticsearch.action.DocWriteResponse;
-import org.elasticsearch.action.admin.indices.segments.IndexShardSegments;
-import org.elasticsearch.action.admin.indices.segments.ShardSegments;
-import org.elasticsearch.action.index.IndexResponse;
-import org.elasticsearch.common.xcontent.XContentBuilder;
-import org.elasticsearch.common.xcontent.XContentFactory;
-import org.elasticsearch.common.xcontent.XContentType;
-import org.elasticsearch.index.engine.Segment;
-import org.elasticsearch.index.query.QueryBuilders;
-import org.elasticsearch.test.ESSingleNodeTestCase;
+import org.opensearch.action.DocWriteResponse;
+import org.opensearch.action.admin.indices.segments.IndexShardSegments;
+import org.opensearch.action.admin.indices.segments.ShardSegments;
+import org.opensearch.action.index.IndexResponse;
+import org.opensearch.common.xcontent.XContentBuilder;
+import org.opensearch.common.xcontent.XContentFactory;
+import org.opensearch.common.xcontent.XContentType;
+import org.opensearch.index.engine.Segment;
+import org.opensearch.index.query.QueryBuilders;
+import org.opensearch.test.OpenSearchSingleNodeTestCase;
 import org.junit.Ignore;
 import org.junit.Test;
 
-import static org.elasticsearch.test.hamcrest.ElasticsearchAssertions.assertAcked;
+import static org.opensearch.test.hamcrest.OpenSearchAssertions.assertAcked;
 import static org.hamcrest.Matchers.equalTo;
 
 /**
@@ -37,7 +37,7 @@ import static org.hamcrest.Matchers.equalTo;
  * @author vroyer
  *
  */
-public class TruncateTests extends ESSingleNodeTestCase {
+public class TruncateTests extends OpenSearchSingleNodeTestCase {
 
     @Test
     @Ignore("Nested truncate is timing out in the OpenSearch 1.3 sidecar Cassandra path and is deferred as a compatibility bucket.")
@@ -65,7 +65,7 @@ public class TruncateTests extends ESSingleNodeTestCase {
                 "          }\n" + 
                 "        ]}", XContentType.JSON).get();
         assertThat(resp.getResult(), equalTo(DocWriteResponse.Result.CREATED));
-        assertThat(client().prepareSearch().setIndices("test").setTypes("user").setQuery(QueryBuilders.matchAllQuery()).get().getHits().getTotalHits(), equalTo(1L));
+        assertThat(client().prepareSearch().setIndices("test").setTypes("user").setQuery(QueryBuilders.matchAllQuery()).get().getHits().getTotalHits().value, equalTo(1L));
         int totalDocs = 0;
         for(IndexShardSegments iss : client().admin().indices().prepareSegments("test").get().getIndices().get("test")) {
             for(ShardSegments ss : iss.getShards()) {
@@ -77,7 +77,7 @@ public class TruncateTests extends ESSingleNodeTestCase {
         assertThat(totalDocs, equalTo(3));
         
         process(ConsistencyLevel.ONE,"TRUNCATE test.user");
-        assertThat(client().prepareSearch().setIndices("test").setTypes("user").setQuery(QueryBuilders.matchAllQuery()).get().getHits().getTotalHits(), equalTo(0L));
+        assertThat(client().prepareSearch().setIndices("test").setTypes("user").setQuery(QueryBuilders.matchAllQuery()).get().getHits().getTotalHits().value, equalTo(0L));
         totalDocs = 0;
         for(IndexShardSegments iss : client().admin().indices().prepareSegments("test").get().getIndices().get("test")) {
             for(ShardSegments ss : iss.getShards()) {

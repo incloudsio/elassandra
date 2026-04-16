@@ -18,18 +18,18 @@ package org.elassandra;
 import org.apache.cassandra.db.ConsistencyLevel;
 import org.apache.cassandra.service.StorageService;
 import org.apache.lucene.search.join.ScoreMode;
-import org.elasticsearch.common.settings.Settings;
-import org.elasticsearch.common.xcontent.XContentBuilder;
-import org.elasticsearch.common.xcontent.XContentFactory;
-import org.elasticsearch.common.xcontent.XContentType;
-import org.elasticsearch.index.query.QueryBuilders;
-import org.elasticsearch.test.ESSingleNodeTestCase;
+import org.opensearch.common.settings.Settings;
+import org.opensearch.common.xcontent.XContentBuilder;
+import org.opensearch.common.xcontent.XContentFactory;
+import org.opensearch.common.xcontent.XContentType;
+import org.opensearch.index.query.QueryBuilders;
+import org.opensearch.test.OpenSearchSingleNodeTestCase;
 import org.junit.Ignore;
 import org.junit.Test;
 
 import java.util.Locale;
 
-import static org.elasticsearch.test.hamcrest.ElasticsearchAssertions.assertAcked;
+import static org.opensearch.test.hamcrest.OpenSearchAssertions.assertAcked;
 import static org.hamcrest.Matchers.equalTo;
 
 /**
@@ -39,7 +39,7 @@ import static org.hamcrest.Matchers.equalTo;
  */
 //gradle :server:test -Dtests.seed=65E2CF27F286CC89 -Dtests.class=org.elassandra.CompositeTests -Dtests.security.manager=false -Dtests.locale=en-PH -Dtests.timezone=America/Coral_Harbour
 @Ignore("Composite-key sidecar coverage is still unstable under OpenSearch 1.3; Wave 4 continues past this legacy bucket.")
-public class CompositeTests extends ESSingleNodeTestCase {
+public class CompositeTests extends OpenSearchSingleNodeTestCase {
 
     @Test
     public void testCompositeWithStaticColumnTest() throws Exception {
@@ -63,10 +63,10 @@ public class CompositeTests extends ESSingleNodeTestCase {
         // INSERT INTO test.t2 (id, surname, name, phonetic_name, nicks) VALUES (22, 'Genesis', 'Abraham', 'ai-b-ram', ['the-A', 'ab'])
         process(ConsistencyLevel.ONE,"INSERT INTO test.t2 (id, surname, name, phonetic_name, nicks) VALUES (22, 'Genesis', 'Abraham', 'ai-b-ram', ['the-A', 'ab'])");
 
-        assertThat(client().prepareSearch().setQuery(QueryBuilders.matchAllQuery()).get().getHits().getTotalHits(), equalTo(2L));
+        assertThat(client().prepareSearch().setQuery(QueryBuilders.matchAllQuery()).get().getHits().getTotalHits().value, equalTo(2L));
     }
 
-    // mvn test -Pdev -pl org.elasticsearch:elasticsearch -Dtests.seed=622A2B0618CE4676 -Dtests.class=org.elassandra.CompositeTests -Dtests.method="testCompositeTest" -Des.logger.level=ERROR -Dtests.assertion.disabled=false -Dtests.security.manager=false -Dtests.heap.size=1024m -Dtests.locale=ro-RO -Dtests.timezone=America/Toronto
+    // mvn test -Pdev -pl org.opensearch:elasticsearch -Dtests.seed=622A2B0618CE4676 -Dtests.class=org.elassandra.CompositeTests -Dtests.method="testCompositeTest" -Des.logger.level=ERROR -Dtests.assertion.disabled=false -Dtests.security.manager=false -Dtests.heap.size=1024m -Dtests.locale=ro-RO -Dtests.timezone=America/Toronto
     @Test
     public void testCompositeTest() throws Exception {
         testCompositeTest(false);
@@ -146,18 +146,18 @@ public class CompositeTests extends ESSingleNodeTestCase {
         assertThat(client().prepareGet().setIndex("composite12").setType("t12").setId("[\"a\",\"b2\",2]").get().isExists(),equalTo(true));
         assertThat(client().prepareGet().setIndex("composite13").setType("t13").setId("[\"a\",\"b3\",2]").get().isExists(),equalTo(true));
 
-        assertThat(client().prepareSearch().setIndices("composite1").setTypes("t1").setQuery(QueryBuilders.queryStringQuery("c:1")).get().getHits().getTotalHits(), equalTo(1L));
-        assertThat(client().prepareSearch().setIndices("composite2").setTypes("t2").setQuery(QueryBuilders.queryStringQuery("d:1")).get().getHits().getTotalHits(), equalTo(2L));
-        assertThat(client().prepareSearch().setIndices("composite3").setTypes("t3").setQuery(QueryBuilders.queryStringQuery("d:3")).get().getHits().getTotalHits(), equalTo(1L));
-        assertThat(client().prepareSearch().setIndices("composite4").setTypes("t4").setQuery(QueryBuilders.queryStringQuery("d:4")).get().getHits().getTotalHits(), equalTo(1L));
+        assertThat(client().prepareSearch().setIndices("composite1").setTypes("t1").setQuery(QueryBuilders.queryStringQuery("c:1")).get().getHits().getTotalHits().value, equalTo(1L));
+        assertThat(client().prepareSearch().setIndices("composite2").setTypes("t2").setQuery(QueryBuilders.queryStringQuery("d:1")).get().getHits().getTotalHits().value, equalTo(2L));
+        assertThat(client().prepareSearch().setIndices("composite3").setTypes("t3").setQuery(QueryBuilders.queryStringQuery("d:3")).get().getHits().getTotalHits().value, equalTo(1L));
+        assertThat(client().prepareSearch().setIndices("composite4").setTypes("t4").setQuery(QueryBuilders.queryStringQuery("d:4")).get().getHits().getTotalHits().value, equalTo(1L));
 
-        assertThat(client().prepareSearch().setIndices("composite11").setTypes("t11").setQuery(QueryBuilders.queryStringQuery("c:1")).get().getHits().getTotalHits(), equalTo(1L));
-        assertThat(client().prepareSearch().setIndices("composite12").setTypes("t12").setQuery(QueryBuilders.queryStringQuery("d:1")).get().getHits().getTotalHits(), equalTo(2L));
-        assertThat(client().prepareSearch().setIndices("composite13").setTypes("t13").setQuery(QueryBuilders.queryStringQuery("d:3")).get().getHits().getTotalHits(), equalTo(2L));
+        assertThat(client().prepareSearch().setIndices("composite11").setTypes("t11").setQuery(QueryBuilders.queryStringQuery("c:1")).get().getHits().getTotalHits().value, equalTo(1L));
+        assertThat(client().prepareSearch().setIndices("composite12").setTypes("t12").setQuery(QueryBuilders.queryStringQuery("d:1")).get().getHits().getTotalHits().value, equalTo(2L));
+        assertThat(client().prepareSearch().setIndices("composite13").setTypes("t13").setQuery(QueryBuilders.queryStringQuery("d:3")).get().getHits().getTotalHits().value, equalTo(2L));
 
-        assertThat(client().prepareSearch().setIndices("composite11").setTypes("t11").setQuery(QueryBuilders.queryStringQuery("s1:b")).get().getHits().getTotalHits(), equalTo(2L));
-        assertThat(client().prepareSearch().setIndices("composite12").setTypes("t12").setQuery(QueryBuilders.queryStringQuery("s1:a2")).get().getHits().getTotalHits(), equalTo(2L));
-        assertThat(client().prepareSearch().setIndices("composite13").setTypes("t13").setQuery(QueryBuilders.queryStringQuery("s1:ab5")).get().getHits().getTotalHits(), equalTo(2L));
+        assertThat(client().prepareSearch().setIndices("composite11").setTypes("t11").setQuery(QueryBuilders.queryStringQuery("s1:b")).get().getHits().getTotalHits().value, equalTo(2L));
+        assertThat(client().prepareSearch().setIndices("composite12").setTypes("t12").setQuery(QueryBuilders.queryStringQuery("s1:a2")).get().getHits().getTotalHits().value, equalTo(2L));
+        assertThat(client().prepareSearch().setIndices("composite13").setTypes("t13").setQuery(QueryBuilders.queryStringQuery("s1:ab5")).get().getHits().getTotalHits().value, equalTo(2L));
 
         assertThat(client().prepareMultiGet().add("composite1", "t1", "[\"a\",\"b1\"]", "[\"b\",\"b1\"]").get().getResponses()[0].getIndex(), equalTo("composite1") );
         assertThat(client().prepareMultiGet().add("composite2", "t2", "[\"a\",\"b2\",2]", "[\"a\",\"b2\",3]").get().getResponses()[0].getIndex(), equalTo("composite2") );
@@ -169,42 +169,42 @@ public class CompositeTests extends ESSingleNodeTestCase {
         assertThat(client().prepareMultiGet().add("composite13", "t13", "[\"a\",\"b3\",2]", "[\"a\",\"b3\",3]").get().getResponses()[0].getIndex(), equalTo("composite13")  );
 
         // delete with partition key
-        assertThat(client().prepareSearch().setIndices("composite1").setTypes("t1").setQuery(QueryBuilders.matchAllQuery()).get().getHits().getTotalHits(), equalTo(2L));
+        assertThat(client().prepareSearch().setIndices("composite1").setTypes("t1").setQuery(QueryBuilders.matchAllQuery()).get().getHits().getTotalHits().value, equalTo(2L));
         process(ConsistencyLevel.ONE,"DELETE FROM composite1.t1 WHERE a='a'");
-        assertThat(client().prepareSearch().setIndices("composite1").setTypes("t1").setQuery(QueryBuilders.matchAllQuery()).get().getHits().getTotalHits(), equalTo(1L));
+        assertThat(client().prepareSearch().setIndices("composite1").setTypes("t1").setQuery(QueryBuilders.matchAllQuery()).get().getHits().getTotalHits().value, equalTo(1L));
 
         // delete with primary key
-        assertThat(client().prepareSearch().setIndices("composite2").setTypes("t2").setQuery(QueryBuilders.matchAllQuery()).get().getHits().getTotalHits(), equalTo(2L));
+        assertThat(client().prepareSearch().setIndices("composite2").setTypes("t2").setQuery(QueryBuilders.matchAllQuery()).get().getHits().getTotalHits().value, equalTo(2L));
         process(ConsistencyLevel.ONE,"DELETE FROM composite2.t2 WHERE a='a' AND b='b2' AND c=2");
-        assertThat(client().prepareSearch().setIndices("composite2").setTypes("t2").setQuery(QueryBuilders.matchAllQuery()).get().getHits().getTotalHits(), equalTo(1L));
+        assertThat(client().prepareSearch().setIndices("composite2").setTypes("t2").setQuery(QueryBuilders.matchAllQuery()).get().getHits().getTotalHits().value, equalTo(1L));
 
         // delete with primary key
         process(ConsistencyLevel.ONE,"DELETE FROM composite3.t3 WHERE a='a' AND b='b3' AND c = 4");
-        assertThat(client().prepareSearch().setIndices("composite3").setTypes("t3").setQuery(QueryBuilders.queryStringQuery("a:a")).get().getHits().getTotalHits(), equalTo(9L));
+        assertThat(client().prepareSearch().setIndices("composite3").setTypes("t3").setQuery(QueryBuilders.queryStringQuery("a:a")).get().getHits().getTotalHits().value, equalTo(9L));
 
         // t3 delete a slice with composite partition key
         process(ConsistencyLevel.ONE,"DELETE FROM composite3.t3 WHERE a='a' AND b='b3' AND c >= 3 AND c <= 5");
-        assertThat(client().prepareSearch().setIndices("composite3").setTypes("t3").setQuery(QueryBuilders.queryStringQuery("a:a")).get().getHits().getTotalHits(), equalTo(7L));
+        assertThat(client().prepareSearch().setIndices("composite3").setTypes("t3").setQuery(QueryBuilders.queryStringQuery("a:a")).get().getHits().getTotalHits().value, equalTo(7L));
         process(ConsistencyLevel.ONE,"DELETE FROM composite3.t3 WHERE a='a' AND b='b3' AND c <= 5");
-        assertThat(client().prepareSearch().setIndices("composite3").setTypes("t3").setQuery(QueryBuilders.queryStringQuery("a:a")).get().getHits().getTotalHits(), equalTo(4L));
+        assertThat(client().prepareSearch().setIndices("composite3").setTypes("t3").setQuery(QueryBuilders.queryStringQuery("a:a")).get().getHits().getTotalHits().value, equalTo(4L));
         process(ConsistencyLevel.ONE,"DELETE FROM composite3.t3 WHERE a='a' AND b='b3' AND c > 6");
-        assertThat(client().prepareSearch().setIndices("composite3").setTypes("t3").setQuery(QueryBuilders.queryStringQuery("a:a")).get().getHits().getTotalHits(), equalTo(1L));
+        assertThat(client().prepareSearch().setIndices("composite3").setTypes("t3").setQuery(QueryBuilders.queryStringQuery("a:a")).get().getHits().getTotalHits().value, equalTo(1L));
 
         // t4 delete a slice with composite partition and a composite clustering keys
         process(ConsistencyLevel.ONE,"DELETE FROM composite4.t4 WHERE a='a' AND b='b3' AND c = 4");
-        assertThat(client().prepareSearch().setIndices("composite4").setTypes("t4").setQuery(QueryBuilders.queryStringQuery("a:a")).get().getHits().getTotalHits(), equalTo(9L));
+        assertThat(client().prepareSearch().setIndices("composite4").setTypes("t4").setQuery(QueryBuilders.queryStringQuery("a:a")).get().getHits().getTotalHits().value, equalTo(9L));
         process(ConsistencyLevel.ONE,"DELETE FROM composite4.t4 WHERE a='a' AND b='b3' AND c >= 3 AND c <= 5");
-        assertThat(client().prepareSearch().setIndices("composite4").setTypes("t4").setQuery(QueryBuilders.queryStringQuery("a:a")).get().getHits().getTotalHits(), equalTo(7L));
+        assertThat(client().prepareSearch().setIndices("composite4").setTypes("t4").setQuery(QueryBuilders.queryStringQuery("a:a")).get().getHits().getTotalHits().value, equalTo(7L));
         process(ConsistencyLevel.ONE,"DELETE FROM composite4.t4 WHERE a='a' AND b='b3' AND c >= 7");
-        assertThat(client().prepareSearch().setIndices("composite4").setTypes("t4").setQuery(QueryBuilders.queryStringQuery("a:a")).get().getHits().getTotalHits(), equalTo(4L));
+        assertThat(client().prepareSearch().setIndices("composite4").setTypes("t4").setQuery(QueryBuilders.queryStringQuery("a:a")).get().getHits().getTotalHits().value, equalTo(4L));
         process(ConsistencyLevel.ONE,"DELETE FROM composite4.t4 WHERE a='a' AND b='b3' AND c <= 3");
-        assertThat(client().prepareSearch().setIndices("composite4").setTypes("t4").setQuery(QueryBuilders.queryStringQuery("a:a")).get().getHits().getTotalHits(), equalTo(1L));
+        assertThat(client().prepareSearch().setIndices("composite4").setTypes("t4").setQuery(QueryBuilders.queryStringQuery("a:a")).get().getHits().getTotalHits().value, equalTo(1L));
 
         // truncate content
         process(ConsistencyLevel.ONE,"TRUNCATE composite3.t3");
-        assertThat(client().prepareSearch().setIndices("composite3").setTypes("t3").setQuery(QueryBuilders.matchAllQuery()).get().getHits().getTotalHits(), equalTo(0L));
+        assertThat(client().prepareSearch().setIndices("composite3").setTypes("t3").setQuery(QueryBuilders.matchAllQuery()).get().getHits().getTotalHits().value, equalTo(0L));
         process(ConsistencyLevel.ONE,"TRUNCATE composite4.t4");
-        assertThat(client().prepareSearch().setIndices("composite4").setTypes("t4").setQuery(QueryBuilders.matchAllQuery()).get().getHits().getTotalHits(), equalTo(0L));
+        assertThat(client().prepareSearch().setIndices("composite4").setTypes("t4").setQuery(QueryBuilders.matchAllQuery()).get().getHits().getTotalHits().value, equalTo(0L));
 
         // test rebuild index
         assertAcked(client().admin().indices().prepareClose("composite3").get());
@@ -214,12 +214,12 @@ public class CompositeTests extends ESSingleNodeTestCase {
         assertAcked(client().admin().indices().prepareOpen("composite3").get());
         ensureGreen("composite3");
 
-        assertThat(client().prepareSearch().setIndices("composite3").setTypes("t3").setQuery(QueryBuilders.queryStringQuery("a:a")).get().getHits().getTotalHits(), equalTo(0L));
+        assertThat(client().prepareSearch().setIndices("composite3").setTypes("t3").setQuery(QueryBuilders.queryStringQuery("a:a")).get().getHits().getTotalHits().value, equalTo(0L));
 
         StorageService.instance.forceKeyspaceFlush("composite3", "t3");
         StorageService.instance.rebuildSecondaryIndex("composite3", "t3", "elastic_t3_idx");
 
-        assertThat(client().prepareSearch().setIndices("composite3").setTypes("t3").setQuery(QueryBuilders.queryStringQuery("a:a")).get().getHits().getTotalHits(), equalTo(3L));
+        assertThat(client().prepareSearch().setIndices("composite3").setTypes("t3").setQuery(QueryBuilders.queryStringQuery("a:a")).get().getHits().getTotalHits().value, equalTo(3L));
 
         // delete index
         assertAcked(client().admin().indices().prepareDelete("composite3").get());
@@ -301,11 +301,11 @@ curl -XGET "http://$NODE:9200/test/timeseries/_search?pretty=true&q=meta.region:
 
         assertThat(client().prepareSearch().setIndices("test").setTypes("timeseries")
                 .setQuery(QueryBuilders.termQuery("v", 20))
-                .get().getHits().getTotalHits(), equalTo(1L));
+                .get().getHits().getTotalHits().value, equalTo(1L));
 
         assertThat(client().prepareSearch().setIndices("test").setTypes("timeseries")
                 .setQuery(QueryBuilders.termQuery("meta.region","west"))
-                .get().getHits().getTotalHits(), equalTo(1L));
+                .get().getHits().getTotalHits().value, equalTo(1L));
     }
 
     @Test
@@ -354,12 +354,12 @@ curl -XGET "http://$NODE:9200/test/timeseries/_search?pretty=true&q=meta.region:
 
         assertThat(client().prepareSearch().setIndices("test").setTypes("timeseries")
                 .setQuery(QueryBuilders.queryStringQuery("meta.region:west"))
-                .get().getHits().getTotalHits(), equalTo(3L));
+                .get().getHits().getTotalHits().value, equalTo(3L));
 
         // check static column is ot indexed when index_static_columns=false
         assertThat(client().prepareSearch().setIndices("test2").setTypes("timeseries")
                 .setQuery(QueryBuilders.queryStringQuery("meta.region:west"))
-                .get().getHits().getTotalHits(), equalTo(0L));
+                .get().getHits().getTotalHits().value, equalTo(0L));
     }
 
     @Test
@@ -390,11 +390,11 @@ curl -XGET "http://$NODE:9200/test/timeseries/_search?pretty=true&q=meta.region:
         process(ConsistencyLevel.ONE,"INSERT INTO test.timeseries (m, t, v) VALUES ('server1-cpu', '2016-04-10 13:31', 20);");
         process(ConsistencyLevel.ONE,"INSERT INTO test.timeseries (m, t, v) VALUES ('server1-cpu', '2016-04-10 13:32', 15);");
 
-        assertThat(client().prepareSearch().setIndices("test").setTypes("timeseries").setQuery(QueryBuilders.matchAllQuery()).get().getHits().getTotalHits(), equalTo(1L));
+        assertThat(client().prepareSearch().setIndices("test").setTypes("timeseries").setQuery(QueryBuilders.matchAllQuery()).get().getHits().getTotalHits().value, equalTo(1L));
 
         assertThat(client().prepareSearch().setIndices("test").setTypes("timeseries")
                 .setQuery(QueryBuilders.nestedQuery("meta", QueryBuilders.matchQuery("meta.region", "west"), ScoreMode.Avg))
-                .get().getHits().getTotalHits(), equalTo(1L));
+                .get().getHits().getTotalHits().value, equalTo(1L));
     }
 
     @Test
@@ -425,7 +425,7 @@ curl -XGET "http://$NODE:9200/test/timeseries/_search?pretty=true&q=meta.region:
 
         assertThat(client().prepareSearch().setIndices("test").setTypes("timeseries")
                 .setQuery(QueryBuilders.matchAllQuery())
-                .get().getHits().getTotalHits(), equalTo(0L));
+                .get().getHits().getTotalHits().value, equalTo(0L));
     }
 
 }

@@ -1,11 +1,10 @@
 ---
 setup:
   - skip:
-      version: " - 6.6.99"
-      reason: include_type_name was introduced in 6.7.0
+      version: " - 6.99.99"
+      reason: include_type_name defaults to true before 7.0
   - do:
         indices.create:
-          include_type_name: false
           index: test_index
           body:
               mappings:
@@ -18,7 +17,6 @@ setup:
 
   - do:
       indices.get_field_mapping:
-        include_type_name: false
         fields: text
 
   - match: {test_index.mappings.text.mapping.text.type:     text}
@@ -27,7 +25,6 @@ setup:
 "Get field mapping by index only":
   - do:
       indices.get_field_mapping:
-        include_type_name: false
         index: test_index
         fields: text
 
@@ -38,7 +35,6 @@ setup:
 
   - do:
       indices.get_field_mapping:
-        include_type_name: false
         index: test_index
         fields: [ text , text1 ]
 
@@ -50,10 +46,26 @@ setup:
 
   - do:
       indices.get_field_mapping:
-        include_type_name: false
         index: test_index
         fields: text
         include_defaults: true
 
   - match: {test_index.mappings.text.mapping.text.type:     text}
   - match: {test_index.mappings.text.mapping.text.analyzer: default}
+
+---
+"Get field mapping with local is deprecated":
+
+  - skip:
+      features: ["allowed_warnings", "node_selector"]
+
+  - do:
+      node_selector:
+        version: "7.8.0 - "
+      allowed_warnings:
+        - "Use [local] in get field mapping requests is deprecated. The parameter will be removed in the next major version"
+      indices.get_field_mapping:
+        fields: text
+        local: true
+
+  - match: {test_index.mappings.text.mapping.text.type:     text}

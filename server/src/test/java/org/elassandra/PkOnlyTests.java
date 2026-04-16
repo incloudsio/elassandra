@@ -20,16 +20,16 @@ import org.apache.cassandra.db.ConsistencyLevel;
 import org.apache.cassandra.db.marshal.UTF8Type;
 import org.apache.cassandra.service.ElassandraDaemon;
 import org.apache.lucene.util.IOUtils;
-import org.elasticsearch.action.DocWriteResponse;
-import org.elasticsearch.action.get.GetResponse;
-import org.elasticsearch.action.admin.indices.mapping.get.GetMappingsResponse;
-import org.elasticsearch.action.search.SearchResponse;
-import org.elasticsearch.common.xcontent.XContentBuilder;
-import org.elasticsearch.common.xcontent.XContentFactory;
-import org.elasticsearch.common.xcontent.XContentType;
-import org.elasticsearch.index.query.QueryBuilders;
-import org.elasticsearch.node.Node;
-import org.elasticsearch.test.ESSingleNodeTestCase;
+import org.opensearch.action.DocWriteResponse;
+import org.opensearch.action.get.GetResponse;
+import org.opensearch.action.admin.indices.mapping.get.GetMappingsResponse;
+import org.opensearch.action.search.SearchResponse;
+import org.opensearch.common.xcontent.XContentBuilder;
+import org.opensearch.common.xcontent.XContentFactory;
+import org.opensearch.common.xcontent.XContentType;
+import org.opensearch.index.query.QueryBuilders;
+import org.opensearch.node.Node;
+import org.opensearch.test.OpenSearchSingleNodeTestCase;
 import org.junit.Before;
 import org.junit.Test;
 
@@ -40,7 +40,7 @@ import java.util.HashMap;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
 
-import static org.elasticsearch.test.hamcrest.ElasticsearchAssertions.assertAcked;
+import static org.opensearch.test.hamcrest.OpenSearchAssertions.assertAcked;
 import static org.hamcrest.Matchers.equalTo;
 import static org.hamcrest.Matchers.is;
 
@@ -49,7 +49,7 @@ import static org.hamcrest.Matchers.is;
  * Test pk-only documents.
  * @author Barth
  */
-public class PkOnlyTests extends ESSingleNodeTestCase {
+public class PkOnlyTests extends OpenSearchSingleNodeTestCase {
 
     @Before
     @Override
@@ -185,7 +185,7 @@ public class PkOnlyTests extends ESSingleNodeTestCase {
         assertBusy(() -> {
             client().admin().indices().prepareRefresh(index).get();
             SearchResponse resp = client().prepareSearch(index).setTypes("pk_only").setQuery(QueryBuilders.matchQuery("b", "222")).get();
-            assertThat(resp.getHits().getTotalHits(), equalTo(1L));
+            assertThat(resp.getHits().getTotalHits().value, equalTo(1L));
             assertThat(resp.getHits().getAt(0).getId(), equalTo("[\"2\",\"22\",\"222\"]"));
             if (resp.getHits().getAt(0).getSourceAsMap() != null) {
                 assertThat(resp.getHits().getAt(0).getSourceAsMap(), is(new HashMap<String, String>() {{ put("b","222"); }}));
@@ -206,7 +206,7 @@ public class PkOnlyTests extends ESSingleNodeTestCase {
             UntypedResultSet.Row row = rs.one();
             assertThat(row.getString(pkName), equalTo("1"));
 
-            assertThat(client().prepareSearch().setIndices(index).setTypes("pk_only").setQuery(QueryBuilders.matchAllQuery()).get().getHits().getTotalHits(), equalTo(2L));
+            assertThat(client().prepareSearch().setIndices(index).setTypes("pk_only").setQuery(QueryBuilders.matchAllQuery()).get().getHits().getTotalHits().value, equalTo(2L));
             GetResponse resp = client().prepareGet().setIndex(index).setType("pk_only").setId("1").get();
             assertTrue(resp.isExists());
             assertTrue(resp.getSource() == null || resp.getSource().isEmpty());
@@ -224,7 +224,7 @@ public class PkOnlyTests extends ESSingleNodeTestCase {
             assertThat(row.getString(pkName), equalTo("3"));
             assertThat(row.getList("new_field", UTF8Type.instance), is(Collections.singletonList("test")));
 
-            assertThat(client().prepareSearch().setIndices(index).setTypes("pk_only").setQuery(QueryBuilders.matchAllQuery()).get().getHits().getTotalHits(), equalTo(3L));
+            assertThat(client().prepareSearch().setIndices(index).setTypes("pk_only").setQuery(QueryBuilders.matchAllQuery()).get().getHits().getTotalHits().value, equalTo(3L));
             GetResponse resp = client().prepareGet().setIndex(index).setType("pk_only").setId("3").get();
             assertTrue(resp.isExists());
             if (resp.getSource() != null) {
@@ -323,7 +323,7 @@ public class PkOnlyTests extends ESSingleNodeTestCase {
             assertThat(row.getString("a"), equalTo("11"));
             assertThat(row.getString("b"), equalTo("111"));
 
-            assertThat(client().prepareSearch().setIndices(index).setTypes("pk_only").setQuery(QueryBuilders.matchAllQuery()).get().getHits().getTotalHits(), equalTo(2L));
+            assertThat(client().prepareSearch().setIndices(index).setTypes("pk_only").setQuery(QueryBuilders.matchAllQuery()).get().getHits().getTotalHits().value, equalTo(2L));
             GetResponse resp = client().prepareGet().setIndex(index).setType("pk_only").setId("[\"1\",\"11\",\"111\"]").get();
             assertTrue(resp.isExists());
             assertTrue(resp.getSource() == null || resp.getSource().isEmpty());
@@ -349,7 +349,7 @@ public class PkOnlyTests extends ESSingleNodeTestCase {
             assertThat(row.getString("b"), equalTo("333"));
             assertThat(row.getList("new_field", UTF8Type.instance), is(Collections.singletonList("test")));
 
-            assertThat(client().prepareSearch().setIndices(index).setTypes("pk_only").setQuery(QueryBuilders.matchAllQuery()).get().getHits().getTotalHits(), equalTo(3L));
+            assertThat(client().prepareSearch().setIndices(index).setTypes("pk_only").setQuery(QueryBuilders.matchAllQuery()).get().getHits().getTotalHits().value, equalTo(3L));
             GetResponse resp = client().prepareGet().setIndex(index).setType("pk_only").setId("[\"3\",\"33\",\"333\"]").get();
             assertTrue(resp.isExists());
             assertThat(resp.getId(), equalTo("[\"3\",\"33\",\"333\"]"));

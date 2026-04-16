@@ -1,12 +1,11 @@
 ---
 "Put template":
   - skip:
-      version: " - 6.6.99"
-      reason:  include_type_name was introduced in 6.7
+      version: " - 6.99.99"
+      reason:  include_type_name defaults to true before 7.0.0
 
   - do:
       indices.put_template:
-        include_type_name: false
         name: test
         body:
           index_patterns: test-*
@@ -20,7 +19,6 @@
 
   - do:
       indices.get_template:
-        include_type_name: false
         name: test
         flat_settings: true
 
@@ -31,12 +29,11 @@
 ---
 "Put multiple template":
   - skip:
-      version: " - 6.6.99"
-      reason:  include_type_name was introduced in 6.7
+      version: " - 6.99.99"
+      reason:  include_type_name defaults to true before 7.0.0
 
   - do:
       indices.put_template:
-        include_type_name: false
         name: test
         body:
           index_patterns: [test-*, test2-*]
@@ -50,7 +47,6 @@
 
   - do:
       indices.get_template:
-        include_type_name: false
         name: test
         flat_settings: true
 
@@ -61,12 +57,11 @@
 ---
 "Put template with empty mappings":
   - skip:
-      version: " - 6.6.99"
-      reason:  include_type_name was introduced in 6.7
+      version: " - 6.99.99"
+      reason:  include_type_name defaults to true before 7.0.0
 
   - do:
       indices.put_template:
-        include_type_name: false
         name: test
         body:
           index_patterns: test-*
@@ -77,7 +72,6 @@
 
   - do:
       indices.get_template:
-        include_type_name: false
         name: test
         flat_settings: true
 
@@ -85,10 +79,6 @@
 
 ---
 "Put template with aliases":
-
-  - skip:
-      version: " - 5.99.99"
-      reason:  this uses a new API that has been added in 6.0
 
   - do:
       indices.put_template:
@@ -98,7 +88,7 @@
           aliases:
             test_alias: {}
             test_blias: { routing: b }
-            test_clias: { filter: { term: { user: kimchy }}}
+            test_clias: { filter: { term: { user: foobar }}}
 
   - do:
       indices.get_template:
@@ -109,14 +99,10 @@
   - is_true: test.aliases.test_alias
   - match: { test.aliases.test_blias.index_routing: "b" }
   - match: { test.aliases.test_blias.search_routing: "b" }
-  - match: { test.aliases.test_clias.filter.term.user: "kimchy" }
+  - match: { test.aliases.test_clias.filter.term.user: "foobar" }
 
 ---
 "Put template create":
-
-  - skip:
-      version: " - 5.99.99"
-      reason:  this uses a new API that has been added in 6.0
 
   - do:
       indices.put_template:
@@ -150,17 +136,13 @@
 ---
 "Test Put Versioned Template":
 
-  - skip:
-      version: " - 5.99.99"
-      reason:  this uses a new API that has been added in 6.0
-
   - do:
       indices.put_template:
         name: "my_template"
         body: >
           {
             "version": 10,
-            "index_patterns": "*",
+            "index_patterns": "foo*",
             "settings": { "number_of_shards": 1 }
           }
   - match: { acknowledged: true }
@@ -177,7 +159,7 @@
         body: >
           {
             "version": 9,
-            "index_patterns": "*",
+            "index_patterns": "foo*",
             "settings": { "number_of_shards": 1 }
           }
   - match: { acknowledged: true }
@@ -194,7 +176,7 @@
         body: >
           {
             "version": 6789,
-            "index_patterns": "*",
+            "index_patterns": "foo*",
             "settings": { "number_of_shards": 1 }
           }
   - match: { acknowledged: true }
@@ -210,7 +192,7 @@
         name: "my_template"
         body: >
           {
-            "index_patterns": "*",
+            "index_patterns": "foo*",
             "settings": { "number_of_shards": 1 }
           }
   - match: { acknowledged: true }
@@ -227,7 +209,7 @@
         body: >
           {
             "version": 5385,
-            "index_patterns": "*",
+            "index_patterns": "foo*",
             "settings": { "number_of_shards": 1 }
           }
   - match: { acknowledged: true }
@@ -251,10 +233,6 @@
 ---
 "Put index template without index_patterns":
 
-  - skip:
-      version: " - 5.99.99"
-      reason:  the error message is updated in v6.0.0
-
   - do:
       catch: /index patterns are missing/
       indices.put_template:
@@ -264,13 +242,12 @@
 ---
 "Put template with explicit _doc type":
   - skip:
-      version: " - 6.6.99"
-      reason: include_type_name was introduced in 6.7.0
+      version: " - 6.99.99"
+      reason: include_type_name defaults to true before 7.0
 
   - do:
       catch: bad_request
       indices.put_template:
-        include_type_name: false
         name: test
         body:
           index_patterns: test-*

@@ -27,15 +27,15 @@ import org.apache.lucene.search.Query;
 import org.apache.lucene.util.Accountable;
 import org.apache.lucene.util.BitDocIdSet;
 import org.apache.lucene.util.BitSet;
-import org.elasticsearch.common.cache.Cache;
-import org.elasticsearch.common.cache.RemovalListener;
-import org.elasticsearch.common.cache.RemovalNotification;
-import org.elasticsearch.common.inject.Inject;
-import org.elasticsearch.index.AbstractIndexComponent;
-import org.elasticsearch.index.IndexSettings;
-import org.elasticsearch.index.cache.bitset.BitsetFilterCache;
-import org.elasticsearch.index.cache.bitset.BitsetFilterCache.Value;
-import org.elasticsearch.index.shard.ShardId;
+import org.opensearch.common.cache.Cache;
+import org.opensearch.common.cache.RemovalListener;
+import org.opensearch.common.cache.RemovalNotification;
+import org.opensearch.common.inject.Inject;
+import org.opensearch.index.AbstractIndexComponent;
+import org.opensearch.index.IndexSettings;
+import org.opensearch.index.cache.bitset.BitsetFilterCache;
+import org.opensearch.index.cache.bitset.BitsetFilterCache.Value;
+import org.opensearch.index.shard.ShardId;
 
 import java.io.Closeable;
 import java.io.IOException;
@@ -49,7 +49,7 @@ import java.util.concurrent.ExecutionException;
  * <p>
  * Use this cache with care, only components that require that a filter is to be materialized as a {@link BitDocIdSet}
  * and require that it should always be around should use this cache, otherwise the
- * {@link org.elasticsearch.index.cache.query.QueryCache} should be used instead.
+ * {@link org.opensearch.index.cache.query.QueryCache} should be used instead.
  */
 public class TokenRangesBitsetFilterCache extends AbstractIndexComponent implements IndexReader.ClosedListener, RemovalListener<IndexReader.CacheKey, Cache<Query, Accountable>>, TokenRangesService.TokenRangesQueryListener, Closeable {
 

@@ -8,6 +8,9 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 DEST="${1:?OpenSearch clone root}"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 SRC="$ROOT/server/src/main/java/org/elasticsearch/cluster/ClusterChangedEvent.java"
+if [[ ! -f "$SRC" ]] && [[ -f "$ROOT/server/src/main/java/org/opensearch/cluster/ClusterChangedEvent.java" ]]; then
+  SRC="$ROOT/server/src/main/java/org/opensearch/cluster/ClusterChangedEvent.java"
+fi
 DST="$DEST/server/src/main/java/org/opensearch/cluster/ClusterChangedEvent.java"
 
 if [[ ! -f "$SRC" ]]; then
@@ -19,10 +22,12 @@ cp "$SRC" "$DST"
 "$SCRIPT_DIR/rewrite-engine-java-for-opensearch.sh" --file "$DST"
 
 # Align method names with OpenSearch 1.3 (rewrite handles .metaData() -> .metadata() but not these identifiers).
-perl -i -pe '
-  s/\bmetaDataChanged\b/metadataChanged/g;
-  s/\bchangedCustomMetaDataSet\b/changedCustomMetadataSet/g;
-' "$DST"
+if [[ "$SRC" == *"/org/elasticsearch/"* ]]; then
+  perl -i -pe '
+    s/\bmetaDataChanged\b/metadataChanged/g;
+    s/\bchangedCustomMetaDataSet\b/changedCustomMetadataSet/g;
+  ' "$DST"
+fi
 
 # Elassandra code still calls metaDataChanged(); keep compatibility with OpenSearch naming.
 if ! grep -q 'boolean metaDataChanged()' "$DST"; then

@@ -23,21 +23,21 @@ import org.apache.cassandra.schema.Schema;
 import org.apache.cassandra.cql3.UntypedResultSet;
 import org.apache.cassandra.db.ConsistencyLevel;
 import org.apache.cassandra.service.StorageService;
-import org.elasticsearch.cli.MockTerminal;
-import org.elasticsearch.action.search.SearchPhaseExecutionException;
-import org.elasticsearch.cluster.metadata.IndexMetaData;
-import org.elasticsearch.common.io.PathUtils;
-import org.elasticsearch.common.settings.Settings;
-import org.elasticsearch.common.xcontent.NamedXContentRegistry;
-import org.elasticsearch.common.xcontent.XContentBuilder;
-import org.elasticsearch.common.xcontent.XContentFactory;
-import org.elasticsearch.index.Index;
-import org.elasticsearch.index.shard.IndexShard;
-import org.elasticsearch.index.shard.IndexShardState;
-import org.elasticsearch.index.shard.ShardPath;
-import org.elasticsearch.index.translog.TruncateTranslogAction;
-import org.elasticsearch.index.query.QueryBuilders;
-import org.elasticsearch.test.ESSingleNodeTestCase;
+import org.opensearch.cli.MockTerminal;
+import org.opensearch.action.search.SearchPhaseExecutionException;
+import org.opensearch.cluster.metadata.IndexMetadata;
+import org.opensearch.common.io.PathUtils;
+import org.opensearch.common.settings.Settings;
+import org.opensearch.common.xcontent.NamedXContentRegistry;
+import org.opensearch.common.xcontent.XContentBuilder;
+import org.opensearch.common.xcontent.XContentFactory;
+import org.opensearch.index.Index;
+import org.opensearch.index.shard.IndexShard;
+import org.opensearch.index.shard.IndexShardState;
+import org.opensearch.index.shard.ShardPath;
+import org.opensearch.index.translog.TruncateTranslogAction;
+import org.opensearch.index.query.QueryBuilders;
+import org.opensearch.test.OpenSearchSingleNodeTestCase;
 import org.junit.Test;
 
 import java.io.IOException;
@@ -49,7 +49,7 @@ import java.util.Date;
 import java.util.Locale;
 import java.util.UUID;
 
-import static org.elasticsearch.test.hamcrest.ElasticsearchAssertions.assertAcked;
+import static org.opensearch.test.hamcrest.OpenSearchAssertions.assertAcked;
 import static org.hamcrest.Matchers.equalTo;
 
 /**
@@ -58,7 +58,7 @@ import static org.hamcrest.Matchers.equalTo;
  *
  */
 //mvn test -Pdev -pl om.strapdata.elasticsearch:elasticsearch -Dtests.seed=622A2B0618CE4676 -Dtests.class=org.elassandra.SnapshotTests -Des.logger.level=ERROR -Dtests.assertion.disabled=false -Dtests.security.manager=false -Dtests.heap.size=1024m -Dtests.locale=ro-RO -Dtests.timezone=America/Toronto
-public class SnapshotTests extends ESSingleNodeTestCase {
+public class SnapshotTests extends OpenSearchSingleNodeTestCase {
     private static final int SNAPSHOT_DOC_COUNT = 64;
     private static final String AUTO_IMPORT_DANGLING_WARNING =
         "[gateway.auto_import_dangling_indices] setting was deprecated in OpenSearch and will be removed in a future release! "
@@ -96,7 +96,7 @@ public class SnapshotTests extends ESSingleNodeTestCase {
         assertBusy(() -> {
             try {
                 assertThat(
-                    client().prepareSearch().setIndices(index).setTypes(type).setQuery(QueryBuilders.matchAllQuery()).get().getHits().getTotalHits(),
+                    client().prepareSearch().setIndices(index).setTypes(type).setQuery(QueryBuilders.matchAllQuery()).get().getHits().getTotalHits().value,
                     equalTo(expected)
                 );
             } catch (SearchPhaseExecutionException e) {
@@ -116,7 +116,7 @@ public class SnapshotTests extends ESSingleNodeTestCase {
     }
 
     private void assertIndexRemoved(String index) throws Exception {
-        assertBusy(() -> assertNull(client().admin().cluster().prepareState().get().getState().metaData().index(index)));
+        assertBusy(() -> assertNull(client().admin().cluster().prepareState().get().getState().metadata().index(index)));
     }
 
     private void assertKeyspaceRemoved(String keyspace) throws Exception {
@@ -137,21 +137,21 @@ public class SnapshotTests extends ESSingleNodeTestCase {
         });
     }
 
-    private void assertIndexState(String index, IndexMetaData.State expectedState) throws Exception {
+    private void assertIndexState(String index, IndexMetadata.State expectedState) throws Exception {
         assertBusy(() -> assertThat(
-            client().admin().cluster().prepareState().get().getState().metaData().index(index).getState(),
+            client().admin().cluster().prepareState().get().getState().metadata().index(index).getState(),
             equalTo(expectedState)
         ));
     }
 
     private void closeIndex(String index) throws Exception {
         client().admin().indices().prepareClose(index).get();
-        assertIndexState(index, IndexMetaData.State.CLOSE);
+        assertIndexState(index, IndexMetadata.State.CLOSE);
     }
 
     private void openIndex(String index) throws Exception {
         client().admin().indices().prepareOpen(index).get();
-        assertIndexState(index, IndexMetaData.State.OPEN);
+        assertIndexState(index, IndexMetadata.State.OPEN);
     }
 
     private Path luceneSnapshotRoot(Index index) {
@@ -272,7 +272,7 @@ public class SnapshotTests extends ESSingleNodeTestCase {
     }
 
     @Test
-    //mvn test -Pdev -pl org.elasticsearch:elasticsearch -Dtests.seed=622A2B0618CE4676 -Dtests.class=org.elassandra.SnapshotTests -Dtests.method="onDropSnapshotTest" -Des.logger.level=ERROR -Dtests.assertion.disabled=false -Dtests.security.manager=false -Dtests.heap.size=1024m -Dtests.locale=ro-RO -Dtests.timezone=America/Toronto
+    //mvn test -Pdev -pl org.opensearch:elasticsearch -Dtests.seed=622A2B0618CE4676 -Dtests.class=org.elassandra.SnapshotTests -Dtests.method="onDropSnapshotTest" -Des.logger.level=ERROR -Dtests.assertion.disabled=false -Dtests.security.manager=false -Dtests.heap.size=1024m -Dtests.locale=ro-RO -Dtests.timezone=America/Toronto
     public void onDropSnapshotTest() throws Exception {
         final String keyspace = randomKeyspaceName("ks");
         process(ConsistencyLevel.ONE,String.format(Locale.ROOT, "CREATE KEYSPACE %s WITH replication = {'class': 'NetworkTopologyStrategy', '%s': '1'}", keyspace, DatabaseDescriptor.getLocalDataCenter()));

@@ -8,6 +8,9 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 DEST="${1:?OpenSearch clone root}"
 SRC="$ROOT/server/src/main/java/org/elasticsearch/index/mapper/ParseContext.java"
+if [[ ! -f "$SRC" ]] && [[ -f "$ROOT/server/src/main/java/org/opensearch/index/mapper/ParseContext.java" ]]; then
+  SRC="$ROOT/server/src/main/java/org/opensearch/index/mapper/ParseContext.java"
+fi
 DST="$DEST/server/src/main/java/org/opensearch/index/mapper/ParseContext.java"
 
 if [[ ! -f "$SRC" ]]; then
@@ -17,7 +20,7 @@ fi
 
 mkdir -p "$(dirname "$DST")"
 cp "$SRC" "$DST"
-perl -i -pe 's/^package org\.elasticsearch\.index\.mapper;/package org.opensearch.index.mapper;/' "$DST"
+perl -i -pe 's/^package org\.elasticsearch\.index\.mapper;/package org.opensearch.index.mapper;/; s/^package org\.opensearch\.index\.mapper;/package org.opensearch.index.mapper;/' "$DST"
 "$SCRIPT_DIR/rewrite-engine-java-for-opensearch.sh" --file "$DST"
 
 # OpenSearch uses LegacyESVersion for ES 6.x index version constants.

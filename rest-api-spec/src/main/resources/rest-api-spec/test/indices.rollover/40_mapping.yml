@@ -1,12 +1,11 @@
 ---
 "Typeless mapping":
   - skip:
-      version: " - 6.6.99"
-      reason: include_type_name was introduced in 6.7.0
+      version: " - 6.99.99"
+      reason:  include_type_name defaults to true before 7.0.0
 
   - do:
       indices.create:
-        include_type_name: false
         index: logs-1
         body:
           aliases:
@@ -16,7 +15,6 @@
   - do:
       index:
         index: logs-1
-        type: _doc
         id:    "1"
         body:  { "foo": "hello world" }
         refresh: true
@@ -25,7 +23,6 @@
   - do:
       index:
         index: logs-1
-        type: _doc
         id:    "2"
         body:  { "foo": "hello world" }
         refresh: true
@@ -33,7 +30,6 @@
   # perform alias rollover with new typeless mapping
   - do:
       indices.rollover:
-        include_type_name: false
         alias: "logs_search"
         body:
           conditions:
@@ -49,8 +45,8 @@
 ---
 "Mappings with explicit _doc type":
   - skip:
-      version: " - 6.6.99"
-      reason: include_type_name was introduced in 6.7.0
+      version: " - 6.99.99"
+      reason: include_type_name defaults to true before 7.0
 
   - do:
       indices.create:
@@ -62,7 +58,6 @@
   - do:
       catch: bad_request
       indices.rollover:
-        include_type_name: false
         alias: "logs_search"
         body:
           conditions:

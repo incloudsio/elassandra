@@ -1,4 +1,12 @@
 /*
+ * SPDX-License-Identifier: Apache-2.0
+ *
+ * The OpenSearch Contributors require contributions made to
+ * this file be licensed under the Apache-2.0 license or a
+ * compatible open source license.
+ */
+
+/*
  * Licensed to Elasticsearch under one or more contributor
  * license agreements. See the NOTICE file distributed with
  * this work for additional information regarding copyright
@@ -17,22 +25,28 @@
  * under the License.
  */
 
+/*
+ * Modifications Copyright OpenSearch Contributors. See
+ * GitHub history for details.
+ */
+
 package org.apache.lucene.queries;
 
 import org.apache.lucene.index.LeafReaderContext;
 import org.apache.lucene.search.ConstantScoreScorer;
 import org.apache.lucene.search.ConstantScoreWeight;
 import org.apache.lucene.search.DocIdSetIterator;
-import org.apache.lucene.search.EarlyTerminatingSortingCollector;
 import org.apache.lucene.search.FieldComparator;
 import org.apache.lucene.search.FieldDoc;
 import org.apache.lucene.search.IndexSearcher;
 import org.apache.lucene.search.LeafFieldComparator;
 import org.apache.lucene.search.Query;
+import org.apache.lucene.search.ScoreMode;
 import org.apache.lucene.search.Scorer;
 import org.apache.lucene.search.Sort;
 import org.apache.lucene.search.SortField;
 import org.apache.lucene.search.Weight;
+import org.opensearch.common.lucene.Lucene;
 
 import java.io.IOException;
 import java.util.Arrays;
@@ -50,10 +64,11 @@ public class SearchAfterSortedDocQuery extends Query {
 
     public SearchAfterSortedDocQuery(Sort sort, FieldDoc after) {
         if (sort.getSort().length != after.fields.length) {
-            throw new IllegalArgumentException("after doc  has " + after.fields.length + " value(s) but sort has "
-                    + sort.getSort().length + ".");
+            throw new IllegalArgumentException(
+                "after doc  has " + after.fields.length + " value(s) but sort has " + sort.getSort().length + "."
+            );
         }
-        this.sort = sort;
+        this.sort = Objects.requireNonNull(sort);
         this.after = after;
         int numFields = sort.getSort().length;
         this.fieldComparators = new FieldComparator[numFields];
@@ -70,12 +85,12 @@ public class SearchAfterSortedDocQuery extends Query {
     }
 
     @Override
-    public Weight createWeight(IndexSearcher searcher, boolean needsScores, float boost) throws IOException {
+    public Weight createWeight(IndexSearcher searcher, ScoreMode scoreMode, float boost) throws IOException {
         return new ConstantScoreWeight(this, 1.0f) {
             @Override
             public Scorer scorer(LeafReaderContext context) throws IOException {
                 Sort segmentSort = context.reader().getMetaData().getSort();
-                if (EarlyTerminatingSortingCollector.canEarlyTerminate(sort, segmentSort) == false) {
+                if (segmentSort == null || Lucene.canEarlyTerminate(sort, segmentSort) == false) {
                     throw new IOException("search sort :[" + sort.getSort() + "] does not match the index sort:[" + segmentSort + "]");
                 }
                 final int afterDoc = after.doc - context.docBase;
@@ -86,7 +101,7 @@ public class SearchAfterSortedDocQuery extends Query {
                     return null;
                 }
                 final DocIdSetIterator disi = new MinDocQuery.MinDocIterator(firstDoc, maxDoc);
-                return new ConstantScoreScorer(this, score(), disi);
+                return new ConstantScoreScorer(this, score(), scoreMode, disi);
             }
 
             @Override
@@ -101,20 +116,19 @@ public class SearchAfterSortedDocQuery extends Query {
 
     @Override
     public String toString(String field) {
-        return "SearchAfterSortedDocQuery(sort=" + sort  + ", afterDoc=" + after.toString() + ")";
+        return "SearchAfterSortedDocQuery(sort=" + sort + ", afterDoc=" + after.toString() + ")";
     }
 
     @Override
     public boolean equals(Object other) {
-        return sameClassAs(other) &&
-            equalsTo(getClass().cast(other));
+        return sameClassAs(other) && equalsTo(getClass().cast(other));
     }
 
     private boolean equalsTo(SearchAfterSortedDocQuery other) {
-        return sort.equals(other.sort) &&
-            after.doc == other.after.doc &&
-            Double.compare(after.score, other.after.score) == 0 &&
-            Arrays.equals(after.fields, other.after.fields);
+        return sort.equals(other.sort)
+            && after.doc == other.after.doc
+            && Double.compare(after.score, other.after.score) == 0
+            && Arrays.equals(after.fields, other.after.fields);
     }
 
     @Override
@@ -126,17 +140,19 @@ public class SearchAfterSortedDocQuery extends Query {
         boolean lessThanTop(int doc) throws IOException;
     }
 
-    static TopComparator getTopComparator(FieldComparator<?>[] fieldComparators,
-                                          int[] reverseMuls,
-                                          LeafReaderContext leafReaderContext,
-                                          int topDoc) {
+    static TopComparator getTopComparator(
+        FieldComparator<?>[] fieldComparators,
+        int[] reverseMuls,
+        LeafReaderContext leafReaderContext,
+        int topDoc
+    ) {
         return doc -> {
             // DVs use forward iterators so we recreate the iterator for each sort field
             // every time we need to compare a document with the <code>after<code> doc.
             // We could reuse the iterators when the comparison goes forward but
             // this should only be called a few time per segment (binary search).
             for (int i = 0; i < fieldComparators.length; i++) {
-                LeafFieldComparator comparator =  fieldComparators[i].getLeafComparator(leafReaderContext);
+                LeafFieldComparator comparator = fieldComparators[i].getLeafComparator(leafReaderContext);
                 int value = reverseMuls[i] * comparator.compareTop(doc);
                 if (value != 0) {
                     return value < 0;

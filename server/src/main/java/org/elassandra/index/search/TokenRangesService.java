@@ -15,10 +15,10 @@ import org.apache.lucene.search.BooleanQuery;
 import org.apache.lucene.search.Query;
 import org.elassandra.cluster.routing.AbstractSearchStrategy;
 import org.elassandra.index.mapper.internal.TokenFieldMapper;
-import org.elasticsearch.cluster.service.ClusterService;
-import org.elasticsearch.common.inject.Inject;
-import org.elasticsearch.common.settings.Settings;
-import org.elasticsearch.index.mapper.NumberFieldMapper;
+import org.opensearch.cluster.service.ClusterService;
+import org.opensearch.common.inject.Inject;
+import org.opensearch.common.settings.Settings;
+import org.opensearch.index.mapper.NumberFieldMapper;
 
 import java.util.Collection;
 import java.util.Queue;

@@ -9,7 +9,13 @@
 set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 DEST="${1:?OpenSearch clone root}"
-SRC="$ROOT/test/framework/src/main/java/org/elasticsearch/test/ESSingleNodeTestCase.java"
+SRC="$ROOT/test/framework/src/main/java/org/opensearch/test/OpenSearchSingleNodeTestCase.java"
+if [[ ! -f "$SRC" ]]; then
+  SRC="$ROOT/test/framework/src/main/java/org/elasticsearch/test/ESSingleNodeTestCase.java"
+fi
+if [[ ! -f "$SRC" ]] && [[ -f "$ROOT/test/framework/src/main/java/org/opensearch/test/ESSingleNodeTestCase.java" ]]; then
+  SRC="$ROOT/test/framework/src/main/java/org/opensearch/test/ESSingleNodeTestCase.java"
+fi
 OUT="$DEST/test/framework/src/main/java/org/opensearch/test/OpenSearchSingleNodeTestCase.java"
 [[ -f "$SRC" ]] || {
   echo "Missing Elassandra fork: $SRC" >&2

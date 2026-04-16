@@ -46,10 +46,13 @@ if [[ -f "$TPL/ParentFieldMapper.java" ]]; then
 fi
 
 EAM_SRC="$ROOT/server/src/main/java/org/elasticsearch/index/mapper/EnabledAttributeMapper.java"
+if [[ ! -f "$EAM_SRC" ]] && [[ -f "$ROOT/server/src/main/java/org/opensearch/index/mapper/EnabledAttributeMapper.java" ]]; then
+  EAM_SRC="$ROOT/server/src/main/java/org/opensearch/index/mapper/EnabledAttributeMapper.java"
+fi
 EAM_DST="$DEST/server/src/main/java/org/opensearch/index/mapper/EnabledAttributeMapper.java"
 if [[ -f "$EAM_SRC" ]]; then
   mkdir -p "$(dirname "$EAM_DST")"
-  perl -pe 's/^package org\.elasticsearch\.index\.mapper/package org.opensearch.index.mapper/' "$EAM_SRC" > "$EAM_DST"
+  perl -pe 's/^package org\.elasticsearch\.index\.mapper/package org.opensearch.index.mapper/; s/^package org\.opensearch\.index\.mapper/package org.opensearch.index.mapper/' "$EAM_SRC" > "$EAM_DST"
   echo "Wrote EnabledAttributeMapper stub → $EAM_DST"
 fi
 

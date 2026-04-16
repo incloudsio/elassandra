@@ -35,7 +35,7 @@ rewrite_file() {
       s/\bElasticsearchParseException\b/OpenSearchParseException/g;
       s/\bElasticsearchGenerationException\b/OpenSearchGenerationException/g;
       s/\bElasticsearchException\b/OpenSearchException/g;
-      s/resp\.getHits\(\)\.getTotalHits\(\)/resp.getHits().getTotalHits().value/g;
+      s/resp\.getHits\(\)\.getTotalHits\(\)(?!\.value)/resp.getHits().getTotalHits().value/g;
       s/^import org\.opensearch\.common\.component\.AbstractComponent;\r?\n//m;
       s/org\.opensearch\.cluster\.metadata\.IndexMetaData/org.opensearch.cluster.metadata.IndexMetadata/g;
       s/org\.opensearch\.cluster\.metadata\.MappingMetaData/org.opensearch.cluster.metadata.MappingMetadata/g;

@@ -18,19 +18,19 @@ package org.elassandra;
 import org.apache.cassandra.config.DatabaseDescriptor;
 import org.apache.cassandra.cql3.UntypedResultSet;
 import org.apache.cassandra.db.ConsistencyLevel;
-import org.elasticsearch.action.DocWriteResponse;
-import org.elasticsearch.common.xcontent.XContentBuilder;
-import org.elasticsearch.common.xcontent.XContentFactory;
-import org.elasticsearch.common.xcontent.XContentType;
-import org.elasticsearch.common.settings.Settings;
-import org.elasticsearch.index.query.QueryBuilders;
-import org.elasticsearch.test.ESSingleNodeTestCase;
+import org.opensearch.action.DocWriteResponse;
+import org.opensearch.common.xcontent.XContentBuilder;
+import org.opensearch.common.xcontent.XContentFactory;
+import org.opensearch.common.xcontent.XContentType;
+import org.opensearch.common.settings.Settings;
+import org.opensearch.index.query.QueryBuilders;
+import org.opensearch.test.OpenSearchSingleNodeTestCase;
 import org.junit.Test;
 
 import java.util.Locale;
 import java.util.concurrent.TimeUnit;
 
-import static org.elasticsearch.test.hamcrest.ElasticsearchAssertions.assertAcked;
+import static org.opensearch.test.hamcrest.OpenSearchAssertions.assertAcked;
 import static org.hamcrest.Matchers.equalTo;
 
 /**
@@ -38,7 +38,7 @@ import static org.hamcrest.Matchers.equalTo;
  * @author vroyer
  *
  */
-public class NamingTests extends ESSingleNodeTestCase {
+public class NamingTests extends OpenSearchSingleNodeTestCase {
 
     private void waitForKeyspace(String keyspace) throws Exception {
         assertBusy(() -> {
@@ -141,7 +141,7 @@ public class NamingTests extends ESSingleNodeTestCase {
 
         assertThat(client().prepareGet().setIndex("test_index-2016.12.29").setType("_doc").setId("1").get().isExists(), equalTo(true));
         assertThat(client().prepareMultiGet().add("test_index-2016.12.29","_doc","1").get().getResponses().length, equalTo(1));
-        assertThat(client().prepareSearch("test_index-2016.12.29").setTypes("_doc").setQuery(QueryBuilders.queryStringQuery("message:hello")).get().getHits().getTotalHits(), equalTo(1L));
+        assertThat(client().prepareSearch("test_index-2016.12.29").setTypes("_doc").setQuery(QueryBuilders.queryStringQuery("message:hello")).get().getHits().getTotalHits().value, equalTo(1L));
         assertThat(client().prepareDelete().setIndex("test_index-2016.12.29").setType("_doc").setId("1").get().getId(), equalTo("1"));
         assertThat(client().admin().indices().prepareDelete("test_index-2016.12.29").get().isAcknowledged(), equalTo(true));
         assertThat(client().admin().indices().prepareDeleteTemplate("test_template").get().isAcknowledged(), equalTo(true));
@@ -181,6 +181,6 @@ public class NamingTests extends ESSingleNodeTestCase {
         ensureGreen("test2");
         assertThat(client().prepareIndex("test2","_doc","1").setSource("{\"top\":\"secret\"}", XContentType.JSON).get().getResult(), equalTo(DocWriteResponse.Result.CREATED));
         client().admin().indices().prepareRefresh("test2").get();
-        assertThat(client().prepareSearch("test2").setTypes("_doc").setQuery(QueryBuilders.existsQuery("top")).get().getHits().getTotalHits(), equalTo(1L));
+        assertThat(client().prepareSearch("test2").setTypes("_doc").setQuery(QueryBuilders.existsQuery("top")).get().getHits().getTotalHits().value, equalTo(1L));
     }
 }

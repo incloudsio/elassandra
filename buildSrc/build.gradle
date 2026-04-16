@@ -1,4 +1,15 @@
 /*
+ * SPDX-License-Identifier: Apache-2.0
+ *
+ * The OpenSearch Contributors require contributions made to
+ * this file be licensed under the Apache-2.0 license or a
+ * compatible open source license.
+ *
+ * Modifications Copyright OpenSearch Contributors. See
+ * GitHub history for details.
+ */
+
+/*
  * Licensed to Elasticsearch under one or more contributor
  * license agreements. See the NOTICE file distributed with
  * this work for additional information regarding copyright
@@ -16,21 +27,21 @@
  * specific language governing permissions and limitations
  * under the License.
  */
-import org.gradle.util.GradleVersion
 
-import java.util.regex.Matcher
-import java.util.regex.Pattern
+import org.gradle.internal.jvm.Jvm
+import org.gradle.util.GradleVersion
 
 plugins {
   id 'java-gradle-plugin'
   id 'groovy'
+  id 'java-test-fixtures'
 }
 
-group = 'org.elasticsearch.gradle'
+group = 'org.opensearch.gradle'
 
 String minimumGradleVersion = file('src/main/resources/minimumGradleVersion').text.trim()
 if (GradleVersion.current() < GradleVersion.version(minimumGradleVersion)) {
-    throw new GradleException("Gradle ${minimumGradleVersion}+ is required to build elasticsearch")
+  throw new GradleException("Gradle ${minimumGradleVersion}+ is required to build opensearch")
 }
 
 if (project == rootProject) {
@@ -46,21 +57,17 @@ if (project == rootProject) {
 // we update the version property to reflect if we are building a snapshot or a release build
 // we write this back out below to load it in the Build.java which will be shown in rest main action
 // to indicate this being a snapshot build or a release build.
-File propsFile = project.file('version.properties')
-Properties props = VersionPropertiesLoader.loadBuildSrcVersion(propsFile)
-version = props.getProperty("elasticsearch")
+Properties props = VersionPropertiesLoader.loadBuildSrcVersion(project.file('version.properties'))
+version = props.getProperty("opensearch")
+
+def generateVersionProperties = tasks.register("generateVersionProperties", WriteProperties) {
+  outputFile = "${buildDir}/version.properties"
+  comment = 'Generated version properties'
+  properties(props)
+}
+
 processResources {
-  inputs.file(propsFile)
-  // We need to be explicit with the version because we add snapshot and qualifier to it based on properties
-  inputs.property("dynamic_elasticsearch_version", props.getProperty("elasticsearch"))
-  doLast {
-    Writer writer = file("$destinationDir/version.properties").newWriter()
-    try {
-      props.store(writer, "Generated version properties")
-    } finally {
-      writer.close()
-    }
-  }
+  from(generateVersionProperties)
 }
 
 /*****************************************************************************
@@ -68,41 +75,19 @@ processResources {
  *****************************************************************************/
 
 if (JavaVersion.current() < JavaVersion.VERSION_11) {
-  throw new GradleException('At least Java 11 is required to build elasticsearch gradle tools')
+  throw new GradleException('At least Java 11 is required to build opensearch gradle tools')
 }
-// Gradle 4.10 does not support setting this to 11 yet
-targetCompatibility = "10"
-sourceCompatibility = "10"
 
-// We have a few classes that need to be compiled for older java versions because these are used to run checks against
-// those
 sourceSets {
-  minimumRuntime {
-    // We only want Java here, but the Groovy doesn't configure javadoc correctly if we don't define this as groovy
-    groovy {
-      srcDirs = ['src/main/minimumRuntime']
-    }
+  integTest {
+    compileClasspath += sourceSets["main"].output + configurations["testRuntimeClasspath"]
+    runtimeClasspath += output + compileClasspath
   }
-}
-compileMinimumRuntimeGroovy {
-  // We can't use BuildPlugin here, so read from file
-  String minimumRuntimeVersion = file('src/main/resources/minimumRuntimeVersion').text.trim()
-  targetCompatibility = minimumRuntimeVersion
-  sourceCompatibility = minimumRuntimeVersion
-}
-dependencies {
-  if (project.ext.has("isEclipse") == false || project.ext.isEclipse == false) {
-      // eclipse is confused if this is set explicitly
-    compile sourceSets.minimumRuntime.output
-  }
-  minimumRuntimeCompile "junit:junit:${props.getProperty('junit')}"
-  minimumRuntimeCompile localGroovy()
-  minimumRuntimeCompile gradleApi()
-}
-jar {
-  from sourceSets.minimumRuntime.output
 }
 
+tasks.withType(JavaCompile).configureEach {
+  options.encoding = 'UTF-8'
+}
 
 /*****************************************************************************
  *                    Dependencies used by the entire build                  *
@@ -111,38 +96,73 @@ jar {
 repositories {
   mavenCentral()
   gradlePluginPortal()
-  // org.gradle:gradle-logging (compileOnly) is not on Maven Central
-  maven { url 'https://repo.gradle.org/gradle/libs-releases-local' }
-  // Legacy Nebula / Perforce transitive deps were published to JCenter; use a public mirror
-  maven { url 'https://maven.aliyun.com/repository/jcenter' }
 }
 
 dependencies {
-  compile localGroovy()
-  compile "com.carrotsearch.randomizedtesting:junit4-ant:${props.getProperty('randomizedrunner')}"
-  compile "com.carrotsearch.randomizedtesting:randomizedtesting-runner:${props.getProperty('randomizedrunner')}"
 
-  compile 'com.netflix.nebula:gradle-extra-configurations-plugin:3.0.3'
-  compile 'com.netflix.nebula:nebula-publishing-plugin:4.4.4'
-  compile 'com.netflix.nebula:gradle-info-plugin:3.0.3'
-  compile 'org.eclipse.jgit:org.eclipse.jgit:3.2.0.201312181205-r'
-  compile 'com.perforce:p4java:2012.3.551082' // THIS IS SUPPOSED TO BE OPTIONAL IN THE FUTURE....
-  compile 'org.apache.rat:apache-rat:0.11'
-  compile "org.elasticsearch:jna:4.5.1"
-  compile 'com.github.jengelman.gradle.plugins:shadow:2.0.4'
-  compile 'de.thetaphi:forbiddenapis:2.6'
-  compile 'com.avast.gradle:gradle-docker-compose-plugin:0.17.21'
-  testCompile "junit:junit:${props.getProperty('junit')}"
+  modules {
+    module("org.bouncycastle:bcprov-jdk15on") {
+      replacedBy("org.bouncycastle:bcprov-jdk15to18", "the jdk15on artifacts are not supported anymore")
+    }
+    module("org.bouncycastle:bcpkix-jdk15on") {
+      replacedBy("org.bouncycastle:bcpkix-jdk15to18", "the jdk15on artifacts are not supported anymore")
+    }
+    module("org.bouncycastle:bcpg-jdk15on") {
+      replacedBy("org.bouncycastle:bcpg-jdk15to18", "the jdk15on artifacts are not supported anymore")
+    }
+    module("org.bouncycastle:bcutil-jdk15on") {
+      replacedBy("org.bouncycastle:bcutil-jdk15to18", "the jdk15on artifacts are not supported anymore")
+    }
+  }
+  api localGroovy()
+
+  api 'commons-codec:commons-codec:1.15'
+  api 'org.apache.commons:commons-compress:1.21'
+  api 'org.apache.ant:ant:1.10.12'
+  api 'com.netflix.nebula:gradle-extra-configurations-plugin:3.0.3'
+  api 'com.netflix.nebula:nebula-publishing-plugin:4.7.0'
+  api("com.netflix.nebula:gradle-info-plugin:8.2.0") {
+    exclude module: 'jgit'
+  }
+  api 'org.eclipse.jgit:org.eclipse.jgit:6.8.0.202311291450-r'
+  api 'org.apache.rat:apache-rat:0.13'
+  api 'commons-io:commons-io:2.16.0'
+  api "net.java.dev.jna:jna:5.5.0"
+  api 'com.github.jengelman.gradle.plugins:shadow:6.0.0'
+  api 'de.thetaphi:forbiddenapis:3.2'
+  api 'com.avast.gradle:gradle-docker-compose-plugin:0.14.12'
+  api "org.yaml:snakeyaml:${props.getProperty('snakeyaml')}"
+  api 'org.apache.maven:maven-model:3.6.2'
+  api 'com.networknt:json-schema-validator:1.0.36'
+  api "com.fasterxml.jackson.core:jackson-databind:${props.getProperty('jackson_databind')}"
+  api "org.bouncycastle:bcprov-jdk15to18:${props.getProperty('bouncycastle')}"
+  api "org.bouncycastle:bcpkix-jdk15to18:${props.getProperty('bouncycastle')}"
+  api "org.bouncycastle:bcpg-jdk15to18:${props.getProperty('bouncycastle')}"
+  api "org.bouncycastle:bcutil-jdk15to18:${props.getProperty('bouncycastle')}"
+
+  testFixturesApi "junit:junit:${props.getProperty('junit')}"
+  testFixturesApi "com.carrotsearch.randomizedtesting:randomizedtesting-runner:${props.getProperty('randomizedrunner')}"
+  testFixturesApi gradleApi()
+  testFixturesApi gradleTestKit()
+  testImplementation 'com.github.tomakehurst:wiremock-jre8-standalone:2.35.1'
+  testImplementation "org.mockito:mockito-core:${props.getProperty('mockito')}"
+  integTestImplementation('org.spockframework:spock-core:2.3-groovy-2.5') {
+    exclude module: "groovy"
+  }
+  constraints {
+    runtimeOnly("org.apache.logging.log4j:log4j-core:${props.getProperty('log4j')}") {
+      because 'log4j CVE'
+    }
+    runtimeOnly("org.jdom:jdom2:${props.getProperty('jdom2')}") {
+      because 'CVE-2021-33813 violation'
+    }
+  }
 }
 
-
-// Gradle 2.14+ removed ProgressLogger(-Factory) classes from the public APIs
-// Use logging dependency instead
-// Gradle 4.3.1 stopped releasing the logging jars to jcenter, just use the last available one
-GradleVersion logVersion = GradleVersion.current() > GradleVersion.version('4.3') ? GradleVersion.version('4.3') : GradleVersion.current()
-
-dependencies {
-  compileOnly "org.gradle:gradle-logging:${logVersion.getVersion()}"
+configurations.all {
+  resolutionStrategy {
+    force "com.google.guava:guava:${props.getProperty('guava')}"
+  }
 }
 
 /*****************************************************************************
@@ -155,6 +175,10 @@ if (project == rootProject) {
       mavenLocal()
     }
   }
+  dependencies {
+    // add this so the runtime classpath so Gradle will properly track it as a build runtime classpath input
+    runtimeOnly project('reaper')
+  }
   // only run tests as build-tools
   test.enabled = false
 }
@@ -166,86 +190,117 @@ if (project == rootProject) {
 // this happens when included as a normal project in the build, which we do
 // to enforce precommit checks like forbidden apis, as well as setup publishing
 if (project != rootProject) {
-  apply plugin: 'elasticsearch.build'
-  apply plugin: 'nebula.maven-base-publish'
-  apply plugin: 'nebula.maven-scm'
+  apply plugin: 'opensearch.build'
+  apply plugin: 'opensearch.publish'
 
-  // we need to apply these again to override the build plugin
-  targetCompatibility = "10"
-  sourceCompatibility = "10"
+  allprojects {
+    targetCompatibility = 8
+    sourceCompatibility = 8
+  }
 
   // groovydoc succeeds, but has some weird internal exception...
   groovydoc.enabled = false
 
   // build-tools is not ready for primetime with these...
-  dependencyLicenses.enabled = false
+  tasks.named("dependencyLicenses").configure { it.enabled = false }
   dependenciesInfo.enabled = false
-  forbiddenApisMain.enabled = false
-  forbiddenApisTest.enabled = false
-  forbiddenApisMinimumRuntime.enabled = false
+  disableTasks('forbiddenApisMain', 'forbiddenApisTest', 'forbiddenApisIntegTest', 'forbiddenApisTestFixtures')
   jarHell.enabled = false
   thirdPartyAudit.enabled = false
-
-  unitTest {
-    // The test task is configured to runtimeJava version, but build-tools doesn't
-    // have to support those.
-    jvm = "${project.compilerJavaHome}/bin/java"
+  if (org.opensearch.gradle.info.BuildParams.inFipsJvm) {
+    // We don't support running gradle with a JVM that is in FIPS 140 mode, so we don't test it.
+    // WaitForHttpResourceTests tests would fail as they use JKS/PKCS12 keystores
+    test.enabled = false
+    testingConventions.enabled = false
   }
 
-  // This can't be an RandomizedTestingTask because we can't yet reference it
-  task integTest(type: Test) {
-    // integration test requires the local testing repo for example plugin builds
-    dependsOn project.rootProject.allprojects.collect {
-      it.tasks.matching { it.name == 'publishNebulaPublicationToTestRepository'}
-    }
-    exclude "**/*Tests.class"
-    testClassesDirs = sourceSets.test.output.classesDirs
-    classpath = sourceSets.test.runtimeClasspath
-    inputs.dir(file("src/testKit"))
-    // tell BuildExamplePluginsIT where to find the example plugins
-    systemProperty (
-            'test.build-tools.plugin.examples',
-            files(
-                    project(':example-plugins').subprojects.collect { it.projectDir }
-            ).asPath,
-    )
-    systemProperty 'test.local-test-repo-path', "${rootProject.buildDir}/local-test-repo"
-    Matcher isLuceneSnapshot = (/\w+-snapshot-([a-z0-9]+)/ =~ versions.lucene)
-    if (isLuceneSnapshot) {
-      systemProperty 'test.lucene-snapshot-revision', isLuceneSnapshot[0][1]
-    }
-    systemProperty 'test.version_under_test', version
-  }
-  check.dependsOn(integTest)
+  configurations.register("distribution")
+  configurations.register("reaper")
 
-  // TODO: re-enable once randomizedtesting gradle code is published and removed from here
-  licenseHeaders.enabled = false
+  dependencies {
+    reaper project('reaper')
+    distribution project(':distribution:archives:darwin-tar')
+    distribution project(':distribution:archives:linux-arm64-tar')
+    distribution project(':distribution:archives:linux-tar')
+    distribution project(':distribution:archives:windows-zip')
+
+    integTestRuntimeOnly(project(":libs:opensearch-core"))
+  }
+
+  // for external projects we want to remove the marker file indicating we are running the OpenSearch project
+  processResources {
+    exclude 'buildSrc.marker'
+    into('META-INF') {
+      from configurations.reaper
+    }
+  }
+
+  // Track reaper jar as a test input using runtime classpath normalization strategy
+  tasks.withType(Test).configureEach {
+    inputs.files(configurations.reaper).withNormalizer(ClasspathNormalizer)
+  }
+
+  normalization {
+    runtimeClasspath {
+      // We already include the reaper jar as part of our runtime classpath. Ignore the copy in META-INF.
+      ignore('META-INF/reaper.jar')
+    }
+  }
 
   forbiddenPatterns {
     exclude '**/*.wav'
     exclude '**/*.p12'
+    exclude '**/*.jks'
+    exclude '**/*.crt'
     // the file that actually defines nocommit
     exclude '**/ForbiddenPatternsTask.java'
+    exclude '**/*.bcfks'
   }
 
   testingConventions {
     naming.clear()
     naming {
       Tests {
-        baseClass 'org.elasticsearch.gradle.test.GradleUnitTestCase'
+        baseClass 'org.opensearch.gradle.test.GradleUnitTestCase'
       }
       IT {
-        baseClass 'org.elasticsearch.gradle.test.GradleIntegrationTestCase'
+        baseClass 'org.opensearch.gradle.test.GradleIntegrationTestCase'
       }
     }
   }
 
+  // disable fail-on-warnings for this specific task which trips Java 11 bug
+  // https://bugs.openjdk.java.net/browse/JDK-8209058
+  tasks.named("compileTestFixturesJava").configure {
+    options.compilerArgs -= '-Werror'
+  }
+
+  tasks.register("integTest", Test) {
+    inputs.dir(file("src/testKit")).withPropertyName("testkit dir").withPathSensitivity(PathSensitivity.RELATIVE)
+    systemProperty 'test.version_under_test', version
+    onlyIf { org.opensearch.gradle.info.BuildParams.inFipsJvm == false }
+    maxParallelForks = System.getProperty('tests.jvms', org.opensearch.gradle.info.BuildParams.defaultParallel.toString()) as Integer
+    testClassesDirs = sourceSets.integTest.output.classesDirs
+    classpath = sourceSets.integTest.runtimeClasspath
+  }
+  check.dependsOn("integTest")
+
+  // for now we hardcode the tests for our build to use the gradle jvm.
+  tasks.withType(Test).configureEach {
+    it.executable = Jvm.current().getJavaExecutable()
+  }
+
   /*
-   * We alread configure publication and we don't need or want this one that
+   * We already configure publication and we don't need or want this one that
    * comes from the java-gradle-plugin.
    */
   afterEvaluate {
     generatePomFileForPluginMavenPublication.enabled = false
+  }
+
+  publishing.publications.named("nebula").configure {
+    suppressPomMetadataWarningsFor("testFixturesApiElements")
+    suppressPomMetadataWarningsFor("testFixturesRuntimeElements")
   }
 }
 
@@ -264,14 +319,14 @@ class VersionPropertiesLoader {
   }
 
   protected static void loadBuildSrcVersion(Properties loadedProps, Properties systemProperties) {
-    String elasticsearch = loadedProps.getProperty("elasticsearch")
-    if (elasticsearch == null) {
-      throw new IllegalStateException("Elasticsearch version is missing from properties.")
+    String opensearch = loadedProps.getProperty("opensearch")
+    if (opensearch == null) {
+      throw new IllegalStateException("OpenSearch version is missing from properties.")
     }
-    if (elasticsearch.matches("[0-9]+\\.[0-9]+\\.[0-9]+\\.[0-9]+") == false) {
+    if (opensearch.matches("[0-9]+\\.[0-9]+\\.[0-9]+") == false) {
       throw new IllegalStateException(
-              "Expected elasticsearch version to be numbers only of the form  X.Y.Z but it was: " +
-                      elasticsearch
+        "Expected opensearch version to be numbers only of the form  X.Y.Z but it was: " +
+          opensearch
       )
     }
     String qualifier = systemProperties.getProperty("build.version_qualifier", "");
@@ -279,12 +334,20 @@ class VersionPropertiesLoader {
       if (qualifier.matches("(alpha|beta|rc)\\d+") == false) {
         throw new IllegalStateException("Invalid qualifier: " + qualifier)
       }
-      elasticsearch += "-" + qualifier
+      opensearch += "-" + qualifier
     }
-    if ("true".equals(systemProperties.getProperty("build.snapshot", "true"))) {
-      elasticsearch += "-SNAPSHOT"
+    final String buildSnapshotSystemProperty = systemProperties.getProperty("build.snapshot", "true");
+    switch (buildSnapshotSystemProperty) {
+      case "true":
+        opensearch += "-SNAPSHOT"
+        break;
+      case "false":
+        // do nothing
+        break;
+      default:
+        throw new IllegalArgumentException(
+          "build.snapshot was set to [" + buildSnapshotSystemProperty + "] but can only be unset or [true|false]");
     }
-    loadedProps.put("elasticsearch", elasticsearch)
-    loadedProps.put("elasticsearch_vanilla", systemProperties.getProperty('elasticsearch_vanilla') + (("true".equals(systemProperties.getProperty("build.snapshot", "true"))) ? "-SNAPSHOT" : ""));
+    loadedProps.put("opensearch", opensearch)
   }
 }

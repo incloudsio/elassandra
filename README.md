@@ -6,34 +6,24 @@
 
 This repository is a **fork** of [Strapdata Elassandra](https://github.com/strapdata/elassandra). The maintained community home is **[github.com/incloudsio/elassandra](https://github.com/incloudsio/elassandra)** under **Elassandra.org**, with **inClouds** and **Maxim Tsarenko (maxts)** among the active maintainers. Original Strapdata history and copyright remain with Strapdata and other contributors; see [License](#license) and [NOTICE.txt](NOTICE.txt).
 
-## Roadmap: Cassandra 4.0.x + OpenSearch 1.3.x
+## Current Line: Cassandra 4.0.x + OpenSearch 1.3.x
 
-The **`modernization/cassandra4-opensearch13`** branch embeds **Elasticsearch 6.8.4** on **Apache Cassandra 4.0.x** via the [incloudsio/cassandra](https://github.com/incloudsio/cassandra) fork checked out under `server/cassandra` (branch **`cassandra-4.0.x-elassandra`**). That line includes a full JVM port of the Elassandra bridge to Cassandra 4.0 APIs (`InetAddressAndPort`, `org.apache.cassandra.schema.*`, CQL `QueryHandler`, secondary index lifecycle, packaging, and test fixes). **CI** builds with **GitHub Actions** (`.github/workflows/build.yml`), **Java 11** (`JAVA11_HOME`) for Gradle and the Cassandra Ant build, and **Python 3** for installing `cqlsh` libraries into `.deb` / `.rpm` packages (Python 2 is no longer required on the build host).
+The **`modernization/cassandra4-opensearch13`** branch now carries an **OpenSearch 1.3.20**-based `server/` tree on **Apache Cassandra 4.0.x** via the [incloudsio/cassandra](https://github.com/incloudsio/cassandra) fork checked out under `server/cassandra` (branch **`cassandra-4.0.x-elassandra`**). That line includes the JVM port of the Elassandra bridge to Cassandra 4.0 APIs (`InetAddressAndPort`, `org.apache.cassandra.schema.*`, CQL `QueryHandler`, secondary index lifecycle, packaging, and test fixes) plus the merged OpenSearch bootstrap, cluster, mapper, and test-framework updates needed for the embedded search runtime.
 
-**Next major target:** **OpenSearch 1.3.x** (Elasticsearch 7.10 lineage) as the embedded search engine, with the same Cassandra 4.0 base. Older release branches may still ship **Cassandra 3.11.x**; see submodule pointers and [CONTRIBUTING.md](CONTRIBUTING.md).
+**CI** builds with **GitHub Actions** (`.github/workflows/build.yml`), **Java 11** (`JAVA11_HOME`) for Gradle and the Cassandra Ant build, and **Python 3** for installing `cqlsh` libraries into `.deb` / `.rpm` packages. Older maintenance branches may still ship the legacy **Elasticsearch 6.8** / **Cassandra 3.11.x** line; see branch-specific docs and [CONTRIBUTING.md](CONTRIBUTING.md).
 
 Developer references: [RELEASING.md](RELEASING.md) and `docs/elassandra/source/` (`migration.rst`, `developer/cassandra_fork_inventory.rst`, `developer/cassandra_40_rebase.rst`, `developer/cassandra_40_jvm_port.rst`, `developer/opensearch_porting_guide.rst`). **Scripts:** `scripts/export-cassandra-elassandra-patches.sh`, `scripts/bootstrap-cassandra-40-worktree.sh`, `scripts/check-cassandra-submodule.sh`, `scripts/use-cassandra-40-submodule.sh`, `scripts/clone-opensearch-upstream.sh`, `scripts/opensearch-port-bootstrap.sh`, `scripts/opensearch-sidecar-prepare.sh`, `scripts/opensearch-sidecar-compile-try.sh`, `scripts/opensearch-sidecar-test-try.sh` (optional `:server:test` probe; see `server/OPENSEARCH_PORT.md`).
 
-### Embedded OpenSearch 1.3 Sidecar Status
+### OpenSearch 1.3 Port Status
 
-The current sidecar stabilization batch has restored and revalidated the `TimeuuidTests`, `SnapshotTests` drop-on-delete flow, `RangeFieldTests`, and a small supported subset of `CqlTypesTests`. Regression Waves 1 through 4 are currently green for this branch after those restores.
-
-The following compatibility buckets remain intentionally unresolved and deferred:
-
-* `TokenRangesBisetCacheTests`: OpenSearch 1.3 sidecar still lacks the token-range request and stats plumbing needed to restore the cache assertions honestly.
-* `TruncateTests.testNestedTruncate`: nested truncate still fails with a Cassandra-side `TRUNCATE` timeout, so this is not currently a safe Lucene/OpenSearch-side fix.
-* Remaining `CqlTypesTests`: only the clearly-supported subset was restored; the rest still need mapper, serializer, or feature-parity work.
-* `TimeDisorderedTests`: wide-row tombstone semantics remain correctness-sensitive and are deferred.
-* `CompletionTests`: suggester parity remains a broader feature gap.
-* `CompositeTests`: composite-key, static-column, and flush-behavior stability remains incomplete.
-* `PartitionedIndexTests`: virtual-index and partition-function support still looks like missing feature support rather than a narrow bug.
+The main repository now carries the OpenSearch-based tree, while the side-car scripts remain the rebase and regression harness for future upstream OpenSearch updates. The curated side-car regression waves `0` through `4` are green on this branch, and the full wave-4 workflow is expected to pass without `continue-on-error`.
 
 ## What Elassandra is (today)
 
-Elassandra is an [Apache Cassandra](https://cassandra.apache.org/) distribution that embeds an [Elasticsearch](https://github.com/elastic/elasticsearch) 6.8 search engine in each node.
+Elassandra is an [Apache Cassandra](https://cassandra.apache.org/) distribution that embeds an [OpenSearch](https://github.com/opensearch-project/OpenSearch) 1.3 search engine in each node.
 Elassandra is a multi-master database and search layer with support for replicating across multiple datacenters in active/active mode.
 
-Elasticsearch code runs inside Cassandra JVMs to index and query Cassandra data; Cassandra stores indexed documents and cluster metadata.
+OpenSearch code runs inside Cassandra JVMs to index and query Cassandra data; Cassandra stores indexed documents and cluster metadata.
 
 ![Elassandra architecture](/docs/elassandra/source/images/elassandra1.jpg)
 

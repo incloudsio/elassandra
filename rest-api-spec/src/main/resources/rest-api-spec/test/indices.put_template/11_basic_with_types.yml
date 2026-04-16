@@ -1,10 +1,8 @@
 ---
 "Put template":
-  - skip:
-      version: " - 5.99.99"
-      reason:  this uses a new API that has been added in 6.0
   - do:
       indices.put_template:
+        include_type_name: true
         name: test
         body:
           index_patterns: test-*
@@ -12,27 +10,26 @@
             number_of_shards:   1
             number_of_replicas: 0
           mappings:
-            doc:
+            _doc:
               properties:
                 field:
                   type: keyword
 
   - do:
       indices.get_template:
+        include_type_name: true
         name: test
         flat_settings: true
 
   - match: {test.index_patterns: ["test-*"]}
   - match: {test.settings: {index.number_of_shards: '1', index.number_of_replicas: '0'}}
-  - match: {test.mappings: {doc: {properties: {field: {type: keyword}}}}}
+  - match: {test.mappings: {_doc: {properties: {field: {type: keyword}}}}}
 
 ---
 "Put multiple template":
-  - skip:
-      version: " - 5.99.99"
-      reason:  this uses a new API that has been added in 6.0
   - do:
       indices.put_template:
+        include_type_name: true
         name: test
         body:
           index_patterns: [test-*, test2-*]
@@ -40,27 +37,26 @@
             number_of_shards:   1
             number_of_replicas: 0
           mappings:
-            doc:
+            _doc:
               properties:
                 field:
                   type: text
 
   - do:
       indices.get_template:
+        include_type_name: true
         name: test
         flat_settings: true
 
   - match: {test.index_patterns: ["test-*", "test2-*"]}
   - match: {test.settings: {index.number_of_shards: '1', index.number_of_replicas: '0'}}
-  - match: {test.mappings: {doc: {properties: {field: {type: text}}}}}
+  - match: {test.mappings: {_doc: {properties: {field: {type: text}}}}}
 
 ---
 "Put template with empty mappings":
-  - skip:
-      version: " - 5.99.99"
-      reason:  this uses a new API that has been added in 6.0
   - do:
       indices.put_template:
+        include_type_name: true
         name: test
         body:
           index_patterns: test-*
@@ -71,6 +67,7 @@
 
   - do:
       indices.get_template:
+        include_type_name: true
         name: test
         flat_settings: true
 

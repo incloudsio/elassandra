@@ -1,4 +1,15 @@
 /*
+ * SPDX-License-Identifier: Apache-2.0
+ *
+ * The OpenSearch Contributors require contributions made to
+ * this file be licensed under the Apache-2.0 license or a
+ * compatible open source license.
+ *
+ * Modifications Copyright OpenSearch Contributors. See
+ * GitHub history for details.
+ */
+
+/*
  * Licensed to Elasticsearch under one or more contributor
  * license agreements. See the NOTICE file distributed with
  * this work for additional information regarding copyright
@@ -17,16 +28,19 @@
  * under the License.
  */
 
+subprojects {
+  apply plugin: 'opensearch.testclusters'
+}
+
 // only configure immediate children of plugins dir
 configure(subprojects.findAll { it.parent.path == project.path }) {
-  group = 'org.elasticsearch.plugin'
+  group = 'org.opensearch.plugin'
+  apply plugin: 'opensearch.opensearchplugin'
 
-  apply plugin: 'elasticsearch.esplugin'
-
-  esplugin {
+  opensearchplugin {
     // for local ES plugins, the name of the plugin is the same as the directory
     name project.name
-    
+
     licenseFile rootProject.file('licenses/APACHE-LICENSE-2.0.txt')
     noticeFile rootProject.file('NOTICE.txt')
   }

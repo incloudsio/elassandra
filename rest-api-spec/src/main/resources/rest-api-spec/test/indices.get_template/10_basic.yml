@@ -1,7 +1,7 @@
 setup:
   - skip:
-      version: " - 6.6.99"
-      reason: include_type_name was introduced in 6.7
+      version: " - 6.99.99"
+      reason: include_type_name defaults to true before 7.0.0
   - do:
       indices.put_template:
         name: test
@@ -11,21 +11,15 @@ setup:
             number_of_shards:   1
             number_of_replicas: 0
           mappings:
-            _doc:
-              properties:
-                field:
-                  type: keyword
+            properties:
+              field:
+                type: keyword
 
 ---
 "Get template":
 
-  - skip:
-      version: " - 5.99.99"
-      reason:  this uses a new API that has been added in 6.0
-
   - do:
       indices.get_template:
-        include_type_name: false
         name: test
 
   - match: {test.index_patterns: ["test-*"]}
@@ -34,9 +28,6 @@ setup:
 
 ---
 "Get template with no mappings":
-  - skip:
-      version: " - 5.99.99"
-      reason:  this uses a new API that has been added in 6.0
 
   - do:
       indices.put_template:
@@ -49,7 +40,6 @@ setup:
 
   - do:
       indices.get_template:
-        include_type_name: false
         name: test_no_mappings
 
   - match: {test_no_mappings.index_patterns: ["test-*"]}
@@ -58,10 +48,6 @@ setup:
 
 ---
 "Get all templates":
-
-  - skip:
-      version: " - 5.99.99"
-      reason:  this uses a new API that has been added in 6.0
 
   - do:
       indices.put_template:
@@ -80,10 +66,6 @@ setup:
 ---
 "Get template with local flag":
 
-  - skip:
-      version: " - 5.99.99"
-      reason:  this uses a new API that has been added in 6.0
-
   - do:
       indices.get_template:
         name: test
@@ -93,10 +75,6 @@ setup:
 
 ---
 "Get template with flat settings and master timeout":
-
-  - skip:
-      version: " - 5.99.99"
-      reason:  this uses a new API that has been added in 6.0
 
   - do:
       indices.get_template:

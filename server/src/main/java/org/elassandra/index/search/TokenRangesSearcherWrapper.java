@@ -18,8 +18,8 @@ package org.elassandra.index.search;
 import org.apache.lucene.index.DirectoryReader;
 import org.apache.lucene.search.BooleanQuery;
 import org.apache.lucene.search.Query;
-import org.elasticsearch.index.shard.IndexSearcherWrapper;
-import org.elasticsearch.search.internal.ShardSearchRequest;
+import org.opensearch.index.shard.IndexSearcherWrapper;
+import org.opensearch.search.internal.ShardSearchRequest;
 
 import java.io.IOException;
 

@@ -1,4 +1,12 @@
 /*
+ * SPDX-License-Identifier: Apache-2.0
+ *
+ * The OpenSearch Contributors require contributions made to
+ * this file be licensed under the Apache-2.0 license or a
+ * compatible open source license.
+ */
+
+/*
  * Licensed to Elasticsearch under one or more contributor
  * license agreements. See the NOTICE file distributed with
  * this work for additional information regarding copyright
@@ -17,10 +25,15 @@
  * under the License.
  */
 
+/*
+ * Modifications Copyright OpenSearch Contributors. See
+ * GitHub history for details.
+ */
+
 package org.apache.lucene.search.uhighlight;
 
 import org.apache.lucene.search.highlight.Encoder;
-import org.elasticsearch.search.fetch.subphase.highlight.HighlightUtils;
+import org.opensearch.search.fetch.subphase.highlight.HighlightUtils;
 
 /**
  * Custom passage formatter that allows us to:
@@ -49,27 +62,33 @@ public class CustomPassageFormatter extends PassageFormatter {
             pos = passage.getStartOffset();
             for (int i = 0; i < passage.getNumMatches(); i++) {
                 int start = passage.getMatchStarts()[i];
+                assert start >= pos && start < passage.getEndOffset();
+                // append content before this start
+                append(sb, content, pos, start);
+
                 int end = passage.getMatchEnds()[i];
-                // its possible to have overlapping terms
-                if (start > pos) {
-                    append(sb, content, pos, start);
+                assert end > start;
+                // Look ahead to expand 'end' past all overlapping:
+                while (i + 1 < passage.getNumMatches() && passage.getMatchStarts()[i + 1] < end) {
+                    end = passage.getMatchEnds()[++i];
                 }
-                if (end > pos) {
-                    sb.append(preTag);
-                    append(sb, content, Math.max(pos, start), end);
-                    sb.append(postTag);
-                    pos = end;
-                }
+                end = Math.min(end, passage.getEndOffset()); // in case match straddles past passage
+
+                sb.append(preTag);
+                append(sb, content, start, end);
+                sb.append(postTag);
+
+                pos = end;
             }
             // its possible a "term" from the analyzer could span a sentence boundary.
             append(sb, content, pos, Math.max(pos, passage.getEndOffset()));
-            //we remove the paragraph separator if present at the end of the snippet (we used it as separator between values)
+            // we remove the paragraph separator if present at the end of the snippet (we used it as separator between values)
             if (sb.charAt(sb.length() - 1) == HighlightUtils.PARAGRAPH_SEPARATOR) {
                 sb.deleteCharAt(sb.length() - 1);
             } else if (sb.charAt(sb.length() - 1) == HighlightUtils.NULL_SEPARATOR) {
                 sb.deleteCharAt(sb.length() - 1);
             }
-            //and we trim the snippets too
+            // and we trim the snippets too
             snippets[j] = new Snippet(sb.toString().trim(), passage.getScore(), passage.getNumMatches() > 0);
         }
         return snippets;

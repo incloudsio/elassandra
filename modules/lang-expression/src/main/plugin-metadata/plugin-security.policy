@@ -1,4 +1,12 @@
 /*
+ * SPDX-License-Identifier: Apache-2.0
+ *
+ * The OpenSearch Contributors require contributions made to
+ * this file be licensed under the Apache-2.0 license or a
+ * compatible open source license.
+ */
+
+/*
  * Licensed to Elasticsearch under one or more contributor
  * license agreements. See the NOTICE file distributed with
  * this work for additional information regarding copyright
@@ -17,16 +25,21 @@
  * under the License.
  */
 
+/*
+ * Modifications Copyright OpenSearch Contributors. See
+ * GitHub history for details.
+ */
+
 grant {
   // needed to generate runtime classes
   permission java.lang.RuntimePermission "createClassLoader";
-  
+
   // expression runtime
-  permission org.elasticsearch.script.ClassPermission "java.lang.String";
-  permission org.elasticsearch.script.ClassPermission "org.apache.lucene.expressions.Expression";
-  permission org.elasticsearch.script.ClassPermission "org.apache.lucene.search.DoubleValues";
+  permission org.opensearch.script.ClassPermission "java.lang.String";
+  permission org.opensearch.script.ClassPermission "org.apache.lucene.expressions.Expression";
+  permission org.opensearch.script.ClassPermission "org.apache.lucene.search.DoubleValues";
   // available functions
-  permission org.elasticsearch.script.ClassPermission "java.lang.Math";
-  permission org.elasticsearch.script.ClassPermission "org.apache.lucene.util.MathUtil";
-  permission org.elasticsearch.script.ClassPermission "org.apache.lucene.util.SloppyMath";
+  permission org.opensearch.script.ClassPermission "java.lang.Math";
+  permission org.opensearch.script.ClassPermission "org.apache.lucene.util.MathUtil";
+  permission org.opensearch.script.ClassPermission "org.apache.lucene.util.SloppyMath";
 };

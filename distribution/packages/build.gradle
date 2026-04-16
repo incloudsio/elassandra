@@ -1,4 +1,15 @@
 /*
+ * SPDX-License-Identifier: Apache-2.0
+ *
+ * The OpenSearch Contributors require contributions made to
+ * this file be licensed under the Apache-2.0 license or a
+ * compatible open source license.
+ *
+ * Modifications Copyright OpenSearch Contributors. See
+ * GitHub history for details.
+ */
+
+/*
  * Licensed to Elasticsearch under one or more contributor
  * license agreements. See the NOTICE file distributed with
  * this work for additional information regarding copyright
@@ -15,9 +26,11 @@
  * KIND, either express or implied.  See the License for the
  */
 
-
-import org.elasticsearch.gradle.LoggedExec
-import org.elasticsearch.gradle.MavenFilteringHack
+import org.opensearch.gradle.LoggedExec
+import org.opensearch.gradle.MavenFilteringHack
+import org.opensearch.gradle.OS
+import org.opensearch.gradle.info.BuildParams
+import org.redline_rpm.header.Flags
 
 import java.nio.file.Files
 import java.nio.file.Path
@@ -45,64 +58,90 @@ import java.util.regex.Pattern
  * The following commands are useful when it comes to check the user/group
  * and files permissions set within the RPM and DEB packages:
  *
- *    rpm -qlp --dump path/to/elasticsearch.rpm
- *    dpkg -c path/to/elasticsearch.deb
+ *    rpm -qlp --dump path/to/opensearch.rpm
+ *    dpkg -c path/to/opensearch.deb
  */
 
+plugins {
+  id "nebula.ospackage-base" version "8.3.0"
+}
 
+void addProcessFilesTask(String type, boolean jdk) {
+  String packagingFiles = "build/packaging/${jdk ? '' : 'no-jdk-'}${type}"
 
-void addProcessFilesTask(String type, boolean oss) {
-  String packagingFiles = "build/packaging/${type}"
-
-  task("process${type.capitalize()}Files", type: Copy) {
+  String taskName = "process'${jdk ? '' : 'NoJdk'}${type.capitalize()}Files"
+  tasks.register(taskName, Copy) {
     into packagingFiles
 
     with copySpec {
       from 'src/common'
       from "src/${type}"
-      MavenFilteringHack.filter(it, expansionsForDistribution(type, oss))
+      MavenFilteringHack.filter(it, expansionsForDistribution(type, jdk))
     }
 
-    into('pylib') {
-      with pylibFiles(type, oss)
+    into('etc/opensearch') {
+      with configFiles(type, jdk)
     }
-
-    into('etc/cassandra') {
-      with configFiles(type, oss)
-    }
-    MavenFilteringHack.filter(it, expansionsForDistribution(type, oss))
+    MavenFilteringHack.filter(it, expansionsForDistribution(type, jdk))
 
     doLast {
       // create empty dirs, we set the permissions when configuring the packages
-      mkdir "${packagingFiles}/var/run/cassandra"
-      mkdir "${packagingFiles}/var/log/cassandra"
-      mkdir "${packagingFiles}/var/lib/cassandra"
-      mkdir "${packagingFiles}/usr/share/cassandra/plugins"
+      mkdir "${packagingFiles}/var/log/opensearch"
+      mkdir "${packagingFiles}/var/lib/opensearch"
+      mkdir "${packagingFiles}/usr/share/opensearch/plugins"
 
-      // bare empty dir for /etc/cassandra
-      mkdir "${packagingFiles}/etc/cassandra"
-      mkdir "${packagingFiles}/etc/cassandra/scripts"
-
-        mkdir "${packagingFiles}/pylib"
+      // bare empty dir for /etc/opensearch and /etc/opensearch/jvm.options.d
+      mkdir "${packagingFiles}/opensearch"
+      mkdir "${packagingFiles}/opensearch/jvm.options.d"
     }
   }
 }
+
 addProcessFilesTask('deb', true)
+addProcessFilesTask('deb', false)
 addProcessFilesTask('rpm', true)
+addProcessFilesTask('rpm', false)
 
 // Common configuration that is package dependent. This can't go in ospackage
 // since we have different templated files that need to be consumed, but the structure
 // is the same
-Closure commonPackageConfig(String type, boolean oss) {
+Closure commonPackageConfig(String type, boolean jdk, String architecture) {
   return {
-    dependsOn "process${type.capitalize()}Files"
-    packageName "elassandra"
-    // Follow elasticsearch's file naming convention
-    archiveName "${packageName}-${project.version}.${type}"
+    onlyIf {
+      OS.current().equals(OS.WINDOWS) == false
+    }
+    dependsOn "process'${jdk ? '' : 'NoJdk'}${type.capitalize()}Files"
+    packageName "opensearch"
+    if (type == 'deb') {
+      if (architecture == 'x64') {
+        arch('amd64')
+      } else {
+        assert architecture == 'arm64' : architecture
+        arch('arm64')
+      }
+    } else {
+      assert type == 'rpm' : type
+      if (architecture == 'x64') {
+        arch('x86_64')
+      } else {
+        assert architecture == 'arm64' : architecture
+        arch('aarch64')
+      }
+    }
+    // Follow opensearch's file naming convention
+    String jdkString = jdk ? "" : "-no-jdk"
+    String prefix = "${architecture == 'arm64' ? 'arm64-' : ''}${jdk ? '' : 'no-jdk-'}${type}"
+    destinationDirectory = file("${prefix}/build/distributions")
 
-    String prefix = "${type}"
-    destinationDir = file("${prefix}/build/distributions")
-    String packagingFiles = "build/packaging/${prefix}"
+    // SystemPackagingTask overrides default archive task convention mappings, but doesn't provide a setter so we have to override the convention mapping itself
+    // Deb convention uses a '_' for final separator before architecture, rpm uses a '.'
+    if (type == 'deb') {
+      conventionMapping.archiveFile = { objects.fileProperty().fileValue(file("${destinationDirectory.get()}/${packageName}-min_${project.version}${jdkString}_${archString}.${type}")) }
+    } else {
+      conventionMapping.archiveFile = { objects.fileProperty().fileValue(file("${destinationDirectory.get()}/${packageName}-min-${project.version}${jdkString}.${archString}.${type}")) }
+    }
+
+    String packagingFiles = "build/packaging/${jdk ? '' : 'no-jdk-'}${type}"
 
     String scripts = "${packagingFiles}/scripts"
     preInstall file("${scripts}/preinst")
@@ -113,48 +152,25 @@ Closure commonPackageConfig(String type, boolean oss) {
       postTrans file("${scripts}/posttrans")
     }
 
-    requires('coreutils')
-
     // top level "into" directive is not inherited from ospackage for some reason, so we must
     // specify it again explicitly for copying common files
-    into('/usr/bin') {
-      with binFiles(type, oss)
-      exclude 'cassandra.in.sh'
-      exclude 'cassandra'
-      exclude 'aliases.sh'
-    }
-    into('/usr/share/cassandra') {
+    into('/usr/share/opensearch') {
+      into('bin') {
+        with binFiles(type, jdk)
+      }
       from(rootProject.projectDir) {
         include 'README.md'
         fileMode 0644
       }
       into('lib') {
-          with libFiles(oss)
-      }
-      into('lib/licenses') {
-        dirMode 0755
-        with cassandraLicenseFiles(type, oss)
-        with licenseFiles(type, oss)
+        with libFiles()
       }
       into('modules') {
-        with modulesFiles(oss)
+        with modulesFiles('linux-' + ((architecture == 'x64') ? 'x64' : architecture))
       }
-      into('lib/sigar-bin') {
-        with copySpec {
-          with sigarFiles(type, oss)
-          exclude '*.dll'
-        }
-      }
-      into('pylib') {
-        with pylibFiles(type, oss)
-      }
-      into('tools') {
-        with copySpec {
-          with toolsFiles(type, oss)
-          with stressFiles(type, oss)
-          exclude 'bin/*.bat'
-          exclude 'bin/*.exe'
-          exclude 'bin/*.ps1'
+      if (jdk) {
+        into('jdk') {
+          with jdkFiles(project, 'linux', architecture)
         }
       }
       // we need to specify every intermediate directory in these paths so the package managers know they are explicitly
@@ -163,8 +179,10 @@ Closure commonPackageConfig(String type, boolean oss) {
       eachFile { FileCopyDetails fcp ->
         String[] segments = fcp.relativePath.segments
         for (int i = segments.length - 2; i > 2; --i) {
-          directory('/' + segments[0..i].join('/'), 0755)
-          if (segments[-2] == 'bin') {
+          if (type == 'rpm') {
+            directory('/' + segments[0..i].join('/'), 0755)
+          }
+          if (segments[-2] == 'bin' || segments[-1] == 'jspawnhelper') {
             fcp.mode = 0755
           } else {
             fcp.mode = 0644
@@ -181,7 +199,7 @@ Closure commonPackageConfig(String type, boolean oss) {
       }
     } else {
       assert type == 'rpm'
-      into('/usr/share/cassandra') {
+      into('/usr/share/opensearch') {
         from(rootProject.file('licenses')) {
           include 'APACHE-LICENSE-2.0.txt'
           rename { 'LICENSE.txt' }
@@ -191,88 +209,62 @@ Closure commonPackageConfig(String type, boolean oss) {
     }
 
     // ========= config files =========
-    configurationFile '/etc/cassandra/cassandra-env.sh'
-    configurationFile '/etc/cassandra/cassandra-jaas.config'
-    configurationFile '/etc/cassandra/cassandra-rackdc.properties'
-    configurationFile '/etc/cassandra/cassandra-topology.properties'
-    configurationFile '/etc/cassandra/cassandra.yaml'
-    configurationFile '/etc/cassandra/commitlog_archiving.properties'
-    configurationFile '/etc/cassandra/cqlshrc.sample'
-    configurationFile '/etc/cassandra/elasticsearch.yml'
-    configurationFile '/etc/cassandra/jvm.options'
-    configurationFile '/etc/cassandra/logback-tools.xml'
-    configurationFile '/etc/cassandra/logback.xml'
-    configurationFile '/etc/cassandra/metrics-reporter-config-sample.yaml'
-    configurationFile '/etc/cassandra/README.txt'
-
-    into('/usr/bin') {
-      with cassandraBinFiles(type, oss)
-      with binFiles(type, oss)
-      fileMode 0755
-      user 'root'
-      permissionGroup 'root'
-      exclude '*.bat'
-      exclude '*.exe'
-      exclude '*.ps1'
-      exclude 'aliases.sh'
-      exclude 'cassandra.in.sh'
-    }
-    into('/usr/share/cassandra') {
-      with homebinFiles(type, oss)
-      fileMode 0755
-      user 'root'
-      permissionGroup 'root'
-    }
-
+    configurationFile '/etc/opensearch/opensearch.yml'
+    configurationFile '/etc/opensearch/jvm.options'
+    configurationFile '/etc/opensearch/log4j2.properties'
     from("${packagingFiles}") {
-     dirMode 02750
-     into('/etc')
-     permissionGroup 'cassandra'
-     includeEmptyDirs true
-     createDirectoryEntry true
-     include("cassandra") // empty dir, just to add directory entry
-   }
-   from("${packagingFiles}/etc/cassandra") {
-     into('/etc/cassandra')
+      dirMode 02750
+      into('/etc')
+      permissionGroup 'opensearch'
+      includeEmptyDirs true
+      createDirectoryEntry true
+      include("opensearch") // empty dir, just to add directory entry
+      include("opensearch/jvm.options.d") // empty dir, just to add directory entry
+    }
+    from("${packagingFiles}/etc/opensearch") {
+      into('/etc/opensearch')
       dirMode 02750
       fileMode 0660
-      permissionGroup 'cassandra'
+      permissionGroup 'opensearch'
       includeEmptyDirs true
       createDirectoryEntry true
       fileType CONFIG | NOREPLACE
     }
-    String envFile = expansionsForDistribution(type, false)['path.env']
+    String envFile = expansionsForDistribution(type, jdk)['path.env']
     configurationFile envFile
     into(new File(envFile).getParent()) {
       fileType CONFIG | NOREPLACE
-      permissionGroup 'cassandra'
+      permissionGroup 'opensearch'
       fileMode 0660
-      from "${packagingFiles}/env/cassandra"
+      from "${packagingFiles}/env/opensearch"
     }
 
     // ========= systemd =========
-    configurationFile '/usr/lib/systemd/system/cassandra.service'
     into('/usr/lib/tmpfiles.d') {
-      from "${packagingFiles}/systemd/cassandra.conf"
+      from "${packagingFiles}/systemd/opensearch.conf"
       fileMode 0644
     }
     into('/usr/lib/systemd/system') {
       fileType CONFIG | NOREPLACE
-      from "${packagingFiles}/systemd/cassandra.service"
+      from "${packagingFiles}/systemd/opensearch.service"
       fileMode 0644
     }
     into('/usr/lib/sysctl.d') {
       fileType CONFIG | NOREPLACE
-      from "${packagingFiles}/systemd/sysctl/cassandra.conf"
+      from "${packagingFiles}/systemd/sysctl/opensearch.conf"
       fileMode 0644
+    }
+    into('/usr/share/opensearch/bin') {
+      from "${packagingFiles}/systemd/systemd-entrypoint"
+      fileMode 0755
     }
 
     // ========= sysV init =========
-    configurationFile '/etc/init.d/cassandra'
+    configurationFile '/etc/init.d/opensearch'
     into('/etc/init.d') {
       fileMode 0750
       fileType CONFIG | NOREPLACE
-      from "${packagingFiles}/init.d/cassandra"
+      from "${packagingFiles}/init.d/opensearch"
     }
 
     // ========= empty dirs =========
@@ -289,13 +281,12 @@ Closure commonPackageConfig(String type, boolean oss) {
         dirMode mode
       }
     }
-    copyEmptyDir('/var/run/cassandra', 'cassandra', 'cassandra', 0755)
-    copyEmptyDir('/var/log/cassandra', 'cassandra', 'cassandra', 02750)
-    copyEmptyDir('/var/lib/cassandra', 'cassandra', 'cassandra', 02750)
-    copyEmptyDir('/usr/share/cassandra/plugins', 'root', 'root', 0755)
+    copyEmptyDir('/var/log/opensearch', 'opensearch', 'opensearch', 02750)
+    copyEmptyDir('/var/lib/opensearch', 'opensearch', 'opensearch', 02750)
+    copyEmptyDir('/usr/share/opensearch/plugins', 'root', 'root', 0755)
 
-    // the oss package conflicts with the default distribution and vice versa
-    conflicts('cassandra')
+    into '/usr/share/opensearch'
+    with noticeFile(jdk)
   }
 }
 
@@ -303,99 +294,105 @@ apply plugin: 'nebula.ospackage-base'
 
 // this is package indepdendent configuration
 ospackage {
-  maintainer 'Elassandra.org / inClouds <https://elassandra.org/>'
-  summary '''
-    Elassandra is a multi-master distributed database and search engine (Elassandra.org, inClouds).
-    Documentation: https://elassandra.readthedocs.io/ and https://elassandra.org/
-    '''.stripIndent().replace('\n', ' ').trim()
-  url 'https://elassandra.org/'
+  maintainer 'OpenSearch Team <opensearch@amazon.com>'
+  summary 'Distributed RESTful search engine built for the cloud'
+  packageDescription '''
+    Reference documentation can be found at
+    https://github.com/opensearch-project/OpenSearch
+  '''.stripIndent().trim()
+  url 'https://github.com/opensearch-project/OpenSearch'
 
   // signing setup
-  if (project.hasProperty('signing.password') && System.getProperty('build.snapshot', 'true') == 'false') {
-    signingKeyId = project.hasProperty('signing.keyId') ? project.property('signing.keyId') : 'C58CE2B6'
+  if (project.hasProperty('signing.password') && BuildParams.isSnapshotBuild() == false) {
+    signingKeyId = project.hasProperty('signing.keyId') ? project.property('signing.keyId') : 'D88E42B4'
     signingKeyPassphrase = project.property('signing.password')
     signingKeyRingFile = project.hasProperty('signing.secretKeyRingFile') ?
-            project.file(project.property('signing.secretKeyRingFile')) :
-            new File(new File(System.getProperty('user.home'), '.gnupg'), 'secring.gpg')
+      project.file(project.property('signing.secretKeyRingFile')) :
+      new File(new File(System.getProperty('user.home'), '.gnupg'), 'secring.gpg')
   }
 
-  requires('coreutils')
+  // version found on oldest supported distro, centos-6
+  requires('coreutils', '8.4', GREATER | EQUAL)
 
   fileMode 0644
   dirMode 0755
   user 'root'
   permissionGroup 'root'
 
-  into '/usr/share/cassandra'
-  with noticeFile
+  into '/usr/share/opensearch'
 }
 
-Closure commonDebConfig() {
+Closure commonDebConfig(boolean jdk, String architecture) {
   return {
-    configure(commonPackageConfig('deb', true))
+    configure(commonPackageConfig('deb', jdk, architecture))
 
+    // jdeb does not provide a way to set the License control attribute, and ospackage
+    // silently ignores setting it. Instead, we set the license as "custom field"
     customFields['License'] = 'ASL-2.0'
 
-    version = project.version
+    archiveVersion = project.version.replace('-', '~')
     packageGroup 'web'
-    requires 'bash'
+
+    // versions found on oldest supported distro, centos-6
+    requires('bash', '4.1', GREATER | EQUAL)
+    requires('lsb-base', '4', GREATER | EQUAL)
     requires 'libc6'
     requires 'adduser'
 
-    requires('python3')
-    requires('openjdk-8-jre-headless').or("java8-runtime")
-    recommends('ntp')
-    conflicts('cassandra')
-
     into('/usr/share/lintian/overrides') {
-      from('src/deb/lintian/cassandra')
-    }
-
-    into('/usr/lib') {
-      from("build/packaging/pylib/usr/lib") {
-        include 'python3/dist-packages/cqlshlib/**'
-      }
-      fileMode 0664
+      from('src/deb/lintian/opensearch')
+      fileMode 0644
     }
   }
 }
 
-task buildDeb(type: Deb) {
-  dependsOn setupPylibDeb
-  configure(commonDebConfig())
+tasks.register('buildArm64Deb', Deb) {
+  configure(commonDebConfig(true, 'arm64'))
 }
 
-Closure commonRpmConfig() {
-  return {
-    configure(commonPackageConfig('rpm', true))
+tasks.register('buildDeb', Deb) {
+  configure(commonDebConfig(true, 'x64'))
+}
 
-    license 'ASL 2.0'
+tasks.register('buildNoJdkDeb', Deb) {
+  configure(commonDebConfig(true, 'x64'))
+}
+
+Closure commonRpmConfig(boolean jdk, String architecture) {
+  return {
+    configure(commonPackageConfig('rpm', jdk, architecture))
+
+    license 'ASL-2.0'
 
     packageGroup 'Application/Internet'
     requires '/bin/bash'
-    requires('python3')
-    requires('jre', "1.8.0", GREATER | EQUAL)
-    recommends('ntp')
-    conflicts('cassandra')
+
+    obsoletes packageName, '7.0.0', Flags.LESS
 
     prefix '/usr'
-    packager 'Elassandra'
-    version = project.version.replace('-', '_')
+    packager 'OpenSearch'
+    archiveVersion = project.version.replace('-', '_')
     release = '1'
-    arch 'NOARCH'
     os 'LINUX'
-    distribution 'Elassandra'
-    vendor 'Elassandra'
+    distribution 'OpenSearch'
+    vendor 'OpenSearch'
     // TODO ospackage doesn't support icon but we used to have one
 
-    // without this the rpm will have parent dirs of any files we copy in, eg /etc/elasticsearch
+    // without this the rpm will have parent dirs of any files we copy in, eg /etc/opensearch
     addParentDirs false
   }
 }
 
-task buildRpm(type: Rpm) {
-  dependsOn setupPylibRpm
-  configure(commonRpmConfig())
+tasks.register('buildArm64Rpm', Rpm) {
+  configure(commonRpmConfig(true, 'arm64'))
+}
+
+tasks.register('buildRpm', Rpm) {
+  configure(commonRpmConfig(true, 'x64'))
+}
+
+tasks.register('buildNoJdkRpm', Rpm) {
+  configure(commonRpmConfig(true, 'x64'))
 }
 
 Closure dpkgExists = { it -> new File('/bin/dpkg-deb').exists() || new File('/usr/bin/dpkg-deb').exists() || new File('/usr/local/bin/dpkg-deb').exists() }
@@ -410,40 +407,45 @@ subprojects {
   apply plugin: 'distribution'
 
   String buildTask = "build${it.name.replaceAll(/-[a-z]/) { it.substring(1).toUpperCase() }.capitalize()}"
-  ext.buildDist = parent.tasks.getByName(buildTask)
+  ext.buildDist = parent.tasks.named(buildTask)
   artifacts {
     'default' buildDist
   }
 
-  // sanity checks if packages can be extracted
-  final File extractionDir = new File(buildDir, 'extracted')
-  File packageExtractionDir
-  if (project.name.contains('deb')) {
-    packageExtractionDir = new File(extractionDir, 'deb-extracted')
-  } else {
-    assert project.name.contains('rpm')
-    packageExtractionDir = new File(extractionDir, 'rpm-extracted')
-  }
-  task checkExtraction(type: LoggedExec) {
-    dependsOn buildDist
-    doFirst {
-      project.delete(extractionDir)
-      extractionDir.mkdirs()
+  if (dpkgExists() || rpmExists()) {
+
+    // sanity checks if packages can be extracted
+    final File extractionDir = new File(buildDir, 'extracted')
+    File packageExtractionDir
+    if (project.name.contains('deb')) {
+      packageExtractionDir = new File(extractionDir, 'deb-extracted')
+    } else {
+      assert project.name.contains('rpm')
+      packageExtractionDir = new File(extractionDir, 'rpm-extracted')
     }
-  }
-  check.dependsOn checkExtraction
-  if (project.name.contains('deb')) {
-    checkExtraction {
-      onlyIf dpkgExists
-      commandLine 'dpkg-deb', '-x', "${-> buildDist.outputs.files.filter(debFilter).singleFile}", packageExtractionDir
+    tasks.register('checkExtraction', LoggedExec) {
+      dependsOn buildDist
+      doFirst {
+        delete(extractionDir)
+        extractionDir.mkdirs()
+      }
     }
-  } else {
-    assert project.name.contains('rpm')
-    checkExtraction {
-      onlyIf rpmExists
-      final File rpmDatabase = new File(extractionDir, 'rpm-database')
-      commandLine 'rpm',
+
+    tasks.named("check").configure { dependsOn "checkExtraction" }
+    if (project.name.contains('deb')) {
+      tasks.named("checkExtraction").configure {
+        onlyIf dpkgExists
+        commandLine 'dpkg-deb', '-x', "${-> buildDist.get().outputs.files.filter(debFilter).singleFile}", packageExtractionDir
+      }
+    } else {
+      assert project.name.contains('rpm')
+      tasks.named("checkExtraction").configure {
+        onlyIf rpmExists
+        final File rpmDatabase = new File(extractionDir, 'rpm-database')
+        commandLine 'rpm',
           '--badreloc',
+          '--ignorearch',
+          '--ignoreos',
           '--nodeps',
           '--noscripts',
           '--notriggers',
@@ -452,108 +454,108 @@ subprojects {
           '--relocate',
           "/=${packageExtractionDir}",
           '-i',
-          "${-> buildDist.outputs.files.singleFile}"
-    }
-  }
-
-  task checkLicense {
-    dependsOn buildDist, checkExtraction
-  }
-  check.dependsOn checkLicense
-  if (project.name.contains('deb')) {
-    checkLicense {
-      onlyIf dpkgExists
-      doLast {
-        Path copyrightPath
-        String expectedLicense
-        String licenseFilename
-        copyrightPath = packageExtractionDir.toPath().resolve("usr/share/doc/elassandra/copyright")
-        expectedLicense = "ASL-2.0"
-        licenseFilename = "APACHE-LICENSE-2.0.txt"
-        final List<String> header = Arrays.asList("Format: https://www.debian.org/doc/packaging-manuals/copyright-format/1.0/",
-                "Copyright: Strapdata SAS <contact@strapdata.com>",
-                "License: " + expectedLicense)
-        final List<String> licenseLines = Files.readAllLines(rootDir.toPath().resolve("licenses/" + licenseFilename))
-        final List<String> expectedLines = header + licenseLines.collect { " " + it }
-        assertLinesInFile(copyrightPath, expectedLines)
+          "${-> buildDist.get().outputs.files.singleFile}"
       }
     }
-  } else {
-    assert project.name.contains('rpm')
-    checkLicense {
-      onlyIf rpmExists
-      doLast {
-        String licenseFilename
-        licenseFilename = "APACHE-LICENSE-2.0.txt"
-        final List<String> licenseLines = Files.readAllLines(rootDir.toPath().resolve("licenses/" + licenseFilename))
-        final Path licensePath = packageExtractionDir.toPath().resolve("usr/share/cassandra/LICENSE.txt")
-        assertLinesInFile(licensePath, licenseLines)
+
+    tasks.register("checkLicense") {
+      dependsOn buildDist, "checkExtraction"
+    }
+    check.dependsOn "checkLicense"
+    if (project.name.contains('deb')) {
+      tasks.named("checkLicense").configure {
+        onlyIf dpkgExists
+        doLast {
+          Path copyrightPath
+          String expectedLicense
+          String licenseFilename
+          copyrightPath = packageExtractionDir.toPath().resolve("usr/share/doc/opensearch/copyright")
+          expectedLicense = "ASL-2.0"
+          licenseFilename = "APACHE-LICENSE-2.0.txt"
+          final List<String> header = Arrays.asList("Format: https://www.debian.org/doc/packaging-manuals/copyright-format/1.0/",
+            "Copyright: Elasticsearch B.V. <info@elastic.co>",
+            "Copyright: OpenSearch Contributors",
+            "License: " + expectedLicense)
+          final List<String> licenseLines = Files.readAllLines(rootDir.toPath().resolve("licenses/" + licenseFilename))
+          final List<String> expectedLines = header + licenseLines.collect { " " + it }
+          assertLinesInFile(copyrightPath, expectedLines)
+        }
+      }
+    } else {
+      assert project.name.contains('rpm')
+      tasks.named("checkLicense").configure {
+        onlyIf rpmExists
+        doLast {
+          String licenseFilename = "APACHE-LICENSE-2.0.txt"
+          final List<String> licenseLines = Files.readAllLines(rootDir.toPath().resolve("licenses/" + licenseFilename))
+          final Path licensePath = packageExtractionDir.toPath().resolve("usr/share/opensearch/LICENSE.txt")
+          assertLinesInFile(licensePath, licenseLines)
+        }
       }
     }
-  }
 
-  task checkNotice {
-    dependsOn buildDist, checkExtraction
-    onlyIf { (project.name.contains('deb') && dpkgExists.call(it)) || (project.name.contains('rpm') && rpmExists.call(it)) }
-    doLast {
-      final List<String> noticeLines = Arrays.asList("Strapdata", "Copyright 2015-2019 Strapdata")
-      final Path noticePath = packageExtractionDir.toPath().resolve("usr/share/cassandra/NOTICE.txt")
-      assertLinesInFile(noticePath, noticeLines)
-    }
-  }
-  check.dependsOn checkNotice
-
-  task checkLicenseMetadata(type: LoggedExec) {
-    dependsOn buildDist, checkExtraction
-  }
-  check.dependsOn checkLicenseMetadata
-  if (project.name.contains('deb')) {
-    checkLicenseMetadata { LoggedExec exec ->
-      onlyIf dpkgExists
-      final ByteArrayOutputStream output = new ByteArrayOutputStream()
-      exec.commandLine 'dpkg-deb', '--info', "${ -> buildDist.outputs.files.filter(debFilter).singleFile}"
-      exec.standardOutput = output
+    tasks.register("checkNotice") {
+      dependsOn buildDist, "checkExtraction"
+      onlyIf {
+        (project.name.contains('deb') && dpkgExists.call(it)) || (project.name.contains('rpm') && rpmExists.call(it))
+      }
       doLast {
-        String expectedLicense
-        expectedLicense = "ASL-2.0"
-        final Pattern pattern = Pattern.compile("\\s*License: (.+)")
-        final String info = output.toString('UTF-8')
-        final String[] actualLines = info.split("\n")
-        int count = 0
-        for (final String actualLine : actualLines) {
-          final Matcher matcher = pattern.matcher(actualLine)
-          if (matcher.matches()) {
-            count++
-            final String actualLicense = matcher.group(1)
-            if (expectedLicense != actualLicense) {
-              throw new GradleException("expected license [${expectedLicense} for package info but found [${actualLicense}]")
+        final List<String> noticeLines = Arrays.asList("OpenSearch (https://opensearch.org/)", "Copyright OpenSearch Contributors")
+        final Path noticePath = packageExtractionDir.toPath().resolve("usr/share/opensearch/NOTICE.txt")
+        assertLinesInFile(noticePath, noticeLines)
+      }
+    }
+    tasks.named("check").configure { dependsOn "checkNotice" }
+
+    tasks.register('checkLicenseMetadata', LoggedExec) {
+      dependsOn buildDist, "checkExtraction"
+    }
+    check.dependsOn checkLicenseMetadata
+    if (project.name.contains('deb')) {
+      checkLicenseMetadata { LoggedExec exec ->
+        onlyIf dpkgExists
+        final ByteArrayOutputStream output = new ByteArrayOutputStream()
+        exec.commandLine 'dpkg-deb', '--info', "${-> buildDist.get().outputs.files.filter(debFilter).singleFile}"
+        exec.standardOutput = output
+        doLast {
+          String expectedLicense = "ASL-2.0"
+          final Pattern pattern = Pattern.compile("\\s*License: (.+)")
+          final String info = output.toString('UTF-8')
+          final String[] actualLines = info.split("\n")
+          int count = 0
+          for (final String actualLine : actualLines) {
+            final Matcher matcher = pattern.matcher(actualLine)
+            if (matcher.matches()) {
+              count++
+              final String actualLicense = matcher.group(1)
+              if (expectedLicense != actualLicense) {
+                throw new GradleException("expected license [${expectedLicense} for package info but found [${actualLicense}]")
+              }
             }
           }
-        }
-        if (count == 0) {
-          throw new GradleException("expected license [${expectedLicense}] for package info but found none in:\n${info}")
-        }
-        if (count > 1) {
-          throw new GradleException("expected a single license for package info but found [${count}] in:\n${info}")
+          if (count == 0) {
+            throw new GradleException("expected license [${expectedLicense}] for package info but found none in:\n${info}")
+          }
+          if (count > 1) {
+            throw new GradleException("expected a single license for package info but found [${count}] in:\n${info}")
+          }
         }
       }
-    }
-  } else {
-    assert project.name.contains('rpm')
-    checkLicenseMetadata { LoggedExec exec ->
-      onlyIf rpmExists
-      final ByteArrayOutputStream output = new ByteArrayOutputStream()
-      exec.commandLine 'rpm', '-qp', '--queryformat', '%{License}', "${-> buildDist.outputs.files.singleFile}"
-      exec.standardOutput = output
-      doLast {
-        String license = output.toString('UTF-8')
-        String expectedLicense
-        expectedLicense = "ASL 2.0"
-        if (license != expectedLicense) {
-          throw new GradleException("expected license [${expectedLicense}] for [${-> buildDist.outputs.files.singleFile}] but was [${license}]")
+    } else {
+      assert project.name.contains('rpm')
+      checkLicenseMetadata { LoggedExec exec ->
+        onlyIf rpmExists
+        final ByteArrayOutputStream output = new ByteArrayOutputStream()
+        exec.commandLine 'rpm', '-qp', '--queryformat', '%{License}', "${-> buildDist.get().outputs.files.singleFile}"
+        exec.standardOutput = output
+        doLast {
+          String license = output.toString('UTF-8')
+          String expectedLicense = "ASL-2.0"
+          if (license != expectedLicense) {
+            throw new GradleException("expected license [${expectedLicense}] for [${-> buildDist.get().outputs.files.singleFile}] but was [${license}]")
+          }
         }
       }
     }
   }
-
 }

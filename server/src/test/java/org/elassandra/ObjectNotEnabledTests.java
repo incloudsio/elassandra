@@ -20,23 +20,23 @@ import org.apache.cassandra.db.ConsistencyLevel;
 
 import static org.hamcrest.Matchers.equalTo;
 import static org.hamcrest.Matchers.notNullValue;
-import static org.elasticsearch.test.hamcrest.ElasticsearchAssertions.assertAcked;
+import static org.opensearch.test.hamcrest.OpenSearchAssertions.assertAcked;
 
 import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
 
-import org.elasticsearch.action.DocWriteResponse;
-import org.elasticsearch.action.get.GetResponse;
-import org.elasticsearch.action.index.IndexResponse;
-import org.elasticsearch.common.bytes.BytesReference;
-import org.elasticsearch.common.xcontent.XContentBuilder;
-import org.elasticsearch.common.xcontent.XContentFactory;
-import org.elasticsearch.common.xcontent.XContentType;
-import org.elasticsearch.index.query.QueryBuilders;
-import org.elasticsearch.search.SearchHits;
-import org.elasticsearch.test.ESSingleNodeTestCase;
+import org.opensearch.action.DocWriteResponse;
+import org.opensearch.action.get.GetResponse;
+import org.opensearch.action.index.IndexResponse;
+import org.opensearch.common.bytes.BytesReference;
+import org.opensearch.common.xcontent.XContentBuilder;
+import org.opensearch.common.xcontent.XContentFactory;
+import org.opensearch.common.xcontent.XContentType;
+import org.opensearch.index.query.QueryBuilders;
+import org.opensearch.search.SearchHits;
+import org.opensearch.test.OpenSearchSingleNodeTestCase;
 import org.junit.Test;
 
 /**
@@ -44,7 +44,7 @@ import org.junit.Test;
  * @author vroyer
  *
  */
-public class ObjectNotEnabledTests extends ESSingleNodeTestCase {
+public class ObjectNotEnabledTests extends OpenSearchSingleNodeTestCase {
 
     private void createIndexAndWaitForReady(String index, XContentBuilder mapping, String... expectedColumns) throws Exception {
         assertAcked(client().admin().indices().prepareCreate(index).addMapping("_doc", mapping).get());

@@ -1,4 +1,12 @@
 /*
+ * SPDX-License-Identifier: Apache-2.0
+ *
+ * The OpenSearch Contributors require contributions made to
+ * this file be licensed under the Apache-2.0 license or a
+ * compatible open source license.
+ */
+
+/*
  * Licensed to Elasticsearch under one or more contributor
  * license agreements. See the NOTICE file distributed with
  * this work for additional information regarding copyright
@@ -16,11 +24,16 @@
  * specific language governing permissions and limitations
  * under the License.
  */
+/*
+ * Modifications Copyright OpenSearch Contributors. See
+ * GitHub history for details.
+ */
+
 package org.apache.lucene.queries;
 
 import org.apache.lucene.document.InetAddressPoint;
-import org.apache.lucene.util.StringHelper;
-import org.elasticsearch.index.mapper.RangeFieldMapper;
+import org.apache.lucene.util.FutureArrays;
+import org.opensearch.index.mapper.RangeType;
 
 import java.net.InetAddress;
 import java.net.UnknownHostException;
@@ -34,8 +47,8 @@ public class InetAddressRandomBinaryDocValuesRangeQueryTests extends BaseRandomB
     }
 
     @Override
-    protected RangeFieldMapper.RangeType rangeType() {
-        return RangeFieldMapper.RangeType.IP;
+    protected RangeType rangeType() {
+        return RangeType.IP;
     }
 
     @Override
@@ -44,7 +57,7 @@ public class InetAddressRandomBinaryDocValuesRangeQueryTests extends BaseRandomB
         byte[] bMin = InetAddressPoint.encode(min);
         InetAddress max = nextInetaddress();
         byte[] bMax = InetAddressPoint.encode(max);
-        if (StringHelper.compare(bMin.length, bMin, 0, bMax, 0) > 0) {
+        if (FutureArrays.compareUnsigned(bMin, 0, bMin.length, bMax, 0, bMin.length) > 0) {
             return new IpRange(max, min);
         }
         return new IpRange(min, max);
@@ -88,10 +101,10 @@ public class InetAddressRandomBinaryDocValuesRangeQueryTests extends BaseRandomB
         @Override
         protected void setMin(int dim, Object val) {
             assert dim == 0;
-            InetAddress v = (InetAddress)val;
+            InetAddress v = (InetAddress) val;
             byte[] e = InetAddressPoint.encode(v);
 
-            if (StringHelper.compare(e.length, min, 0, e, 0) < 0) {
+            if (FutureArrays.compareUnsigned(min, 0, e.length, e, 0, e.length) < 0) {
                 max = e;
                 maxAddress = v;
             } else {
@@ -108,10 +121,10 @@ public class InetAddressRandomBinaryDocValuesRangeQueryTests extends BaseRandomB
         @Override
         protected void setMax(int dim, Object val) {
             assert dim == 0;
-            InetAddress v = (InetAddress)val;
+            InetAddress v = (InetAddress) val;
             byte[] e = InetAddressPoint.encode(v);
 
-            if (StringHelper.compare(e.length, max, 0, e, 0) > 0) {
+            if (FutureArrays.compareUnsigned(max, 0, e.length, e, 0, e.length) > 0) {
                 min = e;
                 minAddress = v;
             } else {
@@ -123,22 +136,22 @@ public class InetAddressRandomBinaryDocValuesRangeQueryTests extends BaseRandomB
         @Override
         protected boolean isDisjoint(Range o) {
             IpRange other = (IpRange) o;
-            return StringHelper.compare(min.length, min, 0, other.max, 0) > 0 ||
-                    StringHelper.compare(max.length, max, 0, other.min, 0) < 0;
+            return FutureArrays.compareUnsigned(min, 0, min.length, other.max, 0, min.length) > 0
+                || FutureArrays.compareUnsigned(max, 0, max.length, other.min, 0, max.length) < 0;
         }
 
         @Override
         protected boolean isWithin(Range o) {
-            IpRange other = (IpRange)o;
-            return StringHelper.compare(min.length, min, 0, other.min, 0) >= 0 &&
-                    StringHelper.compare(max.length, max, 0, other.max, 0) <= 0;
+            IpRange other = (IpRange) o;
+            return FutureArrays.compareUnsigned(min, 0, min.length, other.min, 0, min.length) >= 0
+                && FutureArrays.compareUnsigned(max, 0, max.length, other.max, 0, max.length) <= 0;
         }
 
         @Override
         protected boolean contains(Range o) {
-            IpRange other = (IpRange)o;
-            return StringHelper.compare(min.length, min, 0, other.min, 0) <= 0 &&
-                    StringHelper.compare(max.length, max, 0, other.max, 0) >= 0;
+            IpRange other = (IpRange) o;
+            return FutureArrays.compareUnsigned(min, 0, min.length, other.min, 0, min.length) <= 0
+                && FutureArrays.compareUnsigned(max, 0, max.length, other.max, 0, max.length) >= 0;
         }
 
     }

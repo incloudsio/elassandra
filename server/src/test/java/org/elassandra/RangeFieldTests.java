@@ -16,14 +16,14 @@
 package org.elassandra;
 
 import org.apache.lucene.document.InetAddressPoint;
-import org.elasticsearch.action.DocWriteResponse;
-import org.elasticsearch.common.bytes.BytesReference;
-import org.elasticsearch.common.xcontent.XContentBuilder;
-import org.elasticsearch.common.xcontent.XContentFactory;
-import org.elasticsearch.common.xcontent.XContentType;
-import org.elasticsearch.index.query.QueryBuilder;
-import org.elasticsearch.index.query.QueryBuilders;
-import org.elasticsearch.test.ESSingleNodeTestCase;
+import org.opensearch.action.DocWriteResponse;
+import org.opensearch.common.bytes.BytesReference;
+import org.opensearch.common.xcontent.XContentBuilder;
+import org.opensearch.common.xcontent.XContentFactory;
+import org.opensearch.common.xcontent.XContentType;
+import org.opensearch.index.query.QueryBuilder;
+import org.opensearch.index.query.QueryBuilders;
+import org.opensearch.test.OpenSearchSingleNodeTestCase;
 import org.junit.Test;
 
 import java.text.ParseException;
@@ -34,11 +34,11 @@ import java.util.HashSet;
 import java.util.Locale;
 import java.util.Set;
 
-import static org.elasticsearch.index.query.RangeQueryBuilder.GTE_FIELD;
-import static org.elasticsearch.index.query.RangeQueryBuilder.GT_FIELD;
-import static org.elasticsearch.index.query.RangeQueryBuilder.LTE_FIELD;
-import static org.elasticsearch.index.query.RangeQueryBuilder.LT_FIELD;
-import static org.elasticsearch.test.hamcrest.ElasticsearchAssertions.assertAcked;
+import static org.opensearch.index.query.RangeQueryBuilder.GTE_FIELD;
+import static org.opensearch.index.query.RangeQueryBuilder.GT_FIELD;
+import static org.opensearch.index.query.RangeQueryBuilder.LTE_FIELD;
+import static org.opensearch.index.query.RangeQueryBuilder.LT_FIELD;
+import static org.opensearch.test.hamcrest.OpenSearchAssertions.assertAcked;
 import static org.hamcrest.Matchers.equalTo;
 
 /**
@@ -46,7 +46,7 @@ import static org.hamcrest.Matchers.equalTo;
  * @author vroyer
  *
  */
-public class RangeFieldTests extends ESSingleNodeTestCase {
+public class RangeFieldTests extends OpenSearchSingleNodeTestCase {
 
     private static String FROM_DATE = "2016-10-31";
     private static String TO_DATE = "2016-11-05 23:00:00";
@@ -151,7 +151,7 @@ public class RangeFieldTests extends ESSingleNodeTestCase {
                 .get().getResult(), equalTo(DocWriteResponse.Result.CREATED));
 
         assertThat(client().prepareSearch().setIndices(indexName).setTypes("my_type")
-                .setQuery(getMiddleQuery(type)).get().getHits().getTotalHits(), equalTo(1L));
+                .setQuery(getMiddleQuery(type)).get().getHits().getTotalHits().value, equalTo(1L));
     }
 
 }

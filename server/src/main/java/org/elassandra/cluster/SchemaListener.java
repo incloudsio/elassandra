@@ -34,18 +34,18 @@ import org.apache.cassandra.utils.FBUtilities;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.elassandra.index.ElasticSecondaryIndex;
-import org.elasticsearch.cluster.ClusterChangedEvent;
-import org.elasticsearch.cluster.ClusterState;
-import org.elasticsearch.cluster.ClusterStateListener;
-import org.elasticsearch.cluster.ClusterStateTaskConfig.SchemaUpdate;
-import org.elasticsearch.cluster.ClusterStateUpdateTask;
-import org.elasticsearch.cluster.block.ClusterBlocks;
-import org.elasticsearch.cluster.metadata.IndexMetaData;
-import org.elasticsearch.cluster.metadata.MetaData;
-import org.elasticsearch.cluster.routing.RoutingTable;
-import org.elasticsearch.cluster.service.ClusterService;
-import org.elasticsearch.common.Priority;
-import org.elasticsearch.common.settings.Settings;
+import org.opensearch.cluster.ClusterChangedEvent;
+import org.opensearch.cluster.ClusterState;
+import org.opensearch.cluster.ClusterStateListener;
+import org.opensearch.cluster.ClusterStateTaskConfig.SchemaUpdate;
+import org.opensearch.cluster.ClusterStateUpdateTask;
+import org.opensearch.cluster.block.ClusterBlocks;
+import org.opensearch.cluster.metadata.IndexMetadata;
+import org.opensearch.cluster.metadata.Metadata;
+import org.opensearch.cluster.routing.RoutingTable;
+import org.opensearch.cluster.service.ClusterService;
+import org.opensearch.common.Priority;
+import org.opensearch.common.settings.Settings;
 
 import java.nio.ByteBuffer;
 import java.util.Map;
@@ -58,8 +58,8 @@ public class SchemaListener extends SchemaChangeListener implements ClusterState
     final ClusterService clusterService;
     final Logger logger;
 
-    MetaData recordedMetaData = null;
-    final ListMultimap<String, IndexMetaData> recordedIndexMetaData = ArrayListMultimap.create();
+    Metadata recordedMetaData = null;
+    final ListMultimap<String, IndexMetadata> recordedIndexMetaData = ArrayListMultimap.create();
 
     public SchemaListener(Settings settings, ClusterService clusterService) {
         this.clusterService = clusterService;
@@ -74,8 +74,8 @@ public class SchemaListener extends SchemaChangeListener implements ClusterState
         if (recordedMetaData != null || !recordedIndexMetaData.isEmpty()) {
             final ClusterState currentState = this.clusterService.state();
             final ClusterBlocks.Builder blocks = ClusterBlocks.builder().blocks(currentState.blocks());
-            final MetaData sourceMetaData = (recordedMetaData == null) ? currentState.metaData() : recordedMetaData;
-            final MetaData.Builder metaDataBuilder = MetaData.builder(sourceMetaData);
+            final Metadata sourceMetaData = (recordedMetaData == null) ? currentState.metadata() : recordedMetaData;
+            final Metadata.Builder metaDataBuilder = Metadata.builder(sourceMetaData);
             if (recordedMetaData == null) {
                 recordedIndexMetaData.keySet().forEach( i -> clusterService.mergeIndexMetaData(metaDataBuilder, i, recordedIndexMetaData.get(i)));
             } else {
@@ -83,19 +83,19 @@ public class SchemaListener extends SchemaChangeListener implements ClusterState
             }
 
             if (sourceMetaData.settings().getAsBoolean("cluster.blocks.read_only", false))
-                blocks.addGlobalBlock(MetaData.CLUSTER_READ_ONLY_BLOCK);
+                blocks.addGlobalBlock(Metadata.CLUSTER_READ_ONLY_BLOCK);
 
-            for (IndexMetaData indexMetaData : sourceMetaData)
+            for (IndexMetadata indexMetaData : sourceMetaData)
                 blocks.updateBlocks(indexMetaData);
 
-            final MetaData targetMetaData = metaDataBuilder.build();
+            final Metadata targetMetaData = metaDataBuilder.build();
 
             clusterService.submitStateUpdateTask("cql-schema-mapping-update", new ClusterStateUpdateTask(Priority.URGENT) {
                 @Override
                 public ClusterState execute(ClusterState currentState) {
                     final ClusterState.Builder newStateBuilder = ClusterState.builder(currentState);
                     ClusterState newClusterState = newStateBuilder.incrementVersion()
-                        .metaData(clusterService.addVirtualIndexMappings(targetMetaData))
+                        .metadata(clusterService.addVirtualIndexMappings(targetMetaData))
                         .blocks(blocks)
                         .build();
                     newClusterState = ClusterState.builder(newClusterState)
@@ -154,9 +154,9 @@ public class SchemaListener extends SchemaChangeListener implements ClusterState
     @Override
     public void onAlterKeyspace(String ksName) {
         logger.trace("{}", ksName);
-        MetaData metadata = this.clusterService.state().metaData();
+        Metadata metadata = this.clusterService.state().metadata();
         InetAddressAndPort local = FBUtilities.getBroadcastAddressAndPort();
-        for(ObjectCursor<IndexMetaData> imdCursor : metadata.indices().values()) {
+        for(ObjectCursor<IndexMetadata> imdCursor : metadata.indices().values()) {
             if (ksName.equals(imdCursor.value.keyspace())) {
                 KeyspaceMetadata ksm = Schema.instance.getKeyspaceMetadata(ksName);
                 if (ksm != null && ksm.params != null && ksm.params.replication != null && ksm.params.replication.klass.isAssignableFrom(NetworkTopologyStrategy.class)) {
@@ -189,7 +189,7 @@ public class SchemaListener extends SchemaChangeListener implements ClusterState
         boolean hasSecondaryIndex = cfm.indexes.has(SchemaManager.buildIndexName(cfm.name));
         for(Map.Entry<String, ByteBuffer> e : cfm.params.extensions.entrySet()) {
             if (clusterService.isValidExtensionKey(e.getKey())) {
-                    IndexMetaData indexMetaData = clusterService.getIndexMetaDataFromExtension(e.getValue());
+                    IndexMetadata indexMetaData = clusterService.getIndexMetaDataFromExtension(e.getValue());
                     recordedIndexMetaData.put(indexMetaData.getIndex().getName(), indexMetaData);
 
                     if (hasSecondaryIndex)

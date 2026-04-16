@@ -1,4 +1,12 @@
 /*
+ * SPDX-License-Identifier: Apache-2.0
+ *
+ * The OpenSearch Contributors require contributions made to
+ * this file be licensed under the Apache-2.0 license or a
+ * compatible open source license.
+ */
+
+/*
  * Licensed to Elasticsearch under one or more contributor
  * license agreements. See the NOTICE file distributed with
  * this work for additional information regarding copyright
@@ -17,16 +25,25 @@
  * under the License.
  */
 
+/*
+ * Modifications Copyright OpenSearch Contributors. See
+ * GitHub history for details.
+ */
+
 package org.apache.lucene.queries;
 
 import org.apache.lucene.search.BooleanClause.Occur;
-import org.elasticsearch.common.lucene.search.Queries;
+import org.opensearch.common.lucene.search.Queries;
 
 /**
  * Extended version of {@link CommonTermsQuery} that allows to pass in a
  * {@code minimumNumberShouldMatch} specification that uses the actual num of high frequent terms
  * to calculate the minimum matching terms.
+ *
+ * @deprecated Since max_optimization optimization landed in 7.0, normal MatchQuery
+ *             will achieve the same result without any configuration.
  */
+@Deprecated
 public class ExtendedCommonTermsQuery extends CommonTermsQuery {
 
     public ExtendedCommonTermsQuery(Occur highFreqOccur, Occur lowFreqOccur, float maxTermFrequency) {

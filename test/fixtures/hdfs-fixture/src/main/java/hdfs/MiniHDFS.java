@@ -1,4 +1,12 @@
 /*
+ * SPDX-License-Identifier: Apache-2.0
+ *
+ * The OpenSearch Contributors require contributions made to
+ * this file be licensed under the Apache-2.0 license or a
+ * compatible open source license.
+ */
+
+/*
  * Licensed to Elasticsearch under one or more contributor
  * license agreements. See the NOTICE file distributed with
  * this work for additional information regarding copyright
@@ -15,6 +23,11 @@
  * KIND, either express or implied.  See the License for the
  * specific language governing permissions and limitations
  * under the License.
+ */
+
+/*
+ * Modifications Copyright OpenSearch Contributors. See
+ * GitHub history for details.
  */
 
 package hdfs;
@@ -109,8 +122,8 @@ public class MiniHDFS {
         String haNameService = System.getProperty("ha-nameservice");
         boolean haEnabled = haNameService != null;
         if (haEnabled) {
-            MiniDFSNNTopology.NNConf nn1 = new MiniDFSNNTopology.NNConf("nn1").setIpcPort(10001);
-            MiniDFSNNTopology.NNConf nn2 = new MiniDFSNNTopology.NNConf("nn2").setIpcPort(10002);
+            MiniDFSNNTopology.NNConf nn1 = new MiniDFSNNTopology.NNConf("nn1").setIpcPort(0);
+            MiniDFSNNTopology.NNConf nn2 = new MiniDFSNNTopology.NNConf("nn2").setIpcPort(0);
             MiniDFSNNTopology.NSConf nameservice = new MiniDFSNNTopology.NSConf(haNameService).addNN(nn1).addNN(nn2);
             MiniDFSNNTopology namenodeTopology = new MiniDFSNNTopology().addNameservice(nameservice);
             builder.nnTopology(namenodeTopology);
@@ -119,7 +132,7 @@ public class MiniHDFS {
         MiniDFSCluster dfs = builder.build();
 
         // Configure contents of the filesystem
-        org.apache.hadoop.fs.Path esUserPath = new org.apache.hadoop.fs.Path("/user/elasticsearch");
+        org.apache.hadoop.fs.Path opensearchUserPath = new org.apache.hadoop.fs.Path("/user/opensearch");
 
         FileSystem fs;
         if (haEnabled) {
@@ -130,12 +143,12 @@ public class MiniHDFS {
         }
 
         try {
-            // Set the elasticsearch user directory up
-            fs.mkdirs(esUserPath);
+            // Set the opensearch user directory up
+            fs.mkdirs(opensearchUserPath);
             if (UserGroupInformation.isSecurityEnabled()) {
                 List<AclEntry> acls = new ArrayList<>();
-                acls.add(new AclEntry.Builder().setType(AclEntryType.USER).setName("elasticsearch").setPermission(FsAction.ALL).build());
-                fs.modifyAclEntries(esUserPath, acls);
+                acls.add(new AclEntry.Builder().setType(AclEntryType.USER).setName("opensearch").setPermission(FsAction.ALL).build());
+                fs.modifyAclEntries(opensearchUserPath, acls);
             }
 
             // Install a pre-existing repository into HDFS
@@ -150,7 +163,7 @@ public class MiniHDFS {
 
                 fs.copyFromLocalFile(true, true,
                     new org.apache.hadoop.fs.Path(tempDirectory.resolve(directoryName).toAbsolutePath().toUri()),
-                    esUserPath.suffix("/existing/" + directoryName)
+                    opensearchUserPath.suffix("/existing/" + directoryName)
                 );
 
                 FileUtils.deleteDirectory(tempDirectory.toFile());

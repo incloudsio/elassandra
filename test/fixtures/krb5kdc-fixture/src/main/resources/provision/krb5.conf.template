@@ -1,3 +1,11 @@
+#
+# SPDX-License-Identifier: Apache-2.0
+#
+# The OpenSearch Contributors require contributions made to
+# this file be licensed under the Apache-2.0 license or a
+# compatible open source license.
+#
+
 # Licensed to Elasticsearch under one or more contributor
 # license agreements. See the NOTICE file distributed with
 # this work for additional information regarding copyright
@@ -15,6 +23,11 @@
 # specific language governing permissions and limitations
 # under the License.
 
+#
+# Modifications Copyright OpenSearch Contributors. See
+# GitHub history for details.
+#
+
 [libdefaults]
     default_realm = ${REALM_NAME}
     dns_canonicalize_hostname = false
@@ -29,6 +42,9 @@
     permitted_enctypes = rc4-hmac
     # udp_preference_limit = 1
     kdc_timeout = 3000
+    canonicalize = true
+    # See please https://seanjmullan.org/blog/2021/09/14/jdk17 (deprecate 3DES and RC4 in Kerberos)
+    allow_weak_crypto = true
 
 [realms]
     ${REALM_NAME} = {
@@ -41,6 +57,6 @@
 [domain_realm]
     ${BUILD_ZONE} = ${REALM_NAME}
     .${BUILD_ZONE} = ${REALM_NAME}
-    ${ELASTIC_ZONE} = ${REALM_NAME}
-    .${ELASTIC_ZONE} = ${REALM_NAME}
+    ${OPENSEARCH_ZONE} = ${REALM_NAME}
+    .${OPENSEARCH_ZONE} = ${REALM_NAME}
 

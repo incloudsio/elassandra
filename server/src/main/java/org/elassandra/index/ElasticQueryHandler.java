@@ -57,55 +57,55 @@ import org.elassandra.cluster.DocPrimaryKey;
 import org.elassandra.cluster.QueryManager;
 import org.elassandra.cluster.SchemaManager;
 import org.elassandra.cluster.routing.AbstractSearchStrategy;
-import org.elasticsearch.cluster.metadata.IndexMetaData;
-import org.elasticsearch.action.search.SearchRequestBuilder;
-import org.elasticsearch.action.search.SearchResponse;
-import org.elasticsearch.action.search.SearchScrollRequestBuilder;
-import org.elasticsearch.client.Client;
-import org.elasticsearch.cluster.service.ClusterService;
-import org.elasticsearch.common.ParsingException;
-import org.elasticsearch.common.bytes.BytesReference;
-import org.elasticsearch.common.logging.Loggers;
-import org.elasticsearch.common.unit.TimeValue;
-import org.elasticsearch.common.util.concurrent.ThreadContext;
-import org.elasticsearch.common.xcontent.DeprecationHandler;
-import org.elasticsearch.common.xcontent.ToXContent;
-import org.elasticsearch.common.xcontent.XContentBuilder;
-import org.elasticsearch.common.xcontent.XContentParser;
-import org.elasticsearch.common.xcontent.json.JsonXContent;
-import org.elasticsearch.search.Scroll;
-import org.elasticsearch.search.SearchHit;
-import org.elasticsearch.search.aggregations.Aggregation;
-import org.elasticsearch.search.aggregations.AggregationMetaDataBuilder;
-import org.elasticsearch.search.aggregations.Aggregations;
-import org.elasticsearch.search.aggregations.bucket.histogram.DateHistogramAggregationBuilder;
-import org.elasticsearch.search.aggregations.bucket.histogram.HistogramAggregationBuilder;
-import org.elasticsearch.search.aggregations.bucket.histogram.InternalDateHistogram;
-import org.elasticsearch.search.aggregations.bucket.histogram.InternalHistogram;
-import org.elasticsearch.search.aggregations.bucket.terms.DoubleTerms;
-import org.elasticsearch.search.aggregations.bucket.terms.LongTerms;
-import org.elasticsearch.search.aggregations.bucket.terms.StringTerms;
-import org.elasticsearch.search.aggregations.bucket.terms.Terms;
-import org.elasticsearch.search.aggregations.metrics.avg.Avg;
-import org.elasticsearch.search.aggregations.metrics.avg.AvgAggregationBuilder;
-import org.elasticsearch.search.aggregations.metrics.max.Max;
-import org.elasticsearch.search.aggregations.metrics.max.MaxAggregationBuilder;
-import org.elasticsearch.search.aggregations.metrics.min.Min;
-import org.elasticsearch.search.aggregations.metrics.min.MinAggregationBuilder;
-import org.elasticsearch.search.aggregations.metrics.percentiles.Percentile;
-import org.elasticsearch.search.aggregations.metrics.percentiles.Percentiles;
-import org.elasticsearch.search.aggregations.metrics.percentiles.hdr.InternalHDRPercentiles;
-import org.elasticsearch.search.aggregations.metrics.percentiles.tdigest.InternalTDigestPercentiles;
-import org.elasticsearch.search.aggregations.metrics.stats.Stats;
-import org.elasticsearch.search.aggregations.metrics.stats.StatsAggregationBuilder;
-import org.elasticsearch.search.aggregations.metrics.sum.Sum;
-import org.elasticsearch.search.aggregations.metrics.sum.SumAggregationBuilder;
-import org.elasticsearch.search.aggregations.pipeline.InternalSimpleValue;
-import org.elasticsearch.search.builder.SearchSourceBuilder;
-import org.elasticsearch.common.xcontent.NamedXContentRegistry;
-import org.elasticsearch.index.IndexService;
-import org.elasticsearch.index.shard.IndexShard;
-import org.elasticsearch.search.fetch.CqlFetchPhase;
+import org.opensearch.cluster.metadata.IndexMetadata;
+import org.opensearch.action.search.SearchRequestBuilder;
+import org.opensearch.action.search.SearchResponse;
+import org.opensearch.action.search.SearchScrollRequestBuilder;
+import org.opensearch.client.Client;
+import org.opensearch.cluster.service.ClusterService;
+import org.opensearch.common.ParsingException;
+import org.opensearch.common.bytes.BytesReference;
+import org.opensearch.common.logging.Loggers;
+import org.opensearch.common.unit.TimeValue;
+import org.opensearch.common.util.concurrent.ThreadContext;
+import org.opensearch.common.xcontent.DeprecationHandler;
+import org.opensearch.common.xcontent.ToXContent;
+import org.opensearch.common.xcontent.XContentBuilder;
+import org.opensearch.common.xcontent.XContentParser;
+import org.opensearch.common.xcontent.json.JsonXContent;
+import org.opensearch.search.Scroll;
+import org.opensearch.search.SearchHit;
+import org.opensearch.search.aggregations.Aggregation;
+import org.opensearch.search.aggregations.AggregationMetaDataBuilder;
+import org.opensearch.search.aggregations.Aggregations;
+import org.opensearch.search.aggregations.bucket.histogram.DateHistogramAggregationBuilder;
+import org.opensearch.search.aggregations.bucket.histogram.HistogramAggregationBuilder;
+import org.opensearch.search.aggregations.bucket.histogram.InternalDateHistogram;
+import org.opensearch.search.aggregations.bucket.histogram.InternalHistogram;
+import org.opensearch.search.aggregations.bucket.terms.DoubleTerms;
+import org.opensearch.search.aggregations.bucket.terms.LongTerms;
+import org.opensearch.search.aggregations.bucket.terms.StringTerms;
+import org.opensearch.search.aggregations.bucket.terms.Terms;
+import org.opensearch.search.aggregations.metrics.Avg;
+import org.opensearch.search.aggregations.metrics.AvgAggregationBuilder;
+import org.opensearch.search.aggregations.metrics.Max;
+import org.opensearch.search.aggregations.metrics.MaxAggregationBuilder;
+import org.opensearch.search.aggregations.metrics.Min;
+import org.opensearch.search.aggregations.metrics.MinAggregationBuilder;
+import org.opensearch.search.aggregations.metrics.Percentile;
+import org.opensearch.search.aggregations.metrics.Percentiles;
+import org.opensearch.search.aggregations.metrics.InternalHDRPercentiles;
+import org.opensearch.search.aggregations.metrics.InternalTDigestPercentiles;
+import org.opensearch.search.aggregations.metrics.Stats;
+import org.opensearch.search.aggregations.metrics.StatsAggregationBuilder;
+import org.opensearch.search.aggregations.metrics.Sum;
+import org.opensearch.search.aggregations.metrics.SumAggregationBuilder;
+import org.opensearch.search.aggregations.pipeline.InternalSimpleValue;
+import org.opensearch.search.builder.SearchSourceBuilder;
+import org.opensearch.common.xcontent.NamedXContentRegistry;
+import org.opensearch.index.IndexService;
+import org.opensearch.index.shard.IndexShard;
+import org.opensearch.search.fetch.CqlFetchPhase;
 import org.joda.time.DateTime;
 
 import java.io.IOException;
@@ -229,8 +229,7 @@ public class ElasticQueryHandler extends QueryProcessor {
                 }
                 String indices = (esOptions != null && esOptions.containsKey("indices")) ? esOptions.get("indices") : select.keyspace();
                 SearchRequestBuilder srb = client.prepareSearch(indices)
-                    .setSource(ssb)
-                    .setTypes(typeName);
+                    .setSource(ssb);
 
                 AbstractBounds bounds = select.getRestrictions().getPartitionKeyBounds(options);
                 if (bounds != null) {
@@ -366,7 +365,7 @@ public class ElasticQueryHandler extends QueryProcessor {
                 customPayload.put("_shards.skipped", ByteBufferUtil.bytes(resp.getSkippedShards()));
                 customPayload.put("_shards.failed", ByteBufferUtil.bytes(resp.getFailedShards()));
                 customPayload.put("_shards.total", ByteBufferUtil.bytes(resp.getTotalShards()));
-                customPayload.put("hits.total", ByteBufferUtil.bytes(resp.getHits().getTotalHits()));
+                customPayload.put("hits.total", ByteBufferUtil.bytes(resp.getHits().getTotalHits().value));
                 customPayload.put("hits.max_score", ByteBufferUtil.bytes(resp.getHits().getMaxScore()));
                 if (logger.isDebugEnabled())
                     logger.debug("Add custom payload, _shards.successful={}, _shards.skipped={}, _shards.failed={}, _shards.total={}, hits.total={}, hits.max_score={}",
@@ -374,7 +373,7 @@ public class ElasticQueryHandler extends QueryProcessor {
                         resp.getSkippedShards(),
                         resp.getFailedShards(),
                         resp.getTotalShards(),
-                        resp.getHits().getTotalHits(),
+                        resp.getHits().getTotalHits().value,
                         resp.getHits().getMaxScore());
                 messageRows.setCustomPayload(customPayload);
             } else {
@@ -670,7 +669,7 @@ public class ElasticQueryHandler extends QueryProcessor {
         try {
             ClusterService clusterService = ElassandraDaemon.instance.node().injector().getInstance(ClusterService.class);
             QueryManager queryManager = new QueryManager(ElassandraDaemon.instance.node().settings(), clusterService);
-            IndexMetaData indexMetaData = clusterService.state().metaData().index(select.keyspace());
+            IndexMetadata indexMetaData = clusterService.state().metadata().index(select.keyspace());
             if (indexMetaData == null) {
                 return null;
             }
@@ -712,9 +711,9 @@ public class ElasticQueryHandler extends QueryProcessor {
         boolean forStaticDocument,
         boolean isJson
     ) throws IOException {
-        org.elasticsearch.index.mapper.DocumentMapper docMapper = indexShard.mapperService().documentMapper(typeName);
+        org.opensearch.index.mapper.DocumentMapper docMapper = indexShard.mapperService().documentMapper(typeName);
         String cfName = SchemaManager.typeToCfName(indexShard.mapperService().keyspace(), typeName);
-        org.elasticsearch.index.mapper.DocumentMapper.CqlFragments cqlFragment = docMapper.getCqlFragments();
+        org.opensearch.index.mapper.DocumentMapper.CqlFragments cqlFragment = docMapper.getCqlFragments();
         return new StringBuilder()
             .append("SELECT ")
             .append(isJson ? "JSON " : "")

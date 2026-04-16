@@ -17,9 +17,9 @@ package org.elassandra;
 
 import java.util.UUID;
 
-import org.elasticsearch.ElasticsearchException;
+import org.opensearch.OpenSearchException;
 
-public class ConcurrentMetaDataUpdateException extends ElasticsearchException {
+public class ConcurrentMetaDataUpdateException extends OpenSearchException {
 
     UUID owner;
     long version;

@@ -4,6 +4,7 @@
  - skip:
       version: " - 6.6.99"
       reason: Merging typeless/typed mappings/templates was added in 6.7
+      features: allowed_warnings
 
  - do:
       indices.put_template:
@@ -18,8 +19,9 @@
                               type: keyword
 
  - do:
+      allowed_warnings:
+          - "index [test-1] matches multiple legacy templates [global, test_template], composable templates will only match a single template"
       indices.create:
-          include_type_name: false
           index: test-1
           body:
               mappings:
@@ -43,6 +45,7 @@
  - skip:
       version: " - 6.6.99"
       reason: Merging typeless/typed mappings/templates was added in 6.7
+      features: allowed_warnings
 
  - do:
       indices.put_template:
@@ -56,7 +59,9 @@
                           type: keyword
 
  - do:
-      indices.create: 
+      allowed_warnings:
+          - "index [test-1] matches multiple legacy templates [global, test_template], composable templates will only match a single template"
+      indices.create:
           include_type_name: true
           index: test-1
           body:
@@ -80,7 +85,7 @@
 "Implicitly create a typed index while there is a typeless template":
 
  - skip:
-      version: " - 6.6.99"
+      version: " - 6.99.99"
       reason: include_type_name only supported as of 6.7
 
  - do:
@@ -105,8 +110,9 @@
 "Implicitly create a typeless index while there is a typed template":
 
  - skip:
-      version: " - 6.6.99"
-      reason: include_type_name only supported as of 6.7
+      version: " - 6.99.99"
+      reason: needs typeless index operations to work on typed indices
+      features: allowed_warnings
 
  - do:
       indices.put_template:
@@ -121,15 +127,16 @@
                               type: keyword
 
  - do:
+      allowed_warnings:
+          - "index [test-1] matches multiple legacy templates [global, test_template], composable templates will only match a single template"
       index:
           index: test-1
-          type: _doc
           body: { bar: 42 }
 
-# This cluster health call guarantees that changes are visible to the get-mappings API
+# ensures dynamic mapping update is visible to get_mapping
  - do:
-      cluster.health:
-          wait_for_events: normal
+     cluster.health:
+         wait_for_events: normal
 
  - do:
       indices.get_mapping:

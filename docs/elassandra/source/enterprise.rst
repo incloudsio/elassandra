@@ -441,7 +441,7 @@ With the JMX feature, you can manage and monitor both Cassandra and Elasticsearc
 JMX Monitoring
 ..............
 
-The JMX feature of Elassandra Enterprise exposes Elasticsearch stats over JMX, allowing monitoring the Elasticsearch cluster, index shards, threadpool and networks activities.
+The JMX feature of Elassandra Enterprise exposes OpenSearch stats over JMX, allowing monitoring the OpenSearch cluster, index shards, threadpool and network activities.
 You can browse these metrics with various JMX clients lsuch as `VisualVM <https://visualvm.github.io/>`_ or `jmxterm <http://wiki.cyclopsgroup.org/jmxterm/>`_.
 
 JMXTerm example :
@@ -449,12 +449,12 @@ JMXTerm example :
 .. code::
 
    java -jar jmxterm-1.0.0-uber.jar -l localhost:7199
-   $>domain org.elasticsearch.index
-   #domain is set to org.elasticsearch.index
-   $>bean org.elasticsearch.index:name=sales_2017,scope=search,type=IndexShard
-   #bean is set to org.elasticsearch.index:name=sales_2017,scope=search,type=IndexShard
+   $>domain org.opensearch.index
+   #domain is set to org.opensearch.index
+   $>bean org.opensearch.index:name=sales_2017,scope=search,type=IndexShard
+   #bean is set to org.opensearch.index:name=sales_2017,scope=search,type=IndexShard
    $>get *
-   #mbean = org.elasticsearch.index:name=sales_2017,scope=search,type=IndexShard:
+   #mbean = org.opensearch.index:name=sales_2017,scope=search,type=IndexShard:
    QueryTotal = 21;
    FetchTotal = 0;
    ScrollTotal = 0;
@@ -513,7 +513,7 @@ Then configure Grafana with an influxDB datasource and build your Elassandra das
 Monitoring Elassandra with Prometheus
 .....................................
 
-`Prometheus <https://.io/>`_ can scrape both Elasticsearch and Cassandra JMX metrics through the standrard `Prometheus JMX Exporter <https://github.com/prometheus/jmx_exporter>`_ running as a java agent.
+`Prometheus <https://.io/>`_ can scrape both OpenSearch and Cassandra JMX metrics through the standrard `Prometheus JMX Exporter <https://github.com/prometheus/jmx_exporter>`_ running as a java agent.
 To expose these metrics on TCP port 7500,  add the following in your environnment or in the conf/cassandra-env.sh:
 
 .. code ::
@@ -574,9 +574,9 @@ Here is the default JMX exporter configuration file **conf/jmx_prometheus_export
    "org.apache.cassandra.metrics:type=Table,name=WriteLatency,*",
    "org.apache.cassandra.metrics:type=Table,name=ReadLatency,*",
    "org.apache.cassandra.net:type=FailureDetector,*",
-   "org.elasticsearch.cluster:*",
-   "org.elasticsearch.node:*",
-   "org.elasticsearch.index:*"
+   "org.opensearch.cluster:*",
+   "org.opensearch.node:*",
+   "org.opensearch.index:*"
    ]
    #blacklistObjectNames: ["org.apache.cassandra.metrics:type=ColumnFamily,*"]
    rules:
@@ -606,44 +606,44 @@ Here is the default JMX exporter configuration file **conf/jmx_prometheus_export
        labels:
          "$1": "$4"
          "$2": "$3"
-     - pattern: org.elasticsearch.cluster<name=([a-zA-Z_ 0-9]+)><>(MetadataVersion|ClusterStateVersion|NumberOfPendingTasks|MaxTaskWaitTimeMillis|AliveNodeCount|DeadNodeCount)
+    - pattern: org.opensearch.cluster<name=([a-zA-Z_ 0-9]+)><>(MetadataVersion|ClusterStateVersion|NumberOfPendingTasks|MaxTaskWaitTimeMillis|AliveNodeCount|DeadNodeCount)
        type: GAUGE
-       name: elasticsearch_cluster_$2
-     - pattern: org.elasticsearch.node<type=(transport)><>(\w*)
-       name: elasticsearch_node_$1_$2
-     - pattern: org.elasticsearch.node<type=(threadPool), name=(\S*)><>(\w*)
-       name: elasticsearch_node_$1_$3
+      name: opensearch_cluster_$2
+    - pattern: org.opensearch.node<type=(transport)><>(\w*)
+      name: opensearch_node_$1_$2
+    - pattern: org.opensearch.node<type=(threadPool), name=(\S*)><>(\w*)
+      name: opensearch_node_$1_$3
        type: GAUGE
        labels:
          "name": $2
-     - pattern: org.elasticsearch.node<type=(httpServer)><>(\w*)
+    - pattern: org.opensearch.node<type=(httpServer)><>(\w*)
        type: COUNTER
-       name: elasticsearch_node_$1_$2
+      name: opensearch_node_$1_$2
        type: GAUGE
-     - pattern: org.elasticsearch.index<type=(Index), name=(\S*)><>(IndexStatusCode)
+    - pattern: org.opensearch.index<type=(Index), name=(\S*)><>(IndexStatusCode)
        type: GAUGE
-       name: elasticsearch_$1_$3
+      name: opensearch_$1_$3
        labels:
          "name": $2
-     - pattern: org.elasticsearch.index<type=(IndexShard), scope=(\S*)><>(\w*InBytes)
+    - pattern: org.opensearch.index<type=(IndexShard), scope=(\S*)><>(\w*InBytes)
        type: GAUGE
-       name: elasticsearch_$1_$3
+      name: opensearch_$1_$3
        labels:
          "scope": $2
-     - pattern: org.elasticsearch.index<type=(IndexShard), scope=(\S*)><>(\w*)
+    - pattern: org.opensearch.index<type=(IndexShard), scope=(\S*)><>(\w*)
        type: COUNTER
-       name: elasticsearch_$1_$3
+      name: opensearch_$1_$3
        labels:
          "scope": $2
-     - pattern: org.elasticsearch.index<type=(IndexShard), name=(\S*), scope=(\S*)><>(\w*InBytes)
+    - pattern: org.opensearch.index<type=(IndexShard), name=(\S*), scope=(\S*)><>(\w*InBytes)
        type: GAUGE
-       name: elasticsearch_$1_$4
+      name: opensearch_$1_$4
        labels:
          "index": $2
          "scope": $3
-     - pattern: org.elasticsearch.index<type=(IndexShard), name=(\S*), scope=(\S*)><>(\w*)
+    - pattern: org.opensearch.index<type=(IndexShard), name=(\S*), scope=(\S*)><>(\w*)
        type: COUNTER
-       name: elasticsearch_$1_$4
+      name: opensearch_$1_$4
        labels:
          "index": $2
          "scope": $3
@@ -717,7 +717,7 @@ Enable/Disable search on a node
 ...............................
 
 The JMX feature allows excluding/including a node from distributed search while still receiving CQL write, repairing or rebuilding its elasticsearch indices, by
-setting the following attributes on the JMX Bean ``org.elasticsearch.node:type=node``
+setting the following attributes on the JMX Bean ``org.opensearch.node:type=node``
 
 .. cssclass:: table-bordered
 
@@ -736,7 +736,7 @@ To set ``SearchEnabled`` on command line, just use **jmxterm** as in the followi
 
 .. code::
 
-   echo "set -b org.elasticsearch.node:type=node SearchEnabled false" | java -jar jmxterm-1.0.0-uber.jar -l localhost:7199
+   echo "set -b org.opensearch.node:type=node SearchEnabled false" | java -jar jmxterm-1.0.0-uber.jar -l localhost:7199
 
 SSL Network Encryption
 ----------------------

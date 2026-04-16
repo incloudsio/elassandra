@@ -1,26 +1,32 @@
 ---
 "Index synced flush rest test":
-    - do:
-       indices.create:
-          index: testing
-          body:
-            settings:
-              index:
-                number_of_replicas: 0
+  - skip:
+      version: " - 7.5.99"
+      reason: "synced flush is deprecated in 7.6"
+      features: "allowed_warnings"
+  - do:
+      indices.create:
+        index: testing
+        body:
+          settings:
+            index:
+              number_of_replicas: 0
 
-    - do:
-       cluster.health:
-          wait_for_status: green
-    - do:
-       indices.flush_synced:
-          index: testing
+  - do:
+      cluster.health:
+        wait_for_status: green
+  - do:
+      allowed_warnings:
+        - Synced flush is deprecated and will be removed in 3.0. Use flush at _/flush or /{index}/_flush instead.
+      indices.flush_synced:
+        index: testing
 
-    - is_false: _shards.failed
+  - is_false: _shards.failed
 
-    - do:
-       indices.stats: {level: shards}
+  - do:
+      indices.stats: {level: shards}
 
-    - is_true: indices.testing.shards.0.0.commit.user_data.sync_id
+  - is_true: indices.testing.shards.0.0.commit.user_data.sync_id
 
 ---
 "Flush stats":
@@ -52,3 +58,32 @@
   # periodic flush is async
   - gte: { indices.test.primaries.flush.periodic: 0 }
   - gte: { indices.test.primaries.flush.total:    1 }
+
+---
+"Flush parameters validation":
+  - skip:
+      version: " - 7.1.99"
+      reason: flush parameters validation is introduced in 7.2.0
+  - do:
+      indices.create:
+        index: test
+        body:
+          settings:
+            number_of_shards: 1
+  - do:
+      catch:  /action_request_validation_exception.+ wait_if_ongoing must be true for a force flush/
+      indices.flush:
+        index: test
+        force: true
+        wait_if_ongoing: false
+  - do:
+      indices.stats: { index: test }
+  - match: { indices.test.primaries.flush.total:    0 }
+  - do:
+      indices.flush:
+        index: test
+        force: true
+        wait_if_ongoing: true
+  - do:
+      indices.stats: { index: test }
+  - match: { indices.test.primaries.flush.total:    1 }

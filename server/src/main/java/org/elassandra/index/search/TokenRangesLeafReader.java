@@ -10,7 +10,7 @@ import org.apache.lucene.index.IndexReader.CacheHelper;
 import org.apache.lucene.search.Query;
 import org.apache.lucene.util.BitSet;
 import org.apache.lucene.util.Bits;
-import org.elasticsearch.common.lucene.index.ElasticsearchDirectoryReader;
+import org.opensearch.common.lucene.index.OpenSearchDirectoryReader;
 
 /**
  * Per request LeafReader using cached token ranges bitset filter.
@@ -30,7 +30,7 @@ public class TokenRangesLeafReader extends FilterLeafReader {
         super(in);
         try {
             //in.addCoreClosedListener(cache);
-            ElasticsearchDirectoryReader.addReaderCloseListener(directoryReader, cache);
+            OpenSearchDirectoryReader.addReaderCloseListener(directoryReader, cache);
             this.mask = cache.getBitSet(query, in.getContext());
             if (mask == null) {
                 numDocs = 0;

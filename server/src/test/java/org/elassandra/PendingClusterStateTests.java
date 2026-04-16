@@ -18,15 +18,15 @@ package org.elassandra;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.elassandra.discovery.PendingClusterStatesQueue;
-import org.elasticsearch.cluster.ClusterName;
-import org.elasticsearch.cluster.ClusterState;
-import org.elasticsearch.cluster.metadata.MetaData;
-import org.elasticsearch.test.ESSingleNodeTestCase;
+import org.opensearch.cluster.ClusterName;
+import org.opensearch.cluster.ClusterState;
+import org.opensearch.cluster.metadata.Metadata;
+import org.opensearch.test.OpenSearchSingleNodeTestCase;
 import org.junit.Test;
 
 import static org.hamcrest.Matchers.equalTo;
 
-public class PendingClusterStateTests extends ESSingleNodeTestCase {
+public class PendingClusterStateTests extends OpenSearchSingleNodeTestCase {
     private static final Logger logger = LogManager.getLogger(PendingClusterStateTests.class);
 
     class Listener implements PendingClusterStatesQueue.StateProcessedListener {
@@ -50,10 +50,10 @@ public class PendingClusterStateTests extends ESSingleNodeTestCase {
         PendingClusterStatesQueue queue = new PendingClusterStatesQueue(logger, 25);
         ClusterState cs0 = ClusterState.builder(new ClusterName("cluster")).build();
         ClusterState cs1 = ClusterState.builder(cs0).version(1).build();
-        ClusterState cs2 = ClusterState.builder(cs1).version(2).metaData(MetaData.builder().incrementVersion()).build();
-        ClusterState cs3 = ClusterState.builder(cs2).version(3).metaData(MetaData.builder(cs2.metaData()).incrementVersion()).build();
-        ClusterState cs4 = ClusterState.builder(cs3).version(4).metaData(MetaData.builder(cs3.metaData()).incrementVersion()).build();
-        ClusterState cs5 = ClusterState.builder(cs3).version(5).metaData(MetaData.builder(cs4.metaData()).incrementVersion()).build();
+        ClusterState cs2 = ClusterState.builder(cs1).version(2).metadata(Metadata.builder().incrementVersion()).build();
+        ClusterState cs3 = ClusterState.builder(cs2).version(3).metadata(Metadata.builder(cs2.metadata()).incrementVersion()).build();
+        ClusterState cs4 = ClusterState.builder(cs3).version(4).metadata(Metadata.builder(cs3.metadata()).incrementVersion()).build();
+        ClusterState cs5 = ClusterState.builder(cs3).version(5).metadata(Metadata.builder(cs4.metadata()).incrementVersion()).build();
 
         Listener listener = new Listener();
         queue.addPending(cs1, listener);
@@ -63,7 +63,7 @@ public class PendingClusterStateTests extends ESSingleNodeTestCase {
 
         ClusterState cs_3 = queue.getNextClusterStateToProcess();
         assertThat(cs_3.version(), equalTo(3L));
-        assertThat(cs_3.metaData().version(), equalTo(2L));
+        assertThat(cs_3.metadata().version(), equalTo(2L));
         queue.markAsProcessed(cs_3);
 
         queue.addPending(cs4, listener);
@@ -83,9 +83,9 @@ public class PendingClusterStateTests extends ESSingleNodeTestCase {
         PendingClusterStatesQueue queue = new PendingClusterStatesQueue(logger, 2);
         ClusterState cs0 = ClusterState.builder(new ClusterName("cluster")).build();
         ClusterState cs1 = ClusterState.builder(cs0).version(1).build();
-        ClusterState cs2 = ClusterState.builder(cs1).version(2).metaData(MetaData.builder().incrementVersion()).build();
-        ClusterState cs3 = ClusterState.builder(cs2).version(3).metaData(MetaData.builder(cs2.metaData()).incrementVersion()).build();
-        ClusterState cs4 = ClusterState.builder(cs3).version(4).metaData(MetaData.builder(cs3.metaData()).incrementVersion()).build();
+        ClusterState cs2 = ClusterState.builder(cs1).version(2).metadata(Metadata.builder().incrementVersion()).build();
+        ClusterState cs3 = ClusterState.builder(cs2).version(3).metadata(Metadata.builder(cs2.metadata()).incrementVersion()).build();
+        ClusterState cs4 = ClusterState.builder(cs3).version(4).metadata(Metadata.builder(cs3.metadata()).incrementVersion()).build();
 
         Listener listener = new Listener();
         queue.addPending(cs1, listener);

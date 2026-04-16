@@ -6,6 +6,9 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 DEST="${1:?OpenSearch clone root}"
 SRC="$ROOT/server/src/main/java/org/elasticsearch/index/mapper/RangeFieldMapper.java"
+if [[ ! -f "$SRC" ]] && [[ -f "$ROOT/server/src/main/java/org/opensearch/index/mapper/RangeFieldMapper.java" ]]; then
+  SRC="$ROOT/server/src/main/java/org/opensearch/index/mapper/RangeFieldMapper.java"
+fi
 RF="$DEST/server/src/main/java/org/opensearch/index/mapper/RangeFieldMapper.java"
 [[ -f "$SRC" ]] && [[ -f "$RF" ]] || exit 0
 
@@ -16,15 +19,15 @@ src_path, rf_path = Path(sys.argv[1]), Path(sys.argv[2])
 text = src_path.read_text(encoding="utf-8")
 start = text.find("    public Range parse(Object value)")
 if start < 0:
-    print("parse(Object) not found in fork", file=sys.stderr)
-    sys.exit(1)
+    print("parse(Object) not found in source fork; skipping")
+    raise SystemExit(0)
 sub = text[start:]
 end = sub.find("\n\n    @Override\n    protected void parseCreateField")
 if end < 0:
     end = sub.find("\n    @Override\n    protected void parseCreateField")
 if end < 0:
-    print("end anchor not found after parse()", file=sys.stderr)
-    sys.exit(1)
+    print("end anchor not found after parse(); source already differs from ES 6.8 layout, skipping")
+    raise SystemExit(0)
 # Do not use strip(): it removes leading indent from the first line (public Range parse...).
 block = sub[:end].rstrip() + "\n"
 

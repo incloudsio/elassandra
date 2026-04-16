@@ -11,20 +11,18 @@
 ---
 "Max keep alive":
   - skip:
-      version: " - 6.0.99"
-      reason: search.max_keep_alive was added in 6.1.0
+      version: " - 6.99.99"
+      reason: search.max_keep_alive was added in 7.0.0
 
   - do:
       index:
         index:  test_scroll
-        type:   test
         id:     1
         body:   { foo: 1 }
 
   - do:
       index:
         index:  test_scroll
-        type:   test
         id:     2
         body:   { foo: 1 }
 
@@ -39,8 +37,9 @@
             search.max_keep_alive: "1m"
 
   - do:
-      catch: /.*Keep alive for scroll.*is too large.*/
+      catch: /.*Keep alive for.*is too large.*/
       search:
+        rest_total_hits_as_int: true
         index: test_scroll
         size: 1
         scroll: 2m
@@ -51,6 +50,7 @@
 
   - do:
       search:
+        rest_total_hits_as_int: true
         index: test_scroll
         size: 1
         scroll: 1m
@@ -64,7 +64,8 @@
   - length: {hits.hits:      1    }
 
   - do:
-      catch: /.*Keep alive for scroll.*is too large.*/
+      catch: /.*Keep alive for.*is too large.*/
       scroll:
+        rest_total_hits_as_int: true
         scroll_id: $scroll_id
         scroll: 3m

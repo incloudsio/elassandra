@@ -15,9 +15,9 @@
  */
 package org.elassandra;
 
-import org.elasticsearch.ElasticsearchException;
+import org.opensearch.OpenSearchException;
 
-public class NoPersistedMetaDataException extends ElasticsearchException {
+public class NoPersistedMetaDataException extends OpenSearchException {
 
     private static final long serialVersionUID = 6343514139588332455L;
 

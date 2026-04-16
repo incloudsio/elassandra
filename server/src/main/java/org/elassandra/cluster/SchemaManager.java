@@ -61,17 +61,17 @@ import org.apache.cassandra.utils.FBUtilities;
 import org.apache.cassandra.utils.Pair;
 import org.apache.logging.log4j.LogManager;
 import org.elassandra.index.mapper.internal.TokenFieldMapper;
-import org.elasticsearch.action.ActionRequestValidationException;
-import org.elasticsearch.cluster.metadata.IndexMetaData;
-import org.elasticsearch.cluster.metadata.MappingMetaData;
-import org.elasticsearch.cluster.service.ClusterService;
-import org.elasticsearch.common.settings.Settings;
-import org.elasticsearch.common.settings.SettingsException;
-import org.elasticsearch.index.Index;
-import org.elasticsearch.index.mapper.*;
-import org.elasticsearch.index.mapper.CqlMapper.CqlCollection;
-import org.elasticsearch.index.mapper.CqlMapper.CqlStruct;
-import static org.elasticsearch.index.mapper.CqlMapper.CqlStruct.*;
+import org.opensearch.action.ActionRequestValidationException;
+import org.opensearch.cluster.metadata.IndexMetadata;
+import org.opensearch.cluster.metadata.MappingMetadata;
+import org.opensearch.cluster.service.ClusterService;
+import org.opensearch.common.settings.Settings;
+import org.opensearch.common.settings.SettingsException;
+import org.opensearch.index.Index;
+import org.opensearch.index.mapper.*;
+import org.opensearch.index.mapper.CqlMapper.CqlCollection;
+import org.opensearch.index.mapper.CqlMapper.CqlStruct;
+import static org.opensearch.index.mapper.CqlMapper.CqlStruct.*;
 import com.google.common.collect.ImmutableMap;
 
 import java.io.IOException;
@@ -111,8 +111,8 @@ public class SchemaManager {
     public static final ColumnIdentifier COMPLETION_NAME = new ColumnIdentifier(COMPLETION_TYPE, true);
 
     static final Map<String, CQL3Type.Raw> GEO_POINT_FIELDS = ImmutableMap.of(
-            org.elasticsearch.common.geo.GeoUtils.LATITUDE, CQL3Type.Raw.from(CQL3Type.Native.DOUBLE),
-            org.elasticsearch.common.geo.GeoUtils.LONGITUDE, CQL3Type.Raw.from(CQL3Type.Native.DOUBLE));
+            org.opensearch.common.geo.GeoUtils.LATITUDE, CQL3Type.Raw.from(CQL3Type.Native.DOUBLE),
+            org.opensearch.common.geo.GeoUtils.LONGITUDE, CQL3Type.Raw.from(CQL3Type.Native.DOUBLE));
 
     static final Map<String, CQL3Type.Raw> COMPLETION_FIELDS = new ImmutableMap.Builder<String, CQL3Type.Raw>()
             .put("input",  CQL3Type.Raw.list(CQL3Type.Raw.from(CQL3Type.Native.TEXT)))
@@ -135,8 +135,8 @@ public class SchemaManager {
 
     public static final String ELASTIC_ID_COLUMN_NAME = "_id";
 
-    /** Same as forked {@code IndexMetaData#keyspace()} (OpenSearch {@code IndexMetadata} has no helper). */
-    private static String keyspaceForIndex(IndexMetaData indexMetaData) {
+    /** Same as forked {@code IndexMetadata#keyspace()} (OpenSearch {@code IndexMetadata} has no helper). */
+    private static String keyspaceForIndex(IndexMetadata indexMetaData) {
         String ks = indexMetaData.getSettings().get("index.keyspace");
         if (ks != null) {
             return ks;
@@ -144,12 +144,12 @@ public class SchemaManager {
         return ClusterService.indexToKsName(indexMetaData.getIndex().getName());
     }
 
-    private static boolean hasVirtualIndex(IndexMetaData indexMetaData) {
+    private static boolean hasVirtualIndex(IndexMetadata indexMetaData) {
         return indexMetaData.getSettings().get("index.virtual_index") != null;
     }
 
-    private static boolean isOpaqueStorage(org.elasticsearch.index.IndexSettings indexSettings) {
-        // Same keys as IndexMetaData.SETTING_INDEX_OPAQUE_STORAGE / ClusterService.SETTING_SYSTEM_INDEX_OPAQUE_STORAGE
+    private static boolean isOpaqueStorage(org.opensearch.index.IndexSettings indexSettings) {
+        // Same keys as IndexMetadata.SETTING_INDEX_OPAQUE_STORAGE / ClusterService.SETTING_SYSTEM_INDEX_OPAQUE_STORAGE
         return indexSettings.getSettings().getAsBoolean("index.index_opaque_storage", Boolean.getBoolean("es.index_opaque_storage"));
     }
 
@@ -421,7 +421,7 @@ public class SchemaManager {
     private KeyspaceMetadata createTable(final KeyspaceMetadata ksm, String cfName,
             Map<String, ColumnDescriptor> columnsMap,
             String tableOptions,
-            final Collection<IndexMetaData> siblings, // include the indexMetaData and all other indices having a mapping to the same table.
+            final Collection<IndexMetadata> siblings, // include the indexMetaData and all other indices having a mapping to the same table.
             final Collection<Mutation> mutations,
             final Collection<Event.SchemaChange> events) throws IOException, RecognitionException {
         QualifiedName qn = new QualifiedName(ksm.name, cfName);
@@ -471,7 +471,7 @@ public class SchemaManager {
     private KeyspaceMetadata updateTable(final KeyspaceMetadata ksm, String cfName,
             Map<String, ColumnDescriptor> columnsMap,
             TableAttributes tableAttrs,
-            final Collection<IndexMetaData> siblings,
+            final Collection<IndexMetadata> siblings,
             final Collection<Mutation> mutations,
             final Collection<Event.SchemaChange> events) {
         TableMetadata cfm = ksm.getTableOrViewNullable(cfName);
@@ -499,7 +499,7 @@ public class SchemaManager {
         return ksm2;
     }
 
-    public TableMetadata removeTableExtensionToMutationBuilder(TableMetadata cfm, final Set<IndexMetaData> indexMetaDataSet, Mutation.SimpleBuilder builder) {
+    public TableMetadata removeTableExtensionToMutationBuilder(TableMetadata cfm, final Set<IndexMetadata> indexMetaDataSet, Mutation.SimpleBuilder builder) {
         Map<String, ByteBuffer> extensions = new LinkedHashMap<>();
         if (cfm.params != null && cfm.params.extensions != null) {
             Set<String> toRemoveExtentsions = indexMetaDataSet.stream().map(imd -> clusterService.getExtensionKey(imd)).collect(Collectors.toSet());
@@ -605,12 +605,12 @@ public class SchemaManager {
     /**
      * Update table extensions when index settings change. This allow to get index settings+mappings in the CQL backup of the table.
      */
-    public TableMetadata updateTableExtensions(final KeyspaceMetadata ksm, final TableMetadata cfm, final Collection<IndexMetaData> siblings) {
+    public TableMetadata updateTableExtensions(final KeyspaceMetadata ksm, final TableMetadata cfm, final Collection<IndexMetadata> siblings) {
         Map<String, ByteBuffer> extensions = new LinkedHashMap<>();
         if (cfm.params != null && cfm.params.extensions != null)
             extensions.putAll(cfm.params.extensions);
 
-        for(IndexMetaData imd : siblings) {
+        for(IndexMetadata imd : siblings) {
             assert ksm.name.equals(keyspaceForIndex(imd)) : "Keyspace metadata="+ksm.name+" does not match indexMetadata.keyspace="+keyspaceForIndex(imd);
             clusterService.putIndexMetaDataExtension(imd, extensions);
         }
@@ -624,7 +624,7 @@ public class SchemaManager {
     private KeyspaceMetadata buildColumns(final KeyspaceMetadata ksm2,
             final TableMetadata cfm,
             final String type,
-            final IndexMetaData indexMetaData,
+            final IndexMetadata indexMetaData,
             final MapperService mapperService,
             Map<String, ColumnDescriptor> columnsMap,
             final Collection<Mutation> mutations,
@@ -635,7 +635,7 @@ public class SchemaManager {
         boolean newTable = (cfm == null);
 
         DocumentMapper docMapper = mapperService.documentMapper(type);
-        MappingMetaData mappingMd = indexMetaData.getMappings().get(type);
+        MappingMetadata mappingMd = indexMetaData.getMappings().get(type);
         Map<String, Object> mappingMap = mappingMd.sourceAsMap();
 
         Set<String> columns = new HashSet();
@@ -698,7 +698,7 @@ public class SchemaManager {
                     Pair<KeyspaceMetadata, CQL3Type.Raw> x = createRawTypeIfNotExists(ksm, COMPLETION_TYPE, COMPLETION_FIELDS, mutations, events);
                     ksm = x.left;
                     colDesc.type = x.right;
-                } else if (fieldMapper.getClass().getName().equals("org.elasticsearch.mapper.attachments.AttachmentMapper")) {
+                } else if (fieldMapper.getClass().getName().equals("org.opensearch.mapper.attachments.AttachmentMapper")) {
                     // attachement is a plugin, so class may not found.
                     Pair<KeyspaceMetadata, CQL3Type.Raw> x = createRawTypeIfNotExists(ksm, ATTACHMENT_TYPE, ATTACHMENT_FIELDS, mutations, events);
                     ksm = x.left;
@@ -784,12 +784,12 @@ public class SchemaManager {
     }
 
     /**
-     * Create table for all IndexMetaData having a mapping.
+     * Create table for all IndexMetadata having a mapping.
      * WARNING: schema mutations are applied in a random order and table extensions is replace by the last one.
      */
     public KeyspaceMetadata updateTableSchema(final KeyspaceMetadata ksm2,
             final String type,
-            final Map<Index, Pair<IndexMetaData, MapperService>> indiceMap,
+            final Map<Index, Pair<IndexMetadata, MapperService>> indiceMap,
             final Collection<Mutation> mutations,
             final Collection<Event.SchemaChange> events) {
         String query = null;
@@ -805,11 +805,11 @@ public class SchemaManager {
             final TableMetadata cfm = ksm.getTableOrViewNullable(cfName);
             boolean newTable = (cfm == null);
 
-            MapperService mapperService = null; // set with one of the IndexMetaData !
+            MapperService mapperService = null; // set with one of the IndexMetadata !
 
             Map<String, ColumnDescriptor> columnsMap = new HashMap<>();
-            for(Pair<IndexMetaData, MapperService> pair : indiceMap.values()) {
-                IndexMetaData indexMetaData = pair.left;
+            for(Pair<IndexMetadata, MapperService> pair : indiceMap.values()) {
+                IndexMetadata indexMetaData = pair.left;
                 if (hasVirtualIndex(indexMetaData))
                     continue;
                 mapperService = pair.right;
@@ -837,7 +837,7 @@ public class SchemaManager {
 
 
             String secondaryIndexClazz = mapperService.getIndexSettings().getSettings().get(ClusterService.SETTING_CLUSTER_SECONDARY_INDEX_CLASS,
-                    clusterService.state().metaData().settings().get(ClusterService.SETTING_CLUSTER_SECONDARY_INDEX_CLASS,
+                    clusterService.state().metadata().settings().get(ClusterService.SETTING_CLUSTER_SECONDARY_INDEX_CLASS,
                             ClusterService.defaultSecondaryIndexClass.getName()));
             ksm = createSecondaryIndexIfNotExists(ksm, cfName, secondaryIndexClazz, mutations, events);
             return ksm;
@@ -910,7 +910,7 @@ public class SchemaManager {
         return ksm2;
     }
 
-    public void dropSecondaryIndices(final IndexMetaData indexMetaData, final Collection<Mutation> mutations, final Collection<Event.SchemaChange> events)
+    public void dropSecondaryIndices(final IndexMetadata indexMetaData, final Collection<Mutation> mutations, final Collection<Event.SchemaChange> events)
             throws RequestExecutionException {
         String ksName = keyspaceForIndex(indexMetaData);
         KeyspaceMetadata ksm = Schema.instance.getKeyspaceMetadata(ksName);
@@ -927,7 +927,7 @@ public class SchemaManager {
             dropSecondaryIndex(ksm, cfm, mutations, events);
     }
 
-    public KeyspaceMetadata dropTables(KeyspaceMetadata ksm, final IndexMetaData indexMetaData, final Collection<Mutation> mutations, final Collection<Event.SchemaChange> events)
+    public KeyspaceMetadata dropTables(KeyspaceMetadata ksm, final IndexMetadata indexMetaData, final Collection<Mutation> mutations, final Collection<Event.SchemaChange> events)
             throws RequestExecutionException {
         String ksName = keyspaceForIndex(indexMetaData);
         for(ObjectCursor<String> cursor : indexMetaData.getMappings().keys()) {

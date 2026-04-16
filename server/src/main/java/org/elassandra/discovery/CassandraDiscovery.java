@@ -42,45 +42,47 @@ import org.apache.logging.log4j.message.ParameterizedMessage;
 import org.elassandra.ConcurrentMetaDataUpdateException;
 import org.elassandra.PaxosMetaDataUpdateException;
 import org.elassandra.gateway.CassandraGatewayService;
-import org.elasticsearch.ElasticsearchException;
-import org.elasticsearch.Version;
-import org.elasticsearch.action.ActionListener;
-import org.elasticsearch.client.transport.NoNodeAvailableException;
-import org.elasticsearch.cluster.*;
-import org.elasticsearch.cluster.block.ClusterBlockException;
-import org.elasticsearch.cluster.block.ClusterBlockLevel;
-import org.elasticsearch.cluster.block.ClusterBlocks;
-import org.elasticsearch.cluster.metadata.IndexMetaData;
-import org.elasticsearch.cluster.metadata.MetaData;
-import org.elasticsearch.cluster.node.DiscoveryNode;
-import org.elasticsearch.cluster.node.DiscoveryNode.Role;
-import org.elasticsearch.cluster.node.DiscoveryNodes;
-import org.elasticsearch.cluster.routing.RoutingTable;
-import org.elasticsearch.cluster.routing.ShardRoutingState;
-import org.elasticsearch.cluster.service.ClusterApplier;
-import org.elasticsearch.cluster.service.ClusterService;
-import org.elasticsearch.cluster.service.MasterService;
-import org.elasticsearch.common.Priority;
-import org.elasticsearch.common.component.AbstractLifecycleComponent;
-import org.elasticsearch.common.io.stream.NamedWriteableRegistry;
-import org.elasticsearch.common.network.NetworkAddress;
-import org.elasticsearch.common.settings.ClusterSettings;
-import org.elasticsearch.common.settings.Setting;
-import org.elasticsearch.common.settings.Setting.Property;
-import org.elasticsearch.common.settings.Settings;
-import org.elasticsearch.common.settings.SettingsException;
-import org.elasticsearch.common.transport.TransportAddress;
-import org.elasticsearch.common.unit.TimeValue;
-import org.elasticsearch.discovery.AckClusterStatePublishResponseHandler;
-import org.elasticsearch.discovery.Discovery;
-import org.elasticsearch.discovery.DiscoverySettings;
-import org.elasticsearch.discovery.DiscoveryStats;
-import org.elasticsearch.index.Index;
-import org.elasticsearch.index.IndexNotFoundException;
-import org.elasticsearch.index.IndexService;
-import org.elasticsearch.index.shard.IndexShard;
-import org.elasticsearch.index.shard.ShardNotFoundException;
-import org.elasticsearch.transport.TransportService;
+import org.opensearch.OpenSearchException;
+import org.opensearch.Version;
+import org.opensearch.action.ActionListener;
+import org.opensearch.client.transport.NoNodeAvailableException;
+import org.opensearch.cluster.*;
+import org.opensearch.cluster.block.ClusterBlockException;
+import org.opensearch.cluster.block.ClusterBlockLevel;
+import org.opensearch.cluster.block.ClusterBlocks;
+import org.opensearch.cluster.metadata.IndexMetadata;
+import org.opensearch.cluster.metadata.Metadata;
+import org.opensearch.cluster.node.DiscoveryNode;
+import org.opensearch.cluster.node.DiscoveryNodeRole;
+import org.opensearch.cluster.node.DiscoveryNodes;
+import org.opensearch.cluster.routing.RoutingTable;
+import org.opensearch.cluster.routing.ShardRoutingState;
+import org.opensearch.cluster.service.ClusterApplier;
+import org.opensearch.cluster.service.ClusterService;
+import org.opensearch.cluster.service.MasterService;
+import org.opensearch.common.Priority;
+import org.opensearch.common.component.AbstractLifecycleComponent;
+import org.opensearch.common.io.stream.NamedWriteableRegistry;
+import org.opensearch.common.network.NetworkAddress;
+import org.opensearch.common.settings.ClusterSettings;
+import org.opensearch.common.settings.Setting;
+import org.opensearch.common.settings.Setting.Property;
+import org.opensearch.common.settings.Settings;
+import org.opensearch.common.settings.SettingsException;
+import org.opensearch.common.transport.TransportAddress;
+import org.opensearch.common.unit.TimeValue;
+import org.opensearch.discovery.AckClusterStatePublishResponseHandler;
+import org.opensearch.discovery.Discovery;
+import org.opensearch.cluster.coordination.FailedToCommitClusterStateException;
+import org.opensearch.discovery.DiscoverySettings;
+import org.opensearch.cluster.coordination.NoMasterBlockService;
+import org.opensearch.discovery.DiscoveryStats;
+import org.opensearch.index.Index;
+import org.opensearch.index.IndexNotFoundException;
+import org.opensearch.index.IndexService;
+import org.opensearch.index.shard.IndexShard;
+import org.opensearch.index.shard.ShardNotFoundException;
+import org.opensearch.transport.TransportService;
 
 import java.io.IOException;
 import java.net.InetAddress;
@@ -97,7 +99,7 @@ import java.util.stream.Collectors;
 import static org.apache.cassandra.cql3.QueryProcessor.executeInternal;
 import static org.apache.cassandra.service.GZipStringCompressor.compress;
 import static org.apache.cassandra.service.GZipStringCompressor.uncompressIfGZipped;
-import static org.elasticsearch.gateway.GatewayService.STATE_NOT_RECOVERED_BLOCK;
+import static org.opensearch.gateway.GatewayService.STATE_NOT_RECOVERED_BLOCK;
 
 /**
  * https://www.elastic.co/guide/en/elasticsearch/reference/6.3/modules-discovery-zen.html
@@ -110,7 +112,7 @@ import static org.elasticsearch.gateway.GatewayService.STATE_NOT_RECOVERED_BLOCK
 public class CassandraDiscovery extends AbstractLifecycleComponent implements Discovery, IEndpointStateChangeSubscriber, AppliedClusterStateAction.AppliedClusterStateListener {
     final Logger logger = LogManager.getLogger(CassandraDiscovery.class);
 
-    private static final ImmutableSet<Role> CASSANDRA_ROLES = ImmutableSet.of(Role.MASTER, Role.DATA);
+    private static final ImmutableSet<DiscoveryNodeRole> CASSANDRA_ROLES = ImmutableSet.of(DiscoveryNodeRole.MASTER_ROLE, DiscoveryNodeRole.DATA_ROLE);
     private final TransportService transportService;
 
     private final Settings settings;
@@ -154,9 +156,9 @@ public class CassandraDiscovery extends AbstractLifecycleComponent implements Di
     private final AtomicBoolean autoEnableSearch = new AtomicBoolean(System.getProperty("es.auto_enable_search") == null || Boolean.getBoolean("es.auto_enable_search"));
 
     /**
-     * Same logic as Elassandra's {@code IndexMetaData#keyspace()}; stock {@code IndexMetadata} has no such helper.
+     * Same logic as Elassandra's {@code IndexMetadata#keyspace()}; stock {@code IndexMetadata} has no such helper.
      */
-    private static String keyspaceForIndex(IndexMetaData indexMetaData) {
+    private static String keyspaceForIndex(IndexMetadata indexMetaData) {
         String ks = indexMetaData.getSettings().get("index.keyspace");
         if (ks != null) {
             return ks;
@@ -174,7 +176,7 @@ public class CassandraDiscovery extends AbstractLifecycleComponent implements Di
                               final ClusterApplier clusterApplier,
                               final ClusterSettings clusterSettings,
                               final NamedWriteableRegistry namedWriteableRegistry) {
-        super(settings);
+        super();
         this.settings = settings;
         this.masterService = masterService;
         this.clusterApplier = clusterApplier;
@@ -281,7 +283,7 @@ public class CassandraDiscovery extends AbstractLifecycleComponent implements Di
             return remoteMembers.values();
         }
 
-        public ShardRoutingState getShardRoutingState(UUID nodeUuid, org.elasticsearch.index.Index index) {
+        public ShardRoutingState getShardRoutingState(UUID nodeUuid, org.opensearch.index.Index index) {
             if (UUID.fromString(localNode().getId()).equals(nodeUuid)) {
                 if (isSearchEnabled()) {
                     try {
@@ -577,7 +579,7 @@ public class CassandraDiscovery extends AbstractLifecycleComponent implements Di
             boolean updateRouting = tasks.stream().filter(RoutingTableUpdateTask::updateRouting).count() > 0;
             Set<Index> indices = tasks.stream().map(RoutingTableUpdateTask::indices)
                 .flatMap(Set::stream)
-                .map(i -> Optional.ofNullable(currentState.metaData().hasIndex(i) ? currentState.metaData().index(i).getIndex() : null))
+                .map(i -> Optional.ofNullable(currentState.metadata().hasIndex(i) ? currentState.metadata().index(i).getIndex() : null))
                 .filter(Optional::isPresent)
                 .map(Optional::get)
                 .collect(Collectors.toSet());
@@ -589,24 +591,24 @@ public class CassandraDiscovery extends AbstractLifecycleComponent implements Di
             if (currentState.nodes().getSize() != discoverNodes.getSize() || updateRouting) {
                 // Routing-only updates (searchEnabled/X1 changes) should not bump metadata.version when shard/replica
                 // counts are unchanged; that drift breaks the later schema CAS against Cassandra metadata_log.
-                MetaData.Builder metaDataBuilder = null;
-                for (Iterator<IndexMetaData> it = currentState.metaData().iterator(); it.hasNext();) {
-                    IndexMetaData indexMetaData = it.next();
+                Metadata.Builder metaDataBuilder = null;
+                for (Iterator<IndexMetadata> it = currentState.metadata().iterator(); it.hasNext();) {
+                    IndexMetadata indexMetaData = it.next();
                     final int targetShards = discoverNodes.getSize();
                     final int targetReplicas = Math.max(0, ClusterService.replicationFactor(keyspaceForIndex(indexMetaData)) - 1);
                     if (indexMetaData.getNumberOfShards() == targetShards && indexMetaData.getNumberOfReplicas() == targetReplicas) {
                         continue;
                     }
                     if (metaDataBuilder == null) {
-                        metaDataBuilder = MetaData.builder(currentState.metaData());
+                        metaDataBuilder = Metadata.builder(currentState.metadata());
                     }
-                    IndexMetaData.Builder indexMetaDataBuilder = IndexMetaData.builder(indexMetaData);
+                    IndexMetadata.Builder indexMetaDataBuilder = IndexMetadata.builder(indexMetaData);
                     indexMetaDataBuilder.numberOfShards(targetShards);
                     indexMetaDataBuilder.numberOfReplicas(targetReplicas);
                     metaDataBuilder.put(indexMetaDataBuilder.build(), false);
                 }
                 if (metaDataBuilder != null) {
-                    clusterStateBuilder.metaData(metaDataBuilder.build());
+                    clusterStateBuilder.metadata(metaDataBuilder.build());
                 }
                 ClusterState workingClusterState = clusterStateBuilder.build();
                 RoutingTable routingTable = RoutingTable.build(clusterService, workingClusterState);
@@ -862,7 +864,7 @@ public class CassandraDiscovery extends AbstractLifecycleComponent implements Di
     }
 
     @Override
-    protected void doStop() throws ElasticsearchException {
+    protected void doStop() throws OpenSearchException {
         Gossiper.instance.unregister(this);
 
         synchronized (gossipCluster) {
@@ -955,9 +957,9 @@ public class CassandraDiscovery extends AbstractLifecycleComponent implements Di
 
     public void publishX2(ClusterState clusterState, boolean force) {
         if (Gossiper.instance.isEnabled() || force) {
-            Gossiper.instance.addLocalApplicationState(ELASTIC_META_DATA, StorageService.instance.valueFactory.datacenter(clusterState.metaData().x2()));
+            Gossiper.instance.addLocalApplicationState(ELASTIC_META_DATA, StorageService.instance.valueFactory.datacenter(clusterState.metadata().x2()));
             if (logger.isTraceEnabled())
-                logger.trace("X2={} published in gossip state", clusterState.metaData().x2());
+                logger.trace("X2={} published in gossip state", clusterState.metadata().x2());
         } else {
             logger.warn("Gossiper not yet enabled to publish X2");
         }
@@ -1031,7 +1033,10 @@ public class CassandraDiscovery extends AbstractLifecycleComponent implements Di
      * According to the Metadata.clusterUuid in the new clusterState, the node acts as the coordinator or participant.
      */
     @Override
-    public void publish(final ClusterChangedEvent clusterChangedEvent, final AckListener ackListener) {
+    public void publish(
+        final ClusterChangedEvent clusterChangedEvent,
+        final org.opensearch.action.ActionListener<Void> publishListener,
+        final AckListener ackListener) {
         ClusterState previousClusterState = clusterChangedEvent.previousState();
         ClusterState newClusterState = normalizeSchemaUpdateClusterState(
             clusterChangedEvent.schemaUpdate(),
@@ -1043,14 +1048,14 @@ public class CassandraDiscovery extends AbstractLifecycleComponent implements Di
             clusterChangedEvent.source(),
             clusterChangedEvent.schemaUpdate(),
             localNode().getId(),
-            newClusterState.metaData().x2()
+            newClusterState.metadata().x2()
         );
 
         long startTimeNS = System.nanoTime();
         try {
             if (clusterChangedEvent.schemaUpdate().updated()) {
                 // update and broadcast the metadata through a CQL schema update + ack from participant nodes
-                if (localNode().getId().equals(newClusterState.metaData().clusterUUID())) {
+                if (localNode().getId().equals(newClusterState.metadata().clusterUUID())) {
                     publishAsCoordinator(clusterChangedEvent, ackListener, startTimeNS);
                 } else {
                     publishAsParticipator(clusterChangedEvent, ackListener, startTimeNS);
@@ -1059,6 +1064,7 @@ public class CassandraDiscovery extends AbstractLifecycleComponent implements Di
                 // publish local cluster state update (for blocks, nodes or routing update)
                 publishLocalUpdate(clusterChangedEvent, ackListener, startTimeNS);
             }
+            publishListener.onResponse(null);
         } catch (Exception e) {
             TimeValue executionTime = TimeValue.timeValueMillis(Math.max(0, TimeValue.nsecToMSec(System.nanoTime() - startTimeNS)));
             StringBuilder sb = new StringBuilder("failed to execute cluster state update in ").append(executionTime)
@@ -1066,7 +1072,8 @@ public class CassandraDiscovery extends AbstractLifecycleComponent implements Di
                     .append(previousClusterState.version()).
                     append("], source [").append(clusterChangedEvent.source()).append("]\n");
             logger.warn(sb.toString(), e);
-            throw new ElasticsearchException(e);
+            publishListener.onFailure(e);
+            throw new OpenSearchException(e);
         }
     }
 
@@ -1076,7 +1083,7 @@ public class CassandraDiscovery extends AbstractLifecycleComponent implements Di
      */
     void publishAsCoordinator(final ClusterChangedEvent clusterChangedEvent, final AckListener ackListener, final long startTimeNS)
         throws InterruptedException, IOException {
-        logger.debug("Coordinator update source={} metadata={}", clusterChangedEvent.source(), clusterChangedEvent.state().metaData().x2());
+        logger.debug("Coordinator update source={} metadata={}", clusterChangedEvent.source(), clusterChangedEvent.state().metadata().x2());
 
         ClusterState previousClusterState = clusterChangedEvent.previousState();
         ClusterState newClusterState = normalizeSchemaUpdateClusterState(
@@ -1089,16 +1096,16 @@ public class CassandraDiscovery extends AbstractLifecycleComponent implements Di
 
         // increment metadata.version
         newClusterState = ClusterState.builder(newClusterState)
-                .metaData(MetaData.builder(newClusterState.metaData()).incrementVersion().build())
+                .metadata(Metadata.builder(newClusterState.metadata()).incrementVersion().build())
                 .build();
 
         Collection<Mutation> mutations = clusterChangedEvent.mutations() == null ? new ArrayList<>() : clusterChangedEvent.mutations();
         Collection<Event.SchemaChange> events = clusterChangedEvent.events() == null ? new ArrayList<>() : clusterChangedEvent.events();
         try {
             // TODO: track change to update CQL schema when really needed
-            clusterService.writeMetadataToSchemaMutations(newClusterState.metaData(), mutations, events);
+            clusterService.writeMetadataToSchemaMutations(newClusterState.metadata(), mutations, events);
         } catch (ConfigurationException | IOException e1) {
-            throw new ElasticsearchException(e1);
+            throw new OpenSearchException(e1);
         }
 
         try {
@@ -1106,10 +1113,10 @@ public class CassandraDiscovery extends AbstractLifecycleComponent implements Di
             logger.warn(
                 "commit metadata source={} prev={} next={}",
                 clusterChangedEvent.source(),
-                previousClusterState.metaData().x2(),
-                newClusterState.metaData().x2()
+                previousClusterState.metadata().x2(),
+                newClusterState.metadata().x2()
             );
-            clusterService.commitMetaData(previousClusterState.metaData(), newClusterState.metaData(), clusterChangedEvent.source());
+            clusterService.commitMetaData(previousClusterState.metadata(), newClusterState.metadata(), clusterChangedEvent.source());
             notifyCommit(ackListener, startTimeNS);
 
             // compute alive node for awaiting applied acknowledgment
@@ -1162,9 +1169,9 @@ public class CassandraDiscovery extends AbstractLifecycleComponent implements Di
                     throw new FailedToCommitClusterStateException("local state was mutated while CS update was published to other nodes");
                 }
 
-                boolean sentToApplier = processNextCommittedClusterState("committed source=" + clusterChangedEvent.source() + " metadata=" + newClusterState.metaData().x2());
+                boolean sentToApplier = processNextCommittedClusterState("committed source=" + clusterChangedEvent.source() + " metadata=" + newClusterState.metadata().x2());
                 if (sentToApplier == false && processedOrFailed.get() == false) {
-                    logger.warn("metadata={} has neither been processed nor failed", newClusterState.metaData().x2());
+                    logger.warn("metadata={} has neither been processed nor failed", newClusterState.metadata().x2());
                     assert false : "cluster state published locally neither processed nor failed: " + newClusterState;
                     return;
                 }
@@ -1175,23 +1182,23 @@ public class CassandraDiscovery extends AbstractLifecycleComponent implements Di
             long timeLeftInNanos = Math.max(0, publishTimeout.nanos() - (System.nanoTime() - publishingStartInNanos));
             if (!handler.awaitAllNodes(TimeValue.timeValueNanos(timeLeftInNanos))) {
                 logger.info("commit source={} metadata={} timeout with pending nodes={}",
-                        clusterChangedEvent.source(), newClusterState.metaData().x2(), Arrays.toString(handler.pendingNodes()));
+                        clusterChangedEvent.source(), newClusterState.metadata().x2(), Arrays.toString(handler.pendingNodes()));
             } else {
                 logger.debug("commit source={} metadata={} applied succefully on nodes={}",
-                        clusterChangedEvent.source(), newClusterState.metaData().x2(), nodesToPublishTo);
+                        clusterChangedEvent.source(), newClusterState.metadata().x2(), nodesToPublishTo);
             }
 
         } catch (ConcurrentMetaDataUpdateException e) {
-            UUID owner = clusterService.readMetaDataOwner(newClusterState.metaData().version());
+            UUID owner = clusterService.readMetaDataOwner(newClusterState.metadata().version());
             notifyCommit(ackListener, startTimeNS);
             ackListener.onNodeAck(localNode, null);
             try {
-                final MetaData committedMetaData = clusterService.loadGlobalState();
-                if (metadataUpdateSatisfied(previousClusterState.metaData(), newClusterState.metaData(), committedMetaData)) {
+                final Metadata committedMetaData = clusterService.loadGlobalState();
+                if (metadataUpdateSatisfied(previousClusterState.metadata(), newClusterState.metadata(), committedMetaData)) {
                     logger.warn(
                         "PAXOS concurrent update, source={} metadata={}, owner={}, committed metadata already satisfies requested update; reloading committed metadata",
                         clusterChangedEvent.source(),
-                        newClusterState.metaData().x2(),
+                        newClusterState.metadata().x2(),
                         owner
                     );
                     reloadCommittedMetadata(clusterChangedEvent.source(), committedMetaData);
@@ -1201,7 +1208,7 @@ public class CassandraDiscovery extends AbstractLifecycleComponent implements Di
                     logger.warn(
                         "PAXOS concurrent update, source={} metadata={}, owner={}, reloading committed metadata and resubmitting task on next metadata change",
                         clusterChangedEvent.source(),
-                        newClusterState.metaData().x2(),
+                        newClusterState.metadata().x2(),
                         owner
                     );
                     resubmitTaskOnNextChange(clusterChangedEvent);
@@ -1211,7 +1218,7 @@ public class CassandraDiscovery extends AbstractLifecycleComponent implements Di
                 logger.warn(
                     "PAXOS concurrent update, source={} metadata={}, owner={}, failed to inspect committed metadata; resubmit task on next metadata change",
                     clusterChangedEvent.source(),
-                    newClusterState.metaData().x2(),
+                    newClusterState.metadata().x2(),
                     owner,
                     reloadFailure
                 );
@@ -1220,22 +1227,22 @@ public class CassandraDiscovery extends AbstractLifecycleComponent implements Di
             return;
         } catch(UnavailableException e) {
             logger.error("PAXOS not enough available nodes, source={} metadata={}",
-                    clusterChangedEvent.source(), newClusterState.metaData().x2());
+                    clusterChangedEvent.source(), newClusterState.metadata().x2());
             ackListener.onNodeAck(localNode, e);
             throw e;
         } catch(WriteTimeoutException e) {
             // see https://www.datastax.com/dev/blog/cassandra-error-handling-done-right
             logger.warn("PAXOS write timeout, source={} metadata={} writeType={}, reading the owner of version={}",
-                    clusterChangedEvent.source(), newClusterState.metaData().x2(), e.writeType, newClusterState.metaData().version());
+                    clusterChangedEvent.source(), newClusterState.metadata().x2(), e.writeType, newClusterState.metadata().version());
 
             // read the owner for the expected version to know if PAXOS transaction succeed or not.
-            UUID owner = clusterService.readMetaDataOwner(newClusterState.metaData().version());
-            if (owner == null || !owner.equals(newClusterState.metaData().clusterUUID())) {
-                logger.warn("PAXOS timeout and failed to write version={}, owner={}", newClusterState.metaData().version(), owner);
+            UUID owner = clusterService.readMetaDataOwner(newClusterState.metadata().version());
+            if (owner == null || !owner.equals(newClusterState.metadata().clusterUUID())) {
+                logger.warn("PAXOS timeout and failed to write version={}, owner={}", newClusterState.metadata().version(), owner);
                 throw new PaxosMetaDataUpdateException(e);
             }
 
-            logger.warn("PAXOS timeout but succesfully write x2={}", newClusterState.metaData().x2());
+            logger.warn("PAXOS timeout but succesfully write x2={}", newClusterState.metadata().x2());
             notifyCommit(ackListener, startTimeNS);
             ackListener.onNodeAck(localNode, e);
         } finally {
@@ -1250,11 +1257,11 @@ public class CassandraDiscovery extends AbstractLifecycleComponent implements Di
         ClusterState newClusterState = clusterChangedEvent.state();
         String reason = clusterChangedEvent.source();
 
-        final DiscoveryNode coordinatorNode = newClusterState.nodes().get(newClusterState.metaData().clusterUUID());
-        logger.debug("Participator update reason={} metadata={} coordinator={}", reason, newClusterState.metaData().x2(), coordinatorNode);
+        final DiscoveryNode coordinatorNode = newClusterState.nodes().get(newClusterState.metadata().clusterUUID());
+        logger.debug("Participator update reason={} metadata={} coordinator={}", reason, newClusterState.metadata().x2(), coordinatorNode);
 
-        if (newClusterState.metaData().version() <= clusterState().metaData().version()) {
-            logger.warn("Ignore and acknowlegde obsolete update metadata={}", newClusterState.metaData().x2());
+        if (newClusterState.metadata().version() <= clusterState().metadata().version()) {
+            logger.warn("Ignore and acknowlegde obsolete update metadata={}", newClusterState.metadata().x2());
             if (coordinatorNode != null) {
                 // coordinator from a remote DC maybe null.
                 CassandraDiscovery.this.appliedClusterStateAction.sendAppliedToNode(coordinatorNode, newClusterState, null);
@@ -1269,7 +1276,7 @@ public class CassandraDiscovery extends AbstractLifecycleComponent implements Di
             public void onNewClusterStateProcessed() {
                 if (coordinatorNode != null) {
                     logger.trace("sending applied state=[{}] to coordinator={} reason={}",
-                            newClusterState.metaData().x2(), coordinatorNode, reason);
+                            newClusterState.metadata().x2(), coordinatorNode, reason);
                     CassandraDiscovery.this.appliedClusterStateAction.sendAppliedToNode(coordinatorNode, newClusterState, null);
                 }
             }
@@ -1278,7 +1285,7 @@ public class CassandraDiscovery extends AbstractLifecycleComponent implements Di
             public void onNewClusterStateFailed(Exception e) {
                 if (coordinatorNode != null) {
                     logger.trace("sending failed state=[{}] to coordinator={} reason={} exception={}",
-                            newClusterState.metaData().x2(), coordinatorNode, reason, e.toString());
+                            newClusterState.metadata().x2(), coordinatorNode, reason, e.toString());
                     CassandraDiscovery.this.appliedClusterStateAction.sendAppliedToNode(coordinatorNode, newClusterState, e);
                 }
             }
@@ -1286,9 +1293,9 @@ public class CassandraDiscovery extends AbstractLifecycleComponent implements Di
         // apply the next-to-process cluster state.
         synchronized (stateMutex) {
             boolean sentToApplier = processNextCommittedClusterState(
-                    "committed version [" + newClusterState.metaData().x2() + "] source [" + reason + "]");
+                    "committed version [" + newClusterState.metadata().x2() + "] source [" + reason + "]");
             if (sentToApplier == false  && processedOrFailed.get() == false) {
-                logger.warn("metadata={} has neither been processed nor failed", newClusterState.metaData().x2());
+                logger.warn("metadata={} has neither been processed nor failed", newClusterState.metadata().x2());
                 assert false : "cluster state published locally neither processed nor failed: " + newClusterState;
                 return;
             }
@@ -1300,7 +1307,7 @@ public class CassandraDiscovery extends AbstractLifecycleComponent implements Di
      */
     void publishLocalUpdate(final ClusterChangedEvent clusterChangedEvent, final AckListener ackListener, final long startTimeNS) {
         ClusterState newClusterState = rebaseLocalClusterState(clusterChangedEvent);
-        logger.debug("Local update source={} metadata={}", clusterChangedEvent.source(), newClusterState.metaData().x2());
+        logger.debug("Local update source={} metadata={}", clusterChangedEvent.source(), newClusterState.metadata().x2());
         notifyCommit(ackListener, startTimeNS);
         final AtomicBoolean processedOrFailed = new AtomicBoolean();
         pendingStatesQueue.addPending(newClusterState,
@@ -1329,9 +1336,9 @@ public class CassandraDiscovery extends AbstractLifecycleComponent implements Di
             }
 
             boolean sentToApplier = processNextCommittedClusterState(
-                    "committed version [" + newClusterState.metaData().x2() + "] source [" + clusterChangedEvent.source() + "]");
+                    "committed version [" + newClusterState.metadata().x2() + "] source [" + clusterChangedEvent.source() + "]");
             if (sentToApplier == false && processedOrFailed.get() == false) {
-                logger.warn("metadata={} source=[{}] has neither been processed nor failed", newClusterState.metaData().x2(), clusterChangedEvent.source());
+                logger.warn("metadata={} source=[{}] has neither been processed nor failed", newClusterState.metadata().x2(), clusterChangedEvent.source());
                 assert false : "cluster state published locally neither processed nor failed: " + newClusterState;
                 return;
             }
@@ -1346,8 +1353,8 @@ public class CassandraDiscovery extends AbstractLifecycleComponent implements Di
     private ClusterState rebaseLocalClusterState(ClusterChangedEvent clusterChangedEvent) {
         final ClusterState previousState = clusterChangedEvent.previousState();
         final ClusterState newClusterState = clusterChangedEvent.state();
-        final MetaData previousMetaData = previousState.metaData();
-        final MetaData newMetaData = newClusterState.metaData();
+        final Metadata previousMetaData = previousState.metadata();
+        final Metadata newMetaData = newClusterState.metadata();
 
         if (newMetaData == previousMetaData) {
             return newClusterState;
@@ -1360,7 +1367,7 @@ public class CassandraDiscovery extends AbstractLifecycleComponent implements Di
         }
 
         final String coordinatorId = resolveCoordinatorId(previousMetaData.clusterUUID());
-        final MetaData rebasedMetaData = MetaData.builder(newMetaData)
+        final Metadata rebasedMetaData = Metadata.builder(newMetaData)
             .clusterUUID(coordinatorId)
             .version(staleVersion ? previousMetaData.version() + 1 : newMetaData.version())
             .build();
@@ -1370,7 +1377,7 @@ public class CassandraDiscovery extends AbstractLifecycleComponent implements Di
             newMetaData.x2(),
             rebasedMetaData.x2()
         );
-        return ClusterState.builder(newClusterState).metaData(rebasedMetaData).build();
+        return ClusterState.builder(newClusterState).metadata(rebasedMetaData).build();
     }
 
     private ClusterState normalizeSchemaUpdateClusterState(
@@ -1378,13 +1385,13 @@ public class CassandraDiscovery extends AbstractLifecycleComponent implements Di
         ClusterState previousClusterState,
         ClusterState newClusterState
     ) {
-        if (schemaUpdate.updated() == false || ClusterState.UNKNOWN_UUID.equals(newClusterState.metaData().clusterUUID()) == false) {
+        if (schemaUpdate.updated() == false || ClusterState.UNKNOWN_UUID.equals(newClusterState.metadata().clusterUUID()) == false) {
             return newClusterState;
         }
 
-        final String coordinatorId = resolveCoordinatorId(previousClusterState.metaData().clusterUUID());
+        final String coordinatorId = resolveCoordinatorId(previousClusterState.metadata().clusterUUID());
         return ClusterState.builder(newClusterState)
-            .metaData(MetaData.builder(newClusterState.metaData()).clusterUUID(coordinatorId).build())
+            .metadata(Metadata.builder(newClusterState.metadata()).clusterUUID(coordinatorId).build())
             .build();
     }
 
@@ -1394,7 +1401,7 @@ public class CassandraDiscovery extends AbstractLifecycleComponent implements Di
 
     protected void resubmitTaskOnNextChange(final ClusterChangedEvent clusterChangedEvent) {
         final long resubmitTimeMillis = System.currentTimeMillis();
-        final MetaData baselineMetaData = clusterChangedEvent.previousState().metaData();
+        final Metadata baselineMetaData = clusterChangedEvent.previousState().metadata();
         final AtomicBoolean replayed = new AtomicBoolean(false);
         final ClusterStateListener listener = new ClusterStateListener() {
             @Override
@@ -1408,13 +1415,13 @@ public class CassandraDiscovery extends AbstractLifecycleComponent implements Di
 
     private void tryResubmitDelayedUpdate(
         ClusterChangedEvent clusterChangedEvent,
-        MetaData baselineMetaData,
+        Metadata baselineMetaData,
         long resubmitTimeMillis,
         AtomicBoolean replayed,
         ClusterStateListener listener,
         ClusterState currentState
     ) {
-        if (metadataChangedSince(currentState.metaData(), baselineMetaData) == false) {
+        if (metadataChangedSince(currentState.metadata(), baselineMetaData) == false) {
             return;
         }
         if (replayed.compareAndSet(false, true) == false) {
@@ -1427,7 +1434,7 @@ public class CassandraDiscovery extends AbstractLifecycleComponent implements Di
         if (remainingTimeMillis <= 0L) {
             logger.warn(
                 "metadata={} => drop expired delayed update source={} tasks={} lostTimeMillis={}",
-                currentState.metaData().x2(),
+                currentState.metadata().x2(),
                 clusterChangedEvent.source(),
                 clusterChangedEvent.taskInputs().updateTasks,
                 lostTimeMillis
@@ -1440,7 +1447,7 @@ public class CassandraDiscovery extends AbstractLifecycleComponent implements Di
         Map<Object, ClusterStateTaskListener> map = clusterChangedEvent.taskInputs().updateTasksToMap(priority, lostTimeMillis);
         logger.warn(
             "metadata={} => resubmit delayed update source={} tasks={} priority={} remaing timeout={}",
-            currentState.metaData().x2(),
+            currentState.metadata().x2(),
             clusterChangedEvent.source(),
             clusterChangedEvent.taskInputs().updateTasks,
             priority,
@@ -1462,21 +1469,21 @@ public class CassandraDiscovery extends AbstractLifecycleComponent implements Di
         }
     }
 
-    private void reloadCommittedMetadata(String source, MetaData reloadedMetaData) {
+    private void reloadCommittedMetadata(String source, Metadata reloadedMetaData) {
         clusterService.submitStateUpdateTask("reload-committed-metadata-after-concurrent-update", new ClusterStateUpdateTask() {
             @Override
             public ClusterState execute(ClusterState currentState) {
-                if (reloadedMetaData.version() < currentState.metaData().version()) {
+                if (reloadedMetaData.version() < currentState.metadata().version()) {
                     logger.warn(
                         "skip stale committed metadata reload after [{}], committed metadata={} current metadata={}",
                         source,
                         reloadedMetaData.x2(),
-                        currentState.metaData().x2()
+                        currentState.metadata().x2()
                     );
                     return currentState;
                 }
                 ClusterState updatedState = ClusterState.builder(currentState)
-                    .metaData(MetaData.builder(reloadedMetaData))
+                    .metadata(Metadata.builder(reloadedMetaData))
                     .build();
                 try {
                     return ClusterState.builder(updatedState)
@@ -1484,7 +1491,7 @@ public class CassandraDiscovery extends AbstractLifecycleComponent implements Di
                         .build();
                 } catch (InterruptedException e) {
                     Thread.currentThread().interrupt();
-                    throw new ElasticsearchException(e);
+                    throw new OpenSearchException(e);
                 }
             }
 
@@ -1495,9 +1502,9 @@ public class CassandraDiscovery extends AbstractLifecycleComponent implements Di
         });
     }
 
-    private boolean metadataUpdateSatisfied(MetaData previousMetaData, MetaData expectedMetaData, MetaData actualMetaData) {
-        if (MetaData.isGlobalStateEquals(previousMetaData, expectedMetaData) == false
-            && MetaData.isGlobalStateEquals(expectedMetaData, actualMetaData) == false) {
+    private boolean metadataUpdateSatisfied(Metadata previousMetaData, Metadata expectedMetaData, Metadata actualMetaData) {
+        if (Metadata.isGlobalStateEquals(previousMetaData, expectedMetaData) == false
+            && Metadata.isGlobalStateEquals(expectedMetaData, actualMetaData) == false) {
             return false;
         }
 
@@ -1505,8 +1512,8 @@ public class CassandraDiscovery extends AbstractLifecycleComponent implements Di
         previousMetaData.indices().keysIt().forEachRemaining(changedIndices::add);
         expectedMetaData.indices().keysIt().forEachRemaining(changedIndices::add);
         for (String index : changedIndices) {
-            IndexMetaData previousIndexMetaData = previousMetaData.index(index);
-            IndexMetaData expectedIndexMetaData = expectedMetaData.index(index);
+            IndexMetadata previousIndexMetaData = previousMetaData.index(index);
+            IndexMetadata expectedIndexMetaData = expectedMetaData.index(index);
             if (Objects.equals(previousIndexMetaData, expectedIndexMetaData)) {
                 continue;
             }
@@ -1517,7 +1524,7 @@ public class CassandraDiscovery extends AbstractLifecycleComponent implements Di
         return true;
     }
 
-    private boolean metadataChangedSince(MetaData currentMetaData, MetaData baselineMetaData) {
+    private boolean metadataChangedSince(Metadata currentMetaData, Metadata baselineMetaData) {
         return currentMetaData.version() != baselineMetaData.version()
             || currentMetaData.clusterUUID().equals(baselineMetaData.clusterUUID()) == false;
     }
@@ -1543,7 +1550,7 @@ public class CassandraDiscovery extends AbstractLifecycleComponent implements Di
         if (lastFailure != null) {
             logger.warn(
                 "routing table build failed after schema update retries, metadata={} expectedIndices={}",
-                clusterState.metaData().x2(),
+                clusterState.metadata().x2(),
                 expectedIndices,
                 lastFailure
             );
@@ -1553,7 +1560,7 @@ public class CassandraDiscovery extends AbstractLifecycleComponent implements Di
         if (routingTable.indicesRouting().size() < expectedIndices) {
             logger.warn(
                 "routing table still incomplete after schema update, metadata={} expectedIndices={} actualIndices={}",
-                clusterState.metaData().x2(),
+                clusterState.metadata().x2(),
                 expectedIndices,
                 routingTable.indicesRouting().size()
             );
@@ -1563,8 +1570,8 @@ public class CassandraDiscovery extends AbstractLifecycleComponent implements Di
 
     private int expectedRoutableIndexCount(ClusterState clusterState) {
         int expectedIndices = 0;
-        for (IndexMetaData indexMetaData : clusterState.metaData()) {
-            if (indexMetaData.getState() == IndexMetaData.State.OPEN) {
+        for (IndexMetadata indexMetaData : clusterState.metadata()) {
+            if (indexMetaData.getState() == IndexMetadata.State.OPEN) {
                 expectedIndices++;
             }
         }
@@ -1620,7 +1627,7 @@ public class CassandraDiscovery extends AbstractLifecycleComponent implements Di
             }
             return false;
         }
-        if (newClusterState.blocks().hasGlobalBlock(discoverySettings.getNoMasterBlock())) {
+        if (newClusterState.blocks().hasGlobalBlock(NoMasterBlockService.NO_MASTER_BLOCK_ALL)) {
             IllegalStateException e = new IllegalStateException("received a cluster state with a no-master block");
             logger.error(e.getMessage());
             try {
@@ -1652,7 +1659,7 @@ public class CassandraDiscovery extends AbstractLifecycleComponent implements Di
             return false;
         }
 
-        if (currentState.blocks().hasGlobalBlock(discoverySettings.getNoMasterBlock())) {
+        if (currentState.blocks().hasGlobalBlock(NoMasterBlockService.NO_MASTER_BLOCK_ALL)) {
             // its a fresh update from the master as we transition from a start of not having a master to having one
             logger.debug("got first state from fresh master [{}]", newClusterState.nodes().getMasterNodeId());
         }
@@ -1663,7 +1670,7 @@ public class CassandraDiscovery extends AbstractLifecycleComponent implements Di
 
         committedState.set(newClusterState);
 
-        clusterApplier.onNewClusterState("apply cluster state (from " + newClusterState.metaData().clusterUUID() + "[" + reason + "])",
+        clusterApplier.onNewClusterState("apply cluster state (from " + newClusterState.metadata().clusterUUID() + "[" + reason + "])",
             this::clusterState,
             new ClusterApplier.ClusterApplyListener() {
                 @Override
@@ -1698,15 +1705,15 @@ public class CassandraDiscovery extends AbstractLifecycleComponent implements Di
                     newClusterState.version(), currentState.version());
             return true;
         }
-        if (newClusterState.metaData().version() < currentState.metaData().version()) {
+        if (newClusterState.metadata().version() < currentState.metadata().version()) {
             logger.debug("received a cluster state metadata.verson that is not newer than the current one, ignoring (received {}, current {})",
-                    newClusterState.metaData().version(), currentState.metaData().version());
+                    newClusterState.metadata().version(), currentState.metadata().version());
             return true;
         }
-        if (!newClusterState.metaData().clusterUUID().equals(currentState.metaData().clusterUUID()) &&
-             newClusterState.metaData().version() == currentState.metaData().version() &&
-             currentState.metaData().version() > 0)  {
-            logger.debug("received a remote cluster state with same metadata.version, ignoring (received {}, current {})", newClusterState.metaData().version(), currentState.metaData().version());
+        if (!newClusterState.metadata().clusterUUID().equals(currentState.metadata().clusterUUID()) &&
+             newClusterState.metadata().version() == currentState.metadata().version() &&
+             currentState.metadata().version() > 0)  {
+            logger.debug("received a remote cluster state with same metadata.version, ignoring (received {}, current {})", newClusterState.metadata().version(), currentState.metadata().version());
             return true;
         }
         return false;
@@ -1732,7 +1739,7 @@ public class CassandraDiscovery extends AbstractLifecycleComponent implements Di
             String message = String.format(
                 Locale.ROOT,
                 "rejecting cluster state version [%d] received from [%s]",
-                incomingState.metaData().x2(),
+                incomingState.metadata().x2(),
                 incomingState.nodes().getMasterNodeId()
             );
             logger.warn(message);

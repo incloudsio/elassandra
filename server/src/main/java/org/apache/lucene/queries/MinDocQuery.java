@@ -1,4 +1,12 @@
 /*
+ * SPDX-License-Identifier: Apache-2.0
+ *
+ * The OpenSearch Contributors require contributions made to
+ * this file be licensed under the Apache-2.0 license or a
+ * compatible open source license.
+ */
+
+/*
  * Licensed to Elasticsearch under one or more contributor
  * license agreements. See the NOTICE file distributed with
  * this work for additional information regarding copyright
@@ -17,6 +25,11 @@
  * under the License.
  */
 
+/*
+ * Modifications Copyright OpenSearch Contributors. See
+ * GitHub history for details.
+ */
+
 package org.apache.lucene.queries;
 
 import org.apache.lucene.index.IndexReader;
@@ -26,6 +39,7 @@ import org.apache.lucene.search.ConstantScoreWeight;
 import org.apache.lucene.search.DocIdSetIterator;
 import org.apache.lucene.search.IndexSearcher;
 import org.apache.lucene.search.Query;
+import org.apache.lucene.search.ScoreMode;
 import org.apache.lucene.search.Scorer;
 import org.apache.lucene.search.Weight;
 
@@ -76,7 +90,7 @@ public final class MinDocQuery extends Query {
     }
 
     @Override
-    public Weight createWeight(IndexSearcher searcher, boolean needsScores, float boost) throws IOException {
+    public Weight createWeight(IndexSearcher searcher, ScoreMode scoreMode, float boost) throws IOException {
         if (readerId == null) {
             throw new IllegalStateException("Rewrite first");
         } else if (Objects.equals(searcher.getIndexReader().getContext().id(), readerId) == false) {
@@ -91,7 +105,7 @@ public final class MinDocQuery extends Query {
                 }
                 final int segmentMinDoc = Math.max(0, minDoc - context.docBase);
                 final DocIdSetIterator disi = new MinDocIterator(segmentMinDoc, maxDoc);
-                return new ConstantScoreScorer(this, score(), disi);
+                return new ConstantScoreScorer(this, score(), scoreMode, disi);
             }
 
             @Override
@@ -146,9 +160,8 @@ public final class MinDocQuery extends Query {
         }
     }
 
-
     @Override
     public String toString(String field) {
-        return "MinDocQuery(minDoc=" + minDoc  + ")";
+        return "MinDocQuery(minDoc=" + minDoc + ")";
     }
 }

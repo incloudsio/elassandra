@@ -1,4 +1,15 @@
 /*
+ * SPDX-License-Identifier: Apache-2.0
+ *
+ * The OpenSearch Contributors require contributions made to
+ * this file be licensed under the Apache-2.0 license or a
+ * compatible open source license.
+ *
+ * Modifications Copyright OpenSearch Contributors. See
+ * GitHub history for details.
+ */
+
+/*
  * Licensed to Elasticsearch under one or more contributor
  * license agreements. See the NOTICE file distributed with
  * this work for additional information regarding copyright
@@ -16,35 +27,33 @@
  * specific language governing permissions and limitations
  * under the License.
  */
-apply plugin: 'elasticsearch.esplugin'
 
-esplugin {
+import org.opensearch.gradle.info.BuildParams
+
+apply plugin: 'opensearch.opensearchplugin'
+apply plugin: 'opensearch.yaml-rest-test'
+apply plugin: 'opensearch.java-rest-test'
+
+opensearchplugin {
   name 'rest-handler'
   description 'An example plugin showing how to register a REST handler'
-  classname 'org.elasticsearch.example.resthandler.ExampleRestHandlerPlugin'
+  classname 'org.opensearch.example.resthandler.ExampleRestHandlerPlugin'
   licenseFile rootProject.file('licenses/APACHE-LICENSE-2.0.txt')
   noticeFile rootProject.file('NOTICE.txt')
 }
 
 // No unit tests in this example
-unitTest.enabled = false
+test.enabled = false
 
-task exampleFixture(type: org.elasticsearch.gradle.test.AntFixture) {
-  dependsOn testClasses
-  env 'CLASSPATH', "${ -> project.sourceSets.test.runtimeClasspath.asPath }"
-  executable = new File(project.runtimeJavaHome, 'bin/java')
-  args 'org.elasticsearch.example.resthandler.ExampleFixture', baseDir, 'TEST'
+tasks.register("exampleFixture", org.opensearch.gradle.test.AntFixture) {
+  dependsOn sourceSets.javaRestTest.runtimeClasspath
+  env 'CLASSPATH', "${-> project.sourceSets.javaRestTest.runtimeClasspath.asPath}"
+  executable = "${BuildParams.runtimeJavaHome}/bin/java"
+  args 'org.opensearch.example.resthandler.ExampleFixture', baseDir, 'TEST'
 }
 
-integTestCluster {
+javaRestTest {
   dependsOn exampleFixture
-}
-integTestRunner {
-  systemProperty 'external.address', "${ -> exampleFixture.addressAndPort }"
+  nonInputProperties.systemProperty 'external.address', "${-> exampleFixture.addressAndPort}"
 }
 
-testingConventions.naming {
-  IT {
-    baseClass 'org.elasticsearch.test.ESTestCase'
-  }
-}

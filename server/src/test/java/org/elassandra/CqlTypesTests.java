@@ -30,31 +30,31 @@ import org.apache.cassandra.service.StorageService;
 import org.apache.cassandra.utils.UUIDGen;
 import org.apache.lucene.search.join.ScoreMode;
 import org.elassandra.cluster.Serializer;
-import org.elasticsearch.action.DocWriteResponse;
-import org.elasticsearch.action.admin.indices.create.CreateIndexRequestBuilder;
-import org.elasticsearch.action.index.IndexResponse;
-import org.elasticsearch.action.search.SearchResponse;
-import org.elasticsearch.action.update.UpdateResponse;
-import org.elasticsearch.client.Response;
-import org.elasticsearch.common.geo.GeoPoint;
-import org.elasticsearch.common.geo.GeoUtils;
-import org.elasticsearch.common.settings.Settings;
-import org.elasticsearch.common.xcontent.XContentBuilder;
-import org.elasticsearch.common.xcontent.XContentFactory;
-import org.elasticsearch.common.xcontent.XContentType;
-import org.elasticsearch.index.query.InnerHitBuilder;
-import org.elasticsearch.index.query.Operator;
-import org.elasticsearch.index.query.QueryBuilder;
-import org.elasticsearch.index.query.QueryBuilders;
-import org.elasticsearch.search.aggregations.Aggregation;
-import org.elasticsearch.search.SearchHit;
-import org.elasticsearch.search.aggregations.AggregationBuilders;
-import org.elasticsearch.search.aggregations.bucket.nested.InternalNested;
-import org.elasticsearch.search.aggregations.metrics.sum.InternalSum;
-import org.elasticsearch.search.sort.NestedSortBuilder;
-import org.elasticsearch.search.sort.SortBuilders;
-import org.elasticsearch.search.sort.SortOrder;
-import org.elasticsearch.test.ESSingleNodeTestCase;
+import org.opensearch.action.DocWriteResponse;
+import org.opensearch.action.admin.indices.create.CreateIndexRequestBuilder;
+import org.opensearch.action.index.IndexResponse;
+import org.opensearch.action.search.SearchResponse;
+import org.opensearch.action.update.UpdateResponse;
+import org.opensearch.client.Response;
+import org.opensearch.common.geo.GeoPoint;
+import org.opensearch.common.geo.GeoUtils;
+import org.opensearch.common.settings.Settings;
+import org.opensearch.common.xcontent.XContentBuilder;
+import org.opensearch.common.xcontent.XContentFactory;
+import org.opensearch.common.xcontent.XContentType;
+import org.opensearch.index.query.InnerHitBuilder;
+import org.opensearch.index.query.Operator;
+import org.opensearch.index.query.QueryBuilder;
+import org.opensearch.index.query.QueryBuilders;
+import org.opensearch.search.aggregations.Aggregation;
+import org.opensearch.search.SearchHit;
+import org.opensearch.search.aggregations.AggregationBuilders;
+import org.opensearch.search.aggregations.bucket.nested.InternalNested;
+import org.opensearch.search.aggregations.metrics.InternalSum;
+import org.opensearch.search.sort.NestedSortBuilder;
+import org.opensearch.search.sort.SortBuilders;
+import org.opensearch.search.sort.SortOrder;
+import org.opensearch.test.OpenSearchSingleNodeTestCase;
 import org.junit.Ignore;
 import org.junit.Test;
 
@@ -67,7 +67,7 @@ import java.util.*;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
-import static org.elasticsearch.test.hamcrest.ElasticsearchAssertions.assertAcked;
+import static org.opensearch.test.hamcrest.OpenSearchAssertions.assertAcked;
 import static org.hamcrest.Matchers.equalTo;
 
 /**
@@ -76,7 +76,7 @@ import static org.hamcrest.Matchers.equalTo;
  *
  */
 @Ignore("CQL type discovery coverage is not yet compatible with the OpenSearch 1.3 sidecar test environment.")
-public class CqlTypesTests extends ESSingleNodeTestCase {
+public class CqlTypesTests extends OpenSearchSingleNodeTestCase {
 
     @Test
     public void testTest() throws Exception {
@@ -109,7 +109,7 @@ public class CqlTypesTests extends ESSingleNodeTestCase {
             .setSource("{\"ip\": \"22.22.22.22\", \"netmask\":32, \"prod\" : true, \"description\": \"my big server\" }", XContentType.JSON)
             .get().getResult(), DocWriteResponse.Result.CREATED);
 
-        assertThat(client().prepareSearch().setIndices("cmdb").setTypes("server").setQuery(QueryBuilders.matchAllQuery()).get().getHits().getTotalHits(), equalTo(3L));
+        assertThat(client().prepareSearch().setIndices("cmdb").setTypes("server").setQuery(QueryBuilders.matchAllQuery()).get().getHits().getTotalHits().value, equalTo(3L));
     }
 
     @Test
@@ -145,7 +145,7 @@ public class CqlTypesTests extends ESSingleNodeTestCase {
         assertThat(fields.get("c14"),equalTo("3.1416"));
 
         process(ConsistencyLevel.ONE,"insert into ks1.natives (c1,c2,c3,c4,c5,c6,c7,c8,c9,c10,c11,c12,c13,c14) VALUES ('tutu', 'titi', '2016-11-11T00:00:00.000Z', 1, 45, 1.0, 2.23, false,textAsBlob('bdb14fbe076f6b94444c660e36a400151f26fc6f'),ae8c9260-dd02-11e6-b9d5-bbfb41c263ba,ae8c9260-dd02-11e6-b9d5-bbfb41c263ba, 1, 1, 3.1416)");
-        assertThat(client().prepareSearch().setIndices("ks1").setTypes("natives").setQuery(QueryBuilders.matchAllQuery()).get().getHits().getTotalHits(), equalTo(2L));
+        assertThat(client().prepareSearch().setIndices("ks1").setTypes("natives").setQuery(QueryBuilders.matchAllQuery()).get().getHits().getTotalHits().value, equalTo(2L));
 
         fields = client().prepareSearch().setIndices("ks1").setTypes("natives").setQuery(QueryBuilders.queryStringQuery("c5:45")).get().getHits().getHits()[0].getSourceAsMap();
         assertThat(fields.get("c2"), equalTo("titi"));
@@ -199,7 +199,7 @@ public class CqlTypesTests extends ESSingleNodeTestCase {
                     .setTypes(String.format(Locale.ROOT,"t%s",type))
                     .setQuery(QueryBuilders.matchAllQuery())
                     .storedFields("_id","_routing","_ttl","_timestamp","_source","v")
-                    .get().getHits().getTotalHits(), equalTo(1L));
+                    .get().getHits().getTotalHits().value, equalTo(1L));
         }
     }
 
@@ -250,7 +250,7 @@ public class CqlTypesTests extends ESSingleNodeTestCase {
                     .setTypes(String.format(Locale.ROOT,"t%s", name))
                     .setQuery(QueryBuilders.matchAllQuery())
                     .storedFields("_id","_routing","_ttl","_timestamp","_source","ck","v")
-                    .get().getHits().getTotalHits(), equalTo(1L));
+                    .get().getHits().getTotalHits().value, equalTo(1L));
         }
 
         // range delete to test delete by query
@@ -266,7 +266,7 @@ public class CqlTypesTests extends ESSingleNodeTestCase {
                     .setIndices("ks"+i)
                     .setTypes(String.format(Locale.ROOT,"t%s", name))
                     .setQuery(QueryBuilders.matchAllQuery())
-                    .get().getHits().getTotalHits(), equalTo(0L));
+                    .get().getHits().getTotalHits().value, equalTo(0L));
             }
         }
     }
@@ -293,7 +293,7 @@ public class CqlTypesTests extends ESSingleNodeTestCase {
                     .must(QueryBuilders.matchAllQuery())
                     .filter(QueryBuilders.geoDistanceQuery("geohash").distance("20km").point(-25.068403, 29.411767)))
                 .get();
-        assertThat(rsp.getHits().getTotalHits(),equalTo(1L));
+        assertThat(rsp.getHits().getTotalHits().value,equalTo(1L));
     }
 
     // #282
@@ -335,7 +335,7 @@ public class CqlTypesTests extends ESSingleNodeTestCase {
     }
 
     // #91 test
-    // mvn test -Pdev -pl org.elasticsearch:elasticsearch -Dtests.seed=622A2B0618CE4676 -Dtests.class=org.elassandra.CqlTypesTests -Dtests.method="testMapAsObject" -Des.logger.level=ERROR -Dtests.assertion.disabled=false -Dtests.security.manager=false -Dtests.heap.size=1024m -Dtests.locale=ro-RO -Dtests.timezone=America/Toronto
+    // mvn test -Pdev -pl org.opensearch:elasticsearch -Dtests.seed=622A2B0618CE4676 -Dtests.class=org.elassandra.CqlTypesTests -Dtests.method="testMapAsObject" -Des.logger.level=ERROR -Dtests.assertion.disabled=false -Dtests.security.manager=false -Dtests.heap.size=1024m -Dtests.locale=ro-RO -Dtests.timezone=America/Toronto
     @Test
     public void testMapAsObject() throws Exception {
         createIndex("test");
@@ -377,19 +377,19 @@ public class CqlTypesTests extends ESSingleNodeTestCase {
         for(int i=0; i < N; i++) {
             process(ConsistencyLevel.ONE,String.format(Locale.ROOT, "insert into test.event_test (id, x, strings, metrics) VALUES ('%d', %d, {'key%d':'b%d'}, {'k1':%d})", i, i, i, i, i));
         }
-        assertThat(client().prepareSearch().setIndices("test").setTypes("event_test").setQuery(QueryBuilders.matchAllQuery()).get().getHits().getTotalHits(), equalTo(N));
+        assertThat(client().prepareSearch().setIndices("test").setTypes("event_test").setQuery(QueryBuilders.matchAllQuery()).get().getHits().getTotalHits().value, equalTo(N));
 
         assertThat(client().prepareSearch().setIndices("test").setTypes("event_test")
                 .setQuery(QueryBuilders.nestedQuery("strings",
                         QueryBuilders.termQuery("strings.key1", "b1"),
                         RandomPicks.randomFrom(random(), ScoreMode.values())))
-                .get().getHits().getTotalHits(), equalTo(1L));
+                .get().getHits().getTotalHits().value, equalTo(1L));
 
         assertThat(client().prepareSearch().setIndices("test").setTypes("event_test")
                 .setQuery(QueryBuilders.nestedQuery("strings",
                         QueryBuilders.termsQuery("strings.key1", "x", "b1"),
                         RandomPicks.randomFrom(random(), ScoreMode.values())))
-                .get().getHits().getTotalHits(), equalTo(1L));
+                .get().getHits().getTotalHits().value, equalTo(1L));
 
         assertThat(client().prepareSearch().setIndices("test").setTypes("event_test")
                 .setQuery(QueryBuilders.boolQuery()
@@ -397,12 +397,12 @@ public class CqlTypesTests extends ESSingleNodeTestCase {
                         .should(QueryBuilders.nestedQuery("strings", QueryBuilders.termsQuery("strings.key1", "x", "b1"), RandomPicks.randomFrom(random(), ScoreMode.values())))
                         .should(QueryBuilders.nestedQuery("strings", QueryBuilders.termsQuery("strings.key2", "x", "b2"), RandomPicks.randomFrom(random(), ScoreMode.values())))
                         .minimumShouldMatch(1))
-                .get().getHits().getTotalHits(), equalTo(2L));
+                .get().getHits().getTotalHits().value, equalTo(2L));
 
         // test2 support string query because mapping is available
-        assertThat(client().prepareSearch().setIndices("test2").setTypes("event_test").setQuery(QueryBuilders.matchAllQuery()).get().getHits().getTotalHits(), equalTo(N));
-        assertThat(client().prepareSearch().setIndices("test2").setTypes("event_test").setQuery(QueryBuilders.nestedQuery("strings", QueryBuilders.termQuery("strings.key1", "b1"), RandomPicks.randomFrom(random(), ScoreMode.values()))).get().getHits().getTotalHits(), equalTo(1L));
-        assertThat(client().prepareSearch().setIndices("test2").setTypes("event_test").setQuery(QueryBuilders.nestedQuery("strings", QueryBuilders.queryStringQuery("strings.key1:b1"), RandomPicks.randomFrom(random(), ScoreMode.values()))).get().getHits().getTotalHits(), equalTo(1L));
+        assertThat(client().prepareSearch().setIndices("test2").setTypes("event_test").setQuery(QueryBuilders.matchAllQuery()).get().getHits().getTotalHits().value, equalTo(N));
+        assertThat(client().prepareSearch().setIndices("test2").setTypes("event_test").setQuery(QueryBuilders.nestedQuery("strings", QueryBuilders.termQuery("strings.key1", "b1"), RandomPicks.randomFrom(random(), ScoreMode.values()))).get().getHits().getTotalHits().value, equalTo(1L));
+        assertThat(client().prepareSearch().setIndices("test2").setTypes("event_test").setQuery(QueryBuilders.nestedQuery("strings", QueryBuilders.queryStringQuery("strings.key1:b1"), RandomPicks.randomFrom(random(), ScoreMode.values()))).get().getHits().getTotalHits().value, equalTo(1L));
 
         // aggregation on key
         SearchResponse rsp = client().prepareSearch().setIndices("test").setTypes("event_test")
@@ -444,8 +444,8 @@ public class CqlTypesTests extends ESSingleNodeTestCase {
         for(int i=0; i < N; i++)
             process(ConsistencyLevel.ONE,String.format(Locale.ROOT, "insert into test.event_test (id,strings) VALUES ('%d',{'key%d':'b%d'})", i, i, i));
 
-        assertThat(client().prepareSearch().setIndices("test").setTypes("event_test").setQuery(QueryBuilders.matchAllQuery()).get().getHits().getTotalHits(), equalTo(N));
-        assertThat(client().prepareSearch().setIndices("test").setTypes("event_test").setQuery(QueryBuilders.nestedQuery("strings", QueryBuilders.queryStringQuery("strings.key1:b1"), RandomPicks.randomFrom(random(), ScoreMode.values()))).get().getHits().getTotalHits(), equalTo(1L));
+        assertThat(client().prepareSearch().setIndices("test").setTypes("event_test").setQuery(QueryBuilders.matchAllQuery()).get().getHits().getTotalHits().value, equalTo(N));
+        assertThat(client().prepareSearch().setIndices("test").setTypes("event_test").setQuery(QueryBuilders.nestedQuery("strings", QueryBuilders.queryStringQuery("strings.key1:b1"), RandomPicks.randomFrom(random(), ScoreMode.values()))).get().getHits().getTotalHits().value, equalTo(1L));
     }
 
     @Test
@@ -479,8 +479,8 @@ public class CqlTypesTests extends ESSingleNodeTestCase {
         // wait asynchronous index rebuild triggered by creating the index.
         waitIndexRebuilt("test", Collections.singletonList("event_test"), 10000L);
 
-        assertThat(client().prepareSearch().setIndices("test").setTypes("event_test").setQuery(QueryBuilders.matchAllQuery()).get().getHits().getTotalHits(), equalTo(N));
-        assertThat(client().prepareSearch().setIndices("test").setTypes("event_test").setQuery(QueryBuilders.nestedQuery("strings", QueryBuilders.queryStringQuery("strings.key1:b1"), RandomPicks.randomFrom(random(), ScoreMode.values()))).get().getHits().getTotalHits(), equalTo(1L));
+        assertThat(client().prepareSearch().setIndices("test").setTypes("event_test").setQuery(QueryBuilders.matchAllQuery()).get().getHits().getTotalHits().value, equalTo(N));
+        assertThat(client().prepareSearch().setIndices("test").setTypes("event_test").setQuery(QueryBuilders.nestedQuery("strings", QueryBuilders.queryStringQuery("strings.key1:b1"), RandomPicks.randomFrom(random(), ScoreMode.values()))).get().getHits().getTotalHits().value, equalTo(1L));
     }
 
     // #257 The index is still keeping dynamic update even that index mapping has configured dynamic: false
@@ -517,16 +517,16 @@ public class CqlTypesTests extends ESSingleNodeTestCase {
         process(ConsistencyLevel.ONE,"insert into mytest.mymaptable (id, name, counters) values ('john.d', 'john', {'tps':1000, 'retry':1});");
         process(ConsistencyLevel.ONE,"insert into mytest.mymaptable (id, name, counters) values ('Kelly.S', 'kelly', {'tps':1200, 'fail':2, 'pending':100}); ");
 
-        assertThat(client().prepareSearch().setIndices("mytest").setTypes("mymaptable").setQuery(QueryBuilders.matchAllQuery()).get().getHits().getTotalHits(), equalTo(2L));
+        assertThat(client().prepareSearch().setIndices("mytest").setTypes("mymaptable").setQuery(QueryBuilders.matchAllQuery()).get().getHits().getTotalHits().value, equalTo(2L));
         assertThat(client().prepareSearch().setIndices("mytest").setTypes("mymaptable").setQuery(QueryBuilders.nestedQuery("counters", QueryBuilders.queryStringQuery("counters.retry:1"),
-                RandomPicks.randomFrom(random(), ScoreMode.values()))).get().getHits().getTotalHits(), equalTo(1L));
+                RandomPicks.randomFrom(random(), ScoreMode.values()))).get().getHits().getTotalHits().value, equalTo(1L));
         assertThat(client().prepareSearch().setIndices("mytest").setTypes("mymaptable").setQuery(QueryBuilders.nestedQuery("counters", QueryBuilders.queryStringQuery("counters.fail:2"),
-                RandomPicks.randomFrom(random(), ScoreMode.values()))).get().getHits().getTotalHits(), equalTo(1L));
+                RandomPicks.randomFrom(random(), ScoreMode.values()))).get().getHits().getTotalHits().value, equalTo(1L));
         assertThat(client().prepareSearch().setIndices("mytest").setTypes("mymaptable").setQuery(QueryBuilders.nestedQuery("counters", QueryBuilders.queryStringQuery("counters.tps:1200"),
-                RandomPicks.randomFrom(random(), ScoreMode.values()))).get().getHits().getTotalHits(), equalTo(0L));
+                RandomPicks.randomFrom(random(), ScoreMode.values()))).get().getHits().getTotalHits().value, equalTo(0L));
     }
 
-    // mvn test -Pdev -pl org.elasticsearch:elasticsearch -Dtests.seed=622A2B0618CE4676 -Dtests.class=org.elassandra.CqlTypesTests -Dtests.method="testMapAsObjectWithDynamicMapping" -Des.logger.level=ERROR -Dtests.assertion.disabled=false -Dtests.security.manager=false -Dtests.heap.size=1024m -Dtests.locale=ro-RO -Dtests.timezone=America/Toronto
+    // mvn test -Pdev -pl org.opensearch:elasticsearch -Dtests.seed=622A2B0618CE4676 -Dtests.class=org.elassandra.CqlTypesTests -Dtests.method="testMapAsObjectWithDynamicMapping" -Des.logger.level=ERROR -Dtests.assertion.disabled=false -Dtests.security.manager=false -Dtests.heap.size=1024m -Dtests.locale=ro-RO -Dtests.timezone=America/Toronto
     @Test
     public void testMapAsObjectWithDynamicMapping() throws Exception {
         createIndex("test");
@@ -566,8 +566,8 @@ public class CqlTypesTests extends ESSingleNodeTestCase {
         for(int i=0; i < N; i++)
             process(ConsistencyLevel.ONE,String.format(Locale.ROOT, "insert into test.event_test (id,strings) VALUES ('%d',{'key%d':'test b%d'})", i, i, i));
 
-        assertThat(client().prepareSearch().setIndices("test").setTypes("event_test").setQuery(QueryBuilders.matchAllQuery()).get().getHits().getTotalHits(), equalTo(N));
-        assertThat(client().prepareSearch().setIndices("test").setTypes("event_test").setQuery(QueryBuilders.nestedQuery("strings",QueryBuilders.matchQuery("strings.key1", "test b1"), RandomPicks.randomFrom(random(), ScoreMode.values()))).get().getHits().getTotalHits(), equalTo(1L));
+        assertThat(client().prepareSearch().setIndices("test").setTypes("event_test").setQuery(QueryBuilders.matchAllQuery()).get().getHits().getTotalHits().value, equalTo(N));
+        assertThat(client().prepareSearch().setIndices("test").setTypes("event_test").setQuery(QueryBuilders.nestedQuery("strings",QueryBuilders.matchQuery("strings.key1", "test b1"), RandomPicks.randomFrom(random(), ScoreMode.values()))).get().getHits().getTotalHits().value, equalTo(1L));
     }
 
 
@@ -613,16 +613,16 @@ public class CqlTypesTests extends ESSingleNodeTestCase {
         }
 
 
-        assertThat(client().prepareSearch().setIndices("test").setTypes("ents_test").setQuery(QueryBuilders.matchAllQuery()).get().getHits().getTotalHits(), equalTo(N*2));
-        assertThat(client().prepareSearch().setIndices("test").setTypes("ents_test").setQuery(QueryBuilders.termQuery("int_coerce", 1)).get().getHits().getTotalHits(), equalTo(1L));
-        assertThat(client().prepareSearch().setIndices("test").setTypes("ents_test").setQuery(QueryBuilders.termQuery("int_not_coerce", 1)).get().getHits().getTotalHits(), equalTo(1L));
+        assertThat(client().prepareSearch().setIndices("test").setTypes("ents_test").setQuery(QueryBuilders.matchAllQuery()).get().getHits().getTotalHits().value, equalTo(N*2));
+        assertThat(client().prepareSearch().setIndices("test").setTypes("ents_test").setQuery(QueryBuilders.termQuery("int_coerce", 1)).get().getHits().getTotalHits().value, equalTo(1L));
+        assertThat(client().prepareSearch().setIndices("test").setTypes("ents_test").setQuery(QueryBuilders.termQuery("int_not_coerce", 1)).get().getHits().getTotalHits().value, equalTo(1L));
     }
 
 
     // #91 test
     // see https://www.elastic.co/guide/en/elasticsearch/reference/2.4/null-value.html
     // see https://www.datastax.com/dev/blog/cql3_collections (empty list = null)
-    // mvn test -Pdev -pl org.elasticsearch:elasticsearch -Dtests.seed=622A2B0618CE4676 -Dtests.class=org.elassandra.CqlTypesTests -Dtests.method="testNullValue" -Des.logger.level=ERROR -Dtests.assertion.disabled=false -Dtests.security.manager=false -Dtests.heap.size=1024m -Dtests.locale=ro-RO -Dtests.timezone=America/Toronto
+    // mvn test -Pdev -pl org.opensearch:elasticsearch -Dtests.seed=622A2B0618CE4676 -Dtests.class=org.elassandra.CqlTypesTests -Dtests.method="testNullValue" -Des.logger.level=ERROR -Dtests.assertion.disabled=false -Dtests.security.manager=false -Dtests.heap.size=1024m -Dtests.locale=ro-RO -Dtests.timezone=America/Toronto
     @Test
     public void testNullValue() throws Exception {
         XContentBuilder mapping = XContentFactory.jsonBuilder()
@@ -654,11 +654,11 @@ public class CqlTypesTests extends ESSingleNodeTestCase {
         assertThat(client().prepareIndex("test", "my_type", "4").setSource("{\"status_code\": [] }", XContentType.JSON).get().getResult(), equalTo(DocWriteResponse.Result.CREATED));
         assertThat(client().prepareIndex("test", "my_type", "5").setSource("{\"status_code\": \"NULL\" }", XContentType.JSON).get().getResult(), equalTo(DocWriteResponse.Result.CREATED));
 
-        assertThat(client().prepareSearch().setIndices("test").setTypes("my_type").setQuery(QueryBuilders.queryStringQuery("status_code:NULL")).get().getHits().getTotalHits(), equalTo(3L));
+        assertThat(client().prepareSearch().setIndices("test").setTypes("my_type").setQuery(QueryBuilders.queryStringQuery("status_code:NULL")).get().getHits().getTotalHits().value, equalTo(3L));
     }
 
     // #112 test
-    // mvn test -Pdev -pl org.elasticsearch:elasticsearch -Dtests.seed=622A2B0618CE4676 -Dtests.class=org.elassandra.CqlTypesTests -Dtests.method="testSets" -Des.logger.level=ERROR -Dtests.assertion.disabled=false -Dtests.security.manager=false -Dtests.heap.size=1024m -Dtests.locale=ro-RO -Dtests.timezone=America/Toronto
+    // mvn test -Pdev -pl org.opensearch:elasticsearch -Dtests.seed=622A2B0618CE4676 -Dtests.class=org.elassandra.CqlTypesTests -Dtests.method="testSets" -Des.logger.level=ERROR -Dtests.assertion.disabled=false -Dtests.security.manager=false -Dtests.heap.size=1024m -Dtests.locale=ro-RO -Dtests.timezone=America/Toronto
     @Test
     public void testSets() throws Exception {
         XContentBuilder mapping = XContentFactory.jsonBuilder()
@@ -695,19 +695,19 @@ public class CqlTypesTests extends ESSingleNodeTestCase {
         assertAcked(client().admin().indices().prepareCreate("test").addMapping("tab_set", mapping));
         ensureGreen("test");
         process(ConsistencyLevel.ONE,"insert into test.tab_set (\"_id\",item,items,attrs) values ('1',{name:'hello'},{{name:'world'},{name:'heaven'}},{'blue','red'})");
-        assertThat(client().prepareSearch().setIndices("test").setTypes("tab_set").setQuery(QueryBuilders.queryStringQuery("items.name:heaven")).get().getHits().getTotalHits(), equalTo(1L));
-        assertThat(client().prepareSearch().setIndices("test").setTypes("tab_set").setQuery(QueryBuilders.queryStringQuery("items.name:world")).get().getHits().getTotalHits(), equalTo(1L));
-        assertThat(client().prepareSearch().setIndices("test").setTypes("tab_set").setQuery(QueryBuilders.queryStringQuery("red")).get().getHits().getTotalHits(), equalTo(1L));
+        assertThat(client().prepareSearch().setIndices("test").setTypes("tab_set").setQuery(QueryBuilders.queryStringQuery("items.name:heaven")).get().getHits().getTotalHits().value, equalTo(1L));
+        assertThat(client().prepareSearch().setIndices("test").setTypes("tab_set").setQuery(QueryBuilders.queryStringQuery("items.name:world")).get().getHits().getTotalHits().value, equalTo(1L));
+        assertThat(client().prepareSearch().setIndices("test").setTypes("tab_set").setQuery(QueryBuilders.queryStringQuery("red")).get().getHits().getTotalHits().value, equalTo(1L));
 
         process(ConsistencyLevel.ONE,"insert into test.tab_set (\"_id\",item,items,attrs) values ('1',{name:'hello'},{{name:'heaven'}},{'blue'})");
-        assertThat(client().prepareSearch().setIndices("test").setTypes("tab_set").setQuery(QueryBuilders.queryStringQuery("items.name:heaven")).get().getHits().getTotalHits(), equalTo(1L));
-        assertThat(client().prepareSearch().setIndices("test").setTypes("tab_set").setQuery(QueryBuilders.queryStringQuery("red")).get().getHits().getTotalHits(), equalTo(0L));
+        assertThat(client().prepareSearch().setIndices("test").setTypes("tab_set").setQuery(QueryBuilders.queryStringQuery("items.name:heaven")).get().getHits().getTotalHits().value, equalTo(1L));
+        assertThat(client().prepareSearch().setIndices("test").setTypes("tab_set").setQuery(QueryBuilders.queryStringQuery("red")).get().getHits().getTotalHits().value, equalTo(0L));
 
         process(ConsistencyLevel.ONE,"update test.tab_set set items = items + {{name:'world'}} where \"_id\" = '1'");
-        assertThat(client().prepareSearch().setIndices("test").setTypes("tab_set").setQuery(QueryBuilders.queryStringQuery("items.name:heaven")).get().getHits().getTotalHits(), equalTo(1L));
-        assertThat(client().prepareSearch().setIndices("test").setTypes("tab_set").setQuery(QueryBuilders.queryStringQuery("items.name:world")).get().getHits().getTotalHits(), equalTo(1L));
+        assertThat(client().prepareSearch().setIndices("test").setTypes("tab_set").setQuery(QueryBuilders.queryStringQuery("items.name:heaven")).get().getHits().getTotalHits().value, equalTo(1L));
+        assertThat(client().prepareSearch().setIndices("test").setTypes("tab_set").setQuery(QueryBuilders.queryStringQuery("items.name:world")).get().getHits().getTotalHits().value, equalTo(1L));
         process(ConsistencyLevel.ONE,"update test.tab_set set attrs = attrs + {'yellow'} where \"_id\" = '1'");
-        assertThat(client().prepareSearch().setIndices("test").setTypes("tab_set").setQuery(QueryBuilders.queryStringQuery("yellow")).get().getHits().getTotalHits(), equalTo(1L));
+        assertThat(client().prepareSearch().setIndices("test").setTypes("tab_set").setQuery(QueryBuilders.queryStringQuery("yellow")).get().getHits().getTotalHits().value, equalTo(1L));
     }
 
     // #161 Search over a nested set returns wrong inner_hits
@@ -733,11 +733,11 @@ public class CqlTypesTests extends ESSingleNodeTestCase {
         process(ConsistencyLevel.ONE, "UPDATE test.make_models SET models = models + {{name : 'camaro', date : '2018-02-01 12:50:00'}} WHERE make='gm';");
         process(ConsistencyLevel.ONE, "UPDATE test.make_models SET models = models + {{name : 'chevelle', date : '2018-02-01 12:52:00'}} WHERE make='gm';");
 
-        assertThat(client().prepareSearch().setIndices("test").setTypes("make_models").setQuery(QueryBuilders.nestedQuery("models", QueryBuilders.termQuery("models.name", "galaxie"), RandomPicks.randomFrom(random(), ScoreMode.values()))).get().getHits().getTotalHits(), equalTo(1L));
+        assertThat(client().prepareSearch().setIndices("test").setTypes("make_models").setQuery(QueryBuilders.nestedQuery("models", QueryBuilders.termQuery("models.name", "galaxie"), RandomPicks.randomFrom(random(), ScoreMode.values()))).get().getHits().getTotalHits().value, equalTo(1L));
         process(ConsistencyLevel.ONE, "UPDATE test.make_models SET models = models + {{name : 'mustang', date : '2018-02-01 11:50:00'}} WHERE make='ford';");
-        assertThat(client().prepareSearch().setIndices("test").setTypes("make_models").setQuery(QueryBuilders.nestedQuery("models", QueryBuilders.termQuery("models.name", "galaxie"), RandomPicks.randomFrom(random(), ScoreMode.values()))).get().getHits().getTotalHits(), equalTo(1L));
+        assertThat(client().prepareSearch().setIndices("test").setTypes("make_models").setQuery(QueryBuilders.nestedQuery("models", QueryBuilders.termQuery("models.name", "galaxie"), RandomPicks.randomFrom(random(), ScoreMode.values()))).get().getHits().getTotalHits().value, equalTo(1L));
         process(ConsistencyLevel.ONE, "UPDATE test.make_models SET models = models + {{name : 'galaxie', date : '2018-02-01 11:51:00'}} WHERE make='ford';");
-        assertThat(client().prepareSearch().setIndices("test").setTypes("make_models").setQuery(QueryBuilders.nestedQuery("models", QueryBuilders.termQuery("models.name", "galaxie"), RandomPicks.randomFrom(random(), ScoreMode.values()))).get().getHits().getTotalHits(), equalTo(1L));
+        assertThat(client().prepareSearch().setIndices("test").setTypes("make_models").setQuery(QueryBuilders.nestedQuery("models", QueryBuilders.termQuery("models.name", "galaxie"), RandomPicks.randomFrom(random(), ScoreMode.values()))).get().getHits().getTotalHits().value, equalTo(1L));
     }
 
     // Nested objects with inner hits query returns "extracted source isn't an object or an array" (#346)
@@ -812,7 +812,7 @@ public class CqlTypesTests extends ESSingleNodeTestCase {
             ))
             .setFetchSource(true)
             .get();
-        assertThat(resp.getHits().getTotalHits(), equalTo(1L));
+        assertThat(resp.getHits().getTotalHits().value, equalTo(1L));
         System.out.println("hits[0]=" + resp.getHits().getAt(0).getSourceAsString());
         System.out.println("inner_hits="+resp.getHits().getAt(0).getInnerHits());
         assertNotNull(resp.getHits().getAt(0).getInnerHits());
@@ -874,49 +874,49 @@ public class CqlTypesTests extends ESSingleNodeTestCase {
         System.out.println("hits[1]="+resp.getHits().getHits()[1].getSourceAsString());
         System.out.println("hits[2]="+resp.getHits().getHits()[2].getSourceAsString());
 
-        assertThat(resp.getHits().getTotalHits(), equalTo(3L));
+        assertThat(resp.getHits().getTotalHits().value, equalTo(3L));
 
         assertThat(client().prepareSearch().setIndices("test-issue-index")
                 .setTypes("test-issue")
                 .setQuery(QueryBuilders.termQuery("fieldA.keyword", "A"))
-                .get().getHits().getTotalHits(), equalTo(3L));
+                .get().getHits().getTotalHits().value, equalTo(3L));
         assertThat(client().prepareSearch().setIndices("test-issue-index")
                 .setTypes("test-issue")
                 .setQuery(QueryBuilders.termQuery("fieldB.keyword", "B"))
-                .get().getHits().getTotalHits(), equalTo(3L));
+                .get().getHits().getTotalHits().value, equalTo(3L));
 
         assertThat(client().prepareSearch().setIndices("test-issue-index")
                 .setTypes("test-issue")
                 .setQuery(QueryBuilders.nestedQuery("nested", QueryBuilders.termQuery("nested.fieldC.keyword", "C"), RandomPicks.randomFrom(random(), ScoreMode.values())))
-                .get().getHits().getTotalHits(), equalTo(1L));
+                .get().getHits().getTotalHits().value, equalTo(1L));
         assertThat(client().prepareSearch().setIndices("test-issue-index")
                 .setTypes("test-issue")
                 .setQuery(QueryBuilders.nestedQuery("nested", QueryBuilders.termQuery("nested.fieldD.keyword", "D"), RandomPicks.randomFrom(random(), ScoreMode.values())))
-                .get().getHits().getTotalHits(), equalTo(1L));
+                .get().getHits().getTotalHits().value, equalTo(1L));
         assertThat(client().prepareSearch().setIndices("test-issue-index")
                 .setTypes("test-issue")
                 .setQuery(QueryBuilders.nestedQuery("nested", QueryBuilders.termQuery("nested.fieldE.keyword", "E"), RandomPicks.randomFrom(random(), ScoreMode.values())))
-                .get().getHits().getTotalHits(), equalTo(1L));
+                .get().getHits().getTotalHits().value, equalTo(1L));
         assertThat(client().prepareSearch().setIndices("test-issue-index")
                 .setTypes("test-issue")
                 .setQuery(QueryBuilders.nestedQuery("nested", QueryBuilders.termQuery("nested.fieldF.keyword", "F"), RandomPicks.randomFrom(random(), ScoreMode.values())))
-                .get().getHits().getTotalHits(), equalTo(1L));
+                .get().getHits().getTotalHits().value, equalTo(1L));
         assertThat(client().prepareSearch().setIndices("test-issue-index")
                 .setTypes("test-issue")
                 .setQuery(QueryBuilders.nestedQuery("nested", QueryBuilders.termQuery("nested.fieldG.keyword", "G"), RandomPicks.randomFrom(random(), ScoreMode.values())))
-                .get().getHits().getTotalHits(), equalTo(1L));
+                .get().getHits().getTotalHits().value, equalTo(1L));
         assertThat(client().prepareSearch().setIndices("test-issue-index")
                 .setTypes("test-issue")
                 .setQuery(QueryBuilders.nestedQuery("nested", QueryBuilders.termQuery("nested.fieldH.keyword", "H"), RandomPicks.randomFrom(random(), ScoreMode.values())))
-                .get().getHits().getTotalHits(), equalTo(1L));
+                .get().getHits().getTotalHits().value, equalTo(1L));
         assertThat(client().prepareSearch().setIndices("test-issue-index")
                 .setTypes("test-issue")
                 .setQuery(QueryBuilders.nestedQuery("nested", QueryBuilders.termQuery("nested.fieldI.keyword", "I"), RandomPicks.randomFrom(random(), ScoreMode.values())))
-                .get().getHits().getTotalHits(), equalTo(1L));
+                .get().getHits().getTotalHits().value, equalTo(1L));
         assertThat(client().prepareSearch().setIndices("test-issue-index")
                 .setTypes("test-issue")
                 .setQuery(QueryBuilders.nestedQuery("nested", QueryBuilders.termQuery("nested.fieldJ.keyword", "J"), RandomPicks.randomFrom(random(), ScoreMode.values())))
-                .get().getHits().getTotalHits(), equalTo(1L));
+                .get().getHits().getTotalHits().value, equalTo(1L));
 
     }
 
@@ -944,7 +944,7 @@ public class CqlTypesTests extends ESSingleNodeTestCase {
         process(ConsistencyLevel.ONE, "UPDATE test.table_test SET list = list + [{ id:'bar'}] where id1='1' and id2='2';");
 
         SearchResponse resp = client().prepareSearch().setIndices("test").setTypes("table_test").setQuery(QueryBuilders.matchAllQuery()).get();
-        assertThat(resp.getHits().getTotalHits(), equalTo(1L));
+        assertThat(resp.getHits().getTotalHits().value, equalTo(1L));
         List<Object> list = (List<Object>) resp.getHits().getAt(0).getSourceAsMap().get("list");
         assertThat(list.size(), equalTo(2));
         Map<String, Object> map = (Map<String, Object>)list.get(0);
@@ -952,18 +952,18 @@ public class CqlTypesTests extends ESSingleNodeTestCase {
 
         process(ConsistencyLevel.ONE, "UPDATE test.table_test SET list = list - [{ id:'bar'}] where id1='1' and id2='2';");
         SearchResponse resp2 = client().prepareSearch().setIndices("test").setTypes("table_test").setQuery(QueryBuilders.matchAllQuery()).get();
-        assertThat(resp2.getHits().getTotalHits(), equalTo(1L));
+        assertThat(resp2.getHits().getTotalHits().value, equalTo(1L));
         Map<String, Object> map2 = (Map<String, Object>) resp2.getHits().getAt(0).getSourceAsMap().get("list");
         assertThat(map2.size(), equalTo(1));
 
         // Row delete when all value updated to null, see https://issues.apache.org/jira/browse/CASSANDRA-11805
         process(ConsistencyLevel.ONE, "UPDATE test.table_test SET list = list - [{ id:'foo'}] where id1='1' and id2='2';");
         SearchResponse resp3 = client().prepareSearch().setIndices("test").setTypes("table_test").setQuery(QueryBuilders.matchAllQuery()).get();
-        assertThat(resp3.getHits().getTotalHits(), equalTo(0L));
+        assertThat(resp3.getHits().getTotalHits().value, equalTo(0L));
 
         process(ConsistencyLevel.ONE, "INSERT INTO test.table_test (id1, id2, list) VALUES ('1', '2', null);");
         SearchResponse resp4 = client().prepareSearch().setIndices("test").setTypes("table_test").setQuery(QueryBuilders.matchAllQuery()).get();
-        assertThat(resp4.getHits().getTotalHits(), equalTo(1L));
+        assertThat(resp4.getHits().getTotalHits().value, equalTo(1L));
     }
 
     // #199 unit test
@@ -988,19 +988,19 @@ public class CqlTypesTests extends ESSingleNodeTestCase {
         assertTrue(client().admin().indices().preparePutMapping("test").setType("t1").setSource(mapping).get().isAcknowledged());
         process(ConsistencyLevel.ONE, "UPDATE test.t1 SET id3 = 'foo' where id1='1' and id2='2';");
         SearchResponse resp = client().prepareSearch().setIndices("test").setTypes("t1").setQuery(QueryBuilders.matchAllQuery()).get();
-        assertThat(resp.getHits().getTotalHits(), equalTo(1L));
+        assertThat(resp.getHits().getTotalHits().value, equalTo(1L));
 
         process(ConsistencyLevel.ONE, "UPDATE test.t1 SET id4 = 'foo' where id1='1' and id2='2';");
         resp = client().prepareSearch().setIndices("test").setTypes("t1").setQuery(QueryBuilders.matchAllQuery()).get();
-        assertThat(resp.getHits().getTotalHits(), equalTo(1L));
+        assertThat(resp.getHits().getTotalHits().value, equalTo(1L));
 
         process(ConsistencyLevel.ONE, "UPDATE test.t1 SET id4 = null where id1='1' and id2='2';");
         resp = client().prepareSearch().setIndices("test").setTypes("t1").setQuery(QueryBuilders.matchAllQuery()).get();
-        assertThat(resp.getHits().getTotalHits(), equalTo(1L));
+        assertThat(resp.getHits().getTotalHits().value, equalTo(1L));
 
         process(ConsistencyLevel.ONE, "UPDATE test.t1 SET id3 = null where id1='1' and id2='2';");
         resp = client().prepareSearch().setIndices("test").setTypes("t1").setQuery(QueryBuilders.matchAllQuery()).get();
-        assertThat(resp.getHits().getTotalHits(), equalTo(0L));
+        assertThat(resp.getHits().getTotalHits().value, equalTo(0L));
     }
 
     // test CQL timeuuid, date and time mapping.
@@ -1022,7 +1022,7 @@ public class CqlTypesTests extends ESSingleNodeTestCase {
                 "1", start, end, SimpleDateSerializer.dateStringToDays("2010-10-10"), 10*3600*1000000000L);
 
         SearchResponse resp = client().prepareSearch().setIndices("test").setTypes("event_test").setQuery(QueryBuilders.queryStringQuery("day:2010-10-10")).get();
-        assertThat(resp.getHits().getTotalHits(), equalTo(1L));
+        assertThat(resp.getHits().getTotalHits().value, equalTo(1L));
         assertThat(resp.getHits().getHits()[0].getSourceAsMap().get("day"), equalTo("2010-10-10T00:00:00.000Z"));
         assertThat(resp.getHits().getHits()[0].getSourceAsMap().get("hour"), equalTo(36000000000000L));
         assertThat(resp.getHits().getHits()[0].getSourceAsMap().get("start"), equalTo(start.toString()));
@@ -1039,7 +1039,7 @@ public class CqlTypesTests extends ESSingleNodeTestCase {
         assertThat(client().prepareIndex("test", "typeA", "2").setSource("{ \"b\":\"1\", \"x\":\"aaa\" }", XContentType.JSON).get().getResult(), equalTo(DocWriteResponse.Result.CREATED));
         assertThat(client().prepareIndex("test", "typeA", "3").setSource("{ \"c\":\"1\", \"x\":\"aaa\" }", XContentType.JSON).get().getResult(), equalTo(DocWriteResponse.Result.CREATED));
         SearchResponse resp = client().prepareSearch().setIndices("test").setQuery(QueryBuilders.queryStringQuery("q=aaa")).get();
-        assertThat(resp.getHits().getTotalHits(), equalTo(3L));
+        assertThat(resp.getHits().getTotalHits().value, equalTo(3L));
     }
 
     // see issue #142
@@ -1081,7 +1081,7 @@ public class CqlTypesTests extends ESSingleNodeTestCase {
                 .get().getResult(), equalTo(DocWriteResponse.Result.CREATED));
 
         SearchResponse resp = client().prepareSearch().setIndices("test").setQuery(QueryBuilders.matchAllQuery()).get();
-        assertThat(resp.getHits().getTotalHits(), equalTo(2L));
+        assertThat(resp.getHits().getTotalHits().value, equalTo(2L));
         assertThat(resp.getFailedShards(), equalTo(0));
     }
 
@@ -1096,13 +1096,20 @@ public class CqlTypesTests extends ESSingleNodeTestCase {
         process(ConsistencyLevel.ONE,"INSERT INTO example.sessions (id, project_id, day) VALUES (now(), uuid(), toDate(now()));");
 
         SearchResponse resp = client().prepareSearch().setIndices("example").setQuery(QueryBuilders.matchAllQuery()).get();
-        assertThat(resp.getHits().getTotalHits(), equalTo(1L));
+        assertThat(resp.getHits().getTotalHits().value, equalTo(1L));
      }
 
     // #292 test
     @Test
     public void testStringMappedAsMultiFields() throws Exception {
-        process(ConsistencyLevel.ONE, "CREATE KEYSPACE example WITH replication = {'class': 'NetworkTopologyStrategy', 'DC1': 1};");
+        process(
+            ConsistencyLevel.ONE,
+            String.format(
+                Locale.ROOT,
+                "CREATE KEYSPACE example WITH replication = {'class': 'NetworkTopologyStrategy', '%s': 1};",
+                DatabaseDescriptor.getLocalDataCenter()
+            )
+        );
         process(ConsistencyLevel.ONE,"CREATE TABLE example.sessions (id text, day text, PRIMARY KEY ((id)));");
         XContentBuilder mapping = XContentFactory.jsonBuilder()
                 .startObject()
@@ -1129,7 +1136,7 @@ public class CqlTypesTests extends ESSingleNodeTestCase {
                 .addMapping("sessions", mapping));
         process(ConsistencyLevel.ONE,"INSERT INTO example.sessions (id, day) VALUES ('1', '2019-05-01');");
         SearchResponse resp = client().prepareSearch().setIndices("example").setQuery(QueryBuilders.matchAllQuery()).get();
-        assertThat(resp.getHits().getTotalHits(), equalTo(1L));
+        assertThat(resp.getHits().getTotalHits().value, equalTo(1L));
      }
 
     @Test
@@ -1159,7 +1166,14 @@ public class CqlTypesTests extends ESSingleNodeTestCase {
 
     @Test
     public void testClusteringOrderColumnDiscover() throws Exception {
-        process(ConsistencyLevel.ONE, "CREATE KEYSPACE ks WITH replication = {'class': 'NetworkTopologyStrategy', 'DC1': 1};");
+        process(
+            ConsistencyLevel.ONE,
+            String.format(
+                Locale.ROOT,
+                "CREATE KEYSPACE ks WITH replication = {'class': 'NetworkTopologyStrategy', '%s': 1};",
+                DatabaseDescriptor.getLocalDataCenter()
+            )
+        );
         process(ConsistencyLevel.ONE, "CREATE TABLE ks.test (id int, timestamp timestamp, PRIMARY KEY (id, timestamp)) WITH CLUSTERING ORDER BY (timestamp DESC)");
         assertAcked(client().admin().indices().prepareCreate("ks").addMapping("test", discoverMapping("test")));
     }
@@ -1216,11 +1230,11 @@ public class CqlTypesTests extends ESSingleNodeTestCase {
 
         SearchResponse resp = client().prepareSearch().setIndices("test")
                 .setQuery(QueryBuilders.matchQuery("first_name", "John")).get();
-        assertThat(resp.getHits().getTotalHits(), equalTo(1L));
+        assertThat(resp.getHits().getTotalHits().value, equalTo(1L));
 
         resp = client().prepareSearch().setIndices("test")
                 .setQuery(QueryBuilders.matchQuery("full_name", "John Smith").operator(Operator.AND)).get();
-        assertThat(resp.getHits().getTotalHits(), equalTo(1L));
+        assertThat(resp.getHits().getTotalHits().value, equalTo(1L));
     }
 
     @Test
@@ -1260,11 +1274,11 @@ public class CqlTypesTests extends ESSingleNodeTestCase {
 
         SearchResponse resp = client().prepareSearch().setIndices("copytest")
                 .setQuery(QueryBuilders.nestedQuery("nest", QueryBuilders.matchQuery("nest.first_name", "John"), RandomPicks.randomFrom(random(), ScoreMode.values()))).get();
-        assertThat(resp.getHits().getTotalHits(), equalTo(1L));
+        assertThat(resp.getHits().getTotalHits().value, equalTo(1L));
 
         resp = client().prepareSearch().setIndices("copytest")
                 .setQuery(QueryBuilders.nestedQuery("nest", QueryBuilders.matchQuery("nest.full_name", "John Smith").operator(Operator.AND), RandomPicks.randomFrom(random(), ScoreMode.values()))).get();
-        assertThat(resp.getHits().getTotalHits(), equalTo(1L));
+        assertThat(resp.getHits().getTotalHits().value, equalTo(1L));
     }
 
     @Test
@@ -1286,7 +1300,7 @@ public class CqlTypesTests extends ESSingleNodeTestCase {
                 .get().getResult(), equalTo(DocWriteResponse.Result.CREATED));
 
         SearchResponse resp = client().prepareSearch().setIndices("test1").setQuery(QueryBuilders.matchAllQuery()).get();
-        assertThat(resp.getHits().getTotalHits(), equalTo(1L));
+        assertThat(resp.getHits().getTotalHits().value, equalTo(1L));
         String _source = resp.getHits().getHits()[0].getSourceAsString();
         System.out.println(_source);
         assertTrue(_source.contains("\"127.0.0.1\""));
@@ -1345,15 +1359,15 @@ public class CqlTypesTests extends ESSingleNodeTestCase {
                 .get().getResult(), equalTo(DocWriteResponse.Result.CREATED));
 
         SearchResponse resp = client().prepareSearch().setIndices("test1").setQuery(QueryBuilders.termQuery("us.er", "blabla")).get();
-        assertThat(resp.getHits().getTotalHits(), equalTo(1L));
+        assertThat(resp.getHits().getTotalHits().value, equalTo(1L));
         assertThat(((Map<String, Object>)resp.getHits().getAt(0).getSourceAsMap().get("us")).get("er"), equalTo("blabla"));
 
         resp = client().prepareSearch().setIndices("test1").setQuery(QueryBuilders.termQuery("us.form", "foo")).get();
-        assertThat(resp.getHits().getTotalHits(), equalTo(1L));
+        assertThat(resp.getHits().getTotalHits().value, equalTo(1L));
         assertThat(((Map<String, Object>)resp.getHits().getAt(0).getSourceAsMap().get("us")).get("form"), equalTo("foo"));
 
         resp = client().prepareSearch().setIndices("test1").setQuery(QueryBuilders.termQuery("us.mail.to", "bob@foo.com")).get();
-        assertThat(resp.getHits().getTotalHits(), equalTo(1L));
+        assertThat(resp.getHits().getTotalHits().value, equalTo(1L));
         assertThat(((Map<String, Object>)((Map<String, Object>)resp.getHits().getAt(0).getSourceAsMap().get("us")).get("mail")).get("to"), equalTo("bob@foo.com"));
     }
 
@@ -1407,7 +1421,7 @@ public class CqlTypesTests extends ESSingleNodeTestCase {
             assertThat(client().prepareDelete("test", "my_type", "1")
                 .get().getResult(), equalTo(DocWriteResponse.Result.DELETED));
             SearchResponse resp = client().prepareSearch().setIndices("test").setQuery(QueryBuilders.matchAllQuery()).get();
-            assertThat(resp.getHits().getTotalHits(), equalTo(0L));
+            assertThat(resp.getHits().getTotalHits().value, equalTo(0L));
         }
     }
 

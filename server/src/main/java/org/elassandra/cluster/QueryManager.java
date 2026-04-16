@@ -44,29 +44,29 @@ import org.apache.cassandra.utils.UUIDGen;
 import org.elassandra.index.ElasticSecondaryIndex;
 import org.elassandra.index.mapper.internal.HostFieldMapper;
 import org.elassandra.index.mapper.internal.TokenFieldMapper;
-import org.elasticsearch.action.DocWriteRequest;
-import org.elasticsearch.action.index.IndexRequest;
-import org.elasticsearch.cluster.metadata.IndexMetaData;
-import org.elasticsearch.cluster.service.ClusterService;
-import org.elasticsearch.common.bytes.BytesArray;
-import org.elasticsearch.common.bytes.BytesReference;
+import org.opensearch.action.DocWriteRequest;
+import org.opensearch.action.index.IndexRequest;
+import org.opensearch.cluster.metadata.IndexMetadata;
+import org.opensearch.cluster.service.ClusterService;
+import org.opensearch.common.bytes.BytesArray;
+import org.opensearch.common.bytes.BytesReference;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
-import org.elasticsearch.common.document.DocumentField;
-import org.elasticsearch.common.logging.Loggers;
-import org.elasticsearch.common.lucene.uid.VersionsAndSeqNoResolver.DocIdAndVersion;
-import org.elasticsearch.common.settings.Settings;
-import org.elasticsearch.common.xcontent.XContentBuilder;
-import org.elasticsearch.common.xcontent.XContentFactory;
-import org.elasticsearch.common.xcontent.XContentType;
-import org.elasticsearch.index.IndexService;
-import org.elasticsearch.index.engine.Engine;
-import org.elasticsearch.index.engine.VersionConflictEngineException;
+import org.opensearch.common.document.DocumentField;
+import org.opensearch.common.logging.Loggers;
+import org.opensearch.common.lucene.uid.VersionsAndSeqNoResolver.DocIdAndVersion;
+import org.opensearch.common.settings.Settings;
+import org.opensearch.common.xcontent.XContentBuilder;
+import org.opensearch.common.xcontent.XContentFactory;
+import org.opensearch.common.xcontent.XContentType;
+import org.opensearch.index.IndexService;
+import org.opensearch.index.engine.Engine;
+import org.opensearch.index.engine.VersionConflictEngineException;
 import org.elassandra.index.get.GetField;
-import org.elasticsearch.index.mapper.*;
-import org.elasticsearch.index.mapper.CqlMapper.CqlCollection;
-import org.elasticsearch.index.seqno.SequenceNumbers;
-import org.elasticsearch.index.shard.IndexShard;
+import org.opensearch.index.mapper.*;
+import org.opensearch.index.mapper.CqlMapper.CqlCollection;
+import org.opensearch.index.seqno.SequenceNumbers;
+import org.opensearch.index.shard.IndexShard;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
@@ -214,7 +214,7 @@ public class QueryManager {
 
 
     public BytesReference source(final IndexShard indexShard, DocumentMapper docMapper, Map sourceAsMap, Uid uid) throws JsonParseException, JsonMappingException, IOException {
-        if (docMapper.sourceMapper().enabled()  || indexShard.mapperService().getIndexMetaData().isOpaqueStorage()) {
+        if (docMapper.sourceMapper().enabled()  || indexShard.mapperService().getIndexMetadata().isOpaqueStorage()) {
             // retreive from _source columns stored as blob in cassandra if available.
             ByteBuffer bb = (ByteBuffer) sourceAsMap.get(SourceFieldMapper.NAME);
             if (bb != null)
@@ -522,7 +522,7 @@ public class QueryManager {
 
     /** Maps active-shard policy to Cassandra CL (side-car: stub until ActiveShardCount fork is merged). */
     private static ConsistencyLevel activeShardsToCassandraConsistencyLevel(
-        org.elasticsearch.action.support.ActiveShardCount activeShardCount
+        org.opensearch.action.support.ActiveShardCount activeShardCount
     ) {
         return activeShardCount.toCassandraConsistencyLevel();
     }
@@ -531,7 +531,7 @@ public class QueryManager {
     public Object[] rowAsArray(final IndexShard indexShard, final String type, UntypedResultSet.Row row, boolean valueForSearch) throws IOException {
         final Object values[] = new Object[row.getColumns().size()];
         final DocumentMapper documentMapper = indexShard.mapperService().documentMapper(type);
-        final DocumentFieldMappers docFieldMappers = documentMapper.mappers();
+        final org.opensearch.index.mapper.MappingLookup docFieldMappers = documentMapper.mappers();
 
         int i = 0;
         for (ColumnSpecification colSpec : row.getColumns()) {
@@ -695,11 +695,11 @@ public class QueryManager {
         return values;
     }
 
-    public Engine.IndexResult updateDocument(final IndexShard indexShard, final IndexRequest request, final IndexMetaData indexMetaData) throws IOException {
+    public Engine.IndexResult updateDocument(final IndexShard indexShard, final IndexRequest request, final IndexMetadata indexMetaData) throws IOException {
         return upsertDocument(indexShard, request, indexMetaData, true);
     }
 
-    public Engine.IndexResult insertDocument(final IndexShard indexShard, final IndexRequest request, final IndexMetaData indexMetaData) throws IOException {
+    public Engine.IndexResult insertDocument(final IndexShard indexShard, final IndexRequest request, final IndexMetadata indexMetaData) throws IOException {
         return upsertDocument(indexShard, request, indexMetaData, false);
     }
 
@@ -717,7 +717,7 @@ public class QueryManager {
     /**
      * Convert an IndexRequest to a CQL insert
      */
-    private Engine.IndexResult upsertDocument(final IndexShard indexShard, final IndexRequest request, final IndexMetaData indexMetaData, boolean updateOperation) throws IOException {
+    private Engine.IndexResult upsertDocument(final IndexShard indexShard, final IndexRequest request, final IndexMetadata indexMetaData, boolean updateOperation) throws IOException {
         final SourceToParse sourceToParse = SourceToParse.source(request.index(), request.type(), request.id(), request.source(), request.getContentType());
         if (request.routing() != null)
             sourceToParse.routing(request.routing());
@@ -751,12 +751,12 @@ public class QueryManager {
             updateField(sourceMap, entry.getKey(), entry.getValue());  // build a tree from keys #295
 
         final Map<String, ObjectMapper> objectMappers = docMapper.objectMappers();
-        final DocumentFieldMappers fieldMappers = docMapper.mappers();
+        final org.opensearch.index.mapper.MappingLookup fieldMappers = docMapper.mappers();
 
 
         if (logger.isTraceEnabled())
             logger.trace("Insert metadata.version={} index=[{}] table=[{}] id=[{}] source={} consistency={}",
-                this.clusterService.state().metaData().version(),
+                this.clusterService.state().metadata().version(),
                 indexShard.shardId().getIndex().getName(), cfName, request.id(), sourceMap,
                 activeShardsToCassandraConsistencyLevel(request.waitForActiveShards()));
 
@@ -862,7 +862,7 @@ public class QueryManager {
                     values, 0);
             final boolean applied = this.clusterService.processWriteConditional(activeShardsToCassandraConsistencyLevel(request.waitForActiveShards()), ConsistencyLevel.LOCAL_SERIAL, query, (Object[])values);
             if (!applied)
-                throw new VersionConflictEngineException(indexShard.shardId(), cfName, request.id(), "PAXOS insert failed, document already exists");
+                throw new VersionConflictEngineException(indexShard.shardId(), request.id(), "PAXOS insert failed, document already exists");
         } else {
             ElasticSecondaryIndex esi = ElasticSecondaryIndex.elasticSecondayIndices.get(keyspaceName+"."+cfName);
             ByteBuffer NULL_VALUE = (esi == null || !esi.isInsertOnly()) ? null : ByteBufferUtil.UNSET_BYTE_BUFFER;

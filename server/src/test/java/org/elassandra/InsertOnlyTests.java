@@ -17,18 +17,18 @@ package org.elassandra;
 
 import org.apache.cassandra.db.ConsistencyLevel;
 import org.apache.lucene.search.join.ScoreMode;
-import org.elasticsearch.action.search.SearchResponse;
-import org.elasticsearch.common.settings.Settings;
-import org.elasticsearch.common.xcontent.XContentBuilder;
-import org.elasticsearch.common.xcontent.XContentFactory;
-import org.elasticsearch.index.query.QueryBuilders;
-import org.elasticsearch.test.ESSingleNodeTestCase;
+import org.opensearch.action.search.SearchResponse;
+import org.opensearch.common.settings.Settings;
+import org.opensearch.common.xcontent.XContentBuilder;
+import org.opensearch.common.xcontent.XContentFactory;
+import org.opensearch.index.query.QueryBuilders;
+import org.opensearch.test.OpenSearchSingleNodeTestCase;
 import org.junit.Test;
 
 import java.util.Date;
 import java.util.Locale;
 
-import static org.elasticsearch.test.hamcrest.ElasticsearchAssertions.assertAcked;
+import static org.opensearch.test.hamcrest.OpenSearchAssertions.assertAcked;
 import static org.hamcrest.Matchers.equalTo;
 
 /**
@@ -38,7 +38,7 @@ import static org.hamcrest.Matchers.equalTo;
  *
  */
 //gradle :server:test -Dtests.seed=65E2CF27F286CC89 -Dtests.class=org.elassandra.InsertOnlyTests -Dtests.security.manager=false -Dtests.locale=en-PH -Dtests.timezone=America/Coral_Harbour
-public class InsertOnlyTests extends ESSingleNodeTestCase {
+public class InsertOnlyTests extends OpenSearchSingleNodeTestCase {
 
     @Test
     public void testSkinnyTimeDisordered() throws Exception {
@@ -64,11 +64,11 @@ public class InsertOnlyTests extends ESSingleNodeTestCase {
         long now = new Date().getTime();
         process(ConsistencyLevel.ONE, String.format(Locale.ROOT, "INSERT INTO test.t1 (id, f1) VALUES ('1',1) USING TIMESTAMP %d", now - 1000));
         SearchResponse resp = client().prepareSearch().setIndices("test").setQuery(QueryBuilders.matchAllQuery()).get();
-        assertThat(resp.getHits().getTotalHits(), equalTo(1L));
+        assertThat(resp.getHits().getTotalHits().value, equalTo(1L));
 
         process(ConsistencyLevel.ONE, String.format(Locale.ROOT, "INSERT INTO test.t1 (id, f1) VALUES ('2',2) USING TIMESTAMP %d", now));
         SearchResponse resp2 = client().prepareSearch().setIndices("test").setQuery(QueryBuilders.matchAllQuery()).get();
-        assertThat(resp2.getHits().getTotalHits(), equalTo(2L));
+        assertThat(resp2.getHits().getTotalHits().value, equalTo(2L));
     }
 
     @Test
@@ -102,11 +102,11 @@ public class InsertOnlyTests extends ESSingleNodeTestCase {
         process(ConsistencyLevel.ONE, String.format(Locale.ROOT, "INSERT INTO test.t1 (id,c1,f1) VALUES ('1',0,0) USING TIMESTAMP %d", now));
         process(ConsistencyLevel.ONE, String.format(Locale.ROOT, "INSERT INTO test.t1 (id,c1,f1) VALUES ('1',1,1) USING TIMESTAMP %d", now - 2000));
         SearchResponse resp = client().prepareSearch().setIndices("test").setQuery(QueryBuilders.matchAllQuery()).get();
-        assertThat(resp.getHits().getTotalHits(), equalTo(2L));
+        assertThat(resp.getHits().getTotalHits().value, equalTo(2L));
 
         process(ConsistencyLevel.ONE, String.format(Locale.ROOT, "INSERT INTO test.t1 (id,c1,f1) VALUES ('2',1,1) USING TIMESTAMP %d", now));
         SearchResponse resp2 = client().prepareSearch().setIndices("test").setQuery(QueryBuilders.matchAllQuery()).get();
-        assertThat(resp2.getHits().getTotalHits(), equalTo(3L));
+        assertThat(resp2.getHits().getTotalHits().value, equalTo(3L));
     }
 
 
@@ -164,7 +164,7 @@ public class InsertOnlyTests extends ESSingleNodeTestCase {
 
         assertThat( client().prepareSearch().setIndices("test1").setTypes("t1")
                 .setQuery(QueryBuilders.nestedQuery("s1", QueryBuilders.queryStringQuery("s1.first:1"), ScoreMode.Avg))
-                .get().getHits().getTotalHits(), equalTo(2L));
+                .get().getHits().getTotalHits().value, equalTo(2L));
     }
 
     @Test
@@ -316,24 +316,24 @@ public class InsertOnlyTests extends ESSingleNodeTestCase {
         process(ConsistencyLevel.ONE, String.format(Locale.ROOT, "INSERT INTO test.t1 (id,c1,f1,s1) VALUES ('1',0,0,0)"));
         process(ConsistencyLevel.ONE, String.format(Locale.ROOT, "INSERT INTO test.t1 (id,c1,f1,s1) VALUES ('1',1,1,0)"));
 
-        assertThat( client().prepareSearch().setIndices("test1").setTypes("t1").setQuery(QueryBuilders.queryStringQuery("s1:0")).get().getHits().getTotalHits(), equalTo(2L));
-        assertThat( client().prepareSearch().setIndices("test2").setTypes("t1").setQuery(QueryBuilders.queryStringQuery("s1:0")).get().getHits().getTotalHits(), equalTo(3L));
-        assertThat( client().prepareSearch().setIndices("test3").setTypes("t1").setQuery(QueryBuilders.queryStringQuery("s1:0")).get().getHits().getTotalHits(), equalTo(3L));
-        assertThat( client().prepareSearch().setIndices("test4").setTypes("t1").setQuery(QueryBuilders.queryStringQuery("s1:0")).get().getHits().getTotalHits(), equalTo(1L));
+        assertThat( client().prepareSearch().setIndices("test1").setTypes("t1").setQuery(QueryBuilders.queryStringQuery("s1:0")).get().getHits().getTotalHits().value, equalTo(2L));
+        assertThat( client().prepareSearch().setIndices("test2").setTypes("t1").setQuery(QueryBuilders.queryStringQuery("s1:0")).get().getHits().getTotalHits().value, equalTo(3L));
+        assertThat( client().prepareSearch().setIndices("test3").setTypes("t1").setQuery(QueryBuilders.queryStringQuery("s1:0")).get().getHits().getTotalHits().value, equalTo(3L));
+        assertThat( client().prepareSearch().setIndices("test4").setTypes("t1").setQuery(QueryBuilders.queryStringQuery("s1:0")).get().getHits().getTotalHits().value, equalTo(1L));
 
         process(ConsistencyLevel.ONE, String.format(Locale.ROOT, "INSERT INTO test.t1 (id,c1,f1,s1) VALUES ('2',1,1,0)"));
 
-        assertThat( client().prepareSearch().setIndices("test1").setTypes("t1").setQuery(QueryBuilders.queryStringQuery("s1:0")).get().getHits().getTotalHits(), equalTo(3L));
-        assertThat( client().prepareSearch().setIndices("test2").setTypes("t1").setQuery(QueryBuilders.queryStringQuery("s1:0")).get().getHits().getTotalHits(), equalTo(5L));
-        assertThat( client().prepareSearch().setIndices("test3").setTypes("t1").setQuery(QueryBuilders.queryStringQuery("s1:0")).get().getHits().getTotalHits(), equalTo(5L));
-        assertThat( client().prepareSearch().setIndices("test4").setTypes("t1").setQuery(QueryBuilders.queryStringQuery("s1:0")).get().getHits().getTotalHits(), equalTo(2L));
+        assertThat( client().prepareSearch().setIndices("test1").setTypes("t1").setQuery(QueryBuilders.queryStringQuery("s1:0")).get().getHits().getTotalHits().value, equalTo(3L));
+        assertThat( client().prepareSearch().setIndices("test2").setTypes("t1").setQuery(QueryBuilders.queryStringQuery("s1:0")).get().getHits().getTotalHits().value, equalTo(5L));
+        assertThat( client().prepareSearch().setIndices("test3").setTypes("t1").setQuery(QueryBuilders.queryStringQuery("s1:0")).get().getHits().getTotalHits().value, equalTo(5L));
+        assertThat( client().prepareSearch().setIndices("test4").setTypes("t1").setQuery(QueryBuilders.queryStringQuery("s1:0")).get().getHits().getTotalHits().value, equalTo(2L));
 
         process(ConsistencyLevel.ONE, String.format(Locale.ROOT, "INSERT INTO test.t1 (id,c1,f1,s1) VALUES ('2',2,1,null)"));
 
-        assertThat( client().prepareSearch().setIndices("test1").setTypes("t1").setQuery(QueryBuilders.queryStringQuery("s1:0")).get().getHits().getTotalHits(), equalTo(3L));
-        assertThat( client().prepareSearch().setIndices("test2").setTypes("t1").setQuery(QueryBuilders.queryStringQuery("s1:0")).get().getHits().getTotalHits(), equalTo(4L));
-        assertThat( client().prepareSearch().setIndices("test3").setTypes("t1").setQuery(QueryBuilders.queryStringQuery("s1:0")).get().getHits().getTotalHits(), equalTo(4L));
-        assertThat( client().prepareSearch().setIndices("test4").setTypes("t1").setQuery(QueryBuilders.queryStringQuery("s1:0")).get().getHits().getTotalHits(), equalTo(1L));
+        assertThat( client().prepareSearch().setIndices("test1").setTypes("t1").setQuery(QueryBuilders.queryStringQuery("s1:0")).get().getHits().getTotalHits().value, equalTo(3L));
+        assertThat( client().prepareSearch().setIndices("test2").setTypes("t1").setQuery(QueryBuilders.queryStringQuery("s1:0")).get().getHits().getTotalHits().value, equalTo(4L));
+        assertThat( client().prepareSearch().setIndices("test3").setTypes("t1").setQuery(QueryBuilders.queryStringQuery("s1:0")).get().getHits().getTotalHits().value, equalTo(4L));
+        assertThat( client().prepareSearch().setIndices("test4").setTypes("t1").setQuery(QueryBuilders.queryStringQuery("s1:0")).get().getHits().getTotalHits().value, equalTo(1L));
     }
 
 }

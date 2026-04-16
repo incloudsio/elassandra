@@ -1,10 +1,22 @@
-if [ ! -f /etc/elasticsearch/elasticsearch.keystore ]; then
-    /usr/share/elasticsearch/bin/elasticsearch-keystore create
-    chown root:elasticsearch /etc/elasticsearch/elasticsearch.keystore
-    chmod 660 /etc/elasticsearch/elasticsearch.keystore
-    md5sum /etc/elasticsearch/elasticsearch.keystore > /etc/elasticsearch/.elasticsearch.keystore.initial_md5sum
+# source the default env file
+if [ -f "${path.env}" ]; then
+    . "${path.env}"
+fi
+
+export OPENSEARCH_PATH_CONF=${OPENSEARCH_PATH_CONF:-${path.conf}}
+
+if [ ! -f "${OPENSEARCH_PATH_CONF}"/opensearch.keystore ]; then
+    /usr/share/opensearch/bin/opensearch-keystore create
+    chown root:opensearch "${OPENSEARCH_PATH_CONF}"/opensearch.keystore
+    chmod 660 "${OPENSEARCH_PATH_CONF}"/opensearch.keystore
+    md5sum "${OPENSEARCH_PATH_CONF}"/opensearch.keystore > "${OPENSEARCH_PATH_CONF}"/.opensearch.keystore.initial_md5sum
 else
-    /usr/share/elasticsearch/bin/elasticsearch-keystore upgrade
+    if /usr/share/opensearch/bin/opensearch-keystore has-passwd --silent ; then
+      echo "### Warning: unable to upgrade encrypted keystore" 1>&2
+      echo " Please run opensearch-keystore upgrade and enter password" 1>&2
+    else
+      /usr/share/opensearch/bin/opensearch-keystore upgrade
+    fi
 fi
 
 ${scripts.footer}

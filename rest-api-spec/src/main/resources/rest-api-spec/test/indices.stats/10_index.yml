@@ -18,14 +18,12 @@ setup:
   - do:
       index:
           index: test1
-          type:  bar
           id:    1
           body:  { "foo": "bar" }
 
   - do:
       index:
           index: test2
-          type:  baz
           id:    1
           body:  { "foo": "baz" }
 
@@ -108,9 +106,6 @@ setup:
 
 ---
 "Indices stats unrecognized parameter":
-  - skip:
-      version: " - 5.0.99"
-      reason: strict stats handling does not exist in 5.0
   - do:
       catch: bad_request
       indices.stats:

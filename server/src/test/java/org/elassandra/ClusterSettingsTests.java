@@ -20,12 +20,12 @@ import com.carrotsearch.randomizedtesting.annotations.ThreadLeakScope.Scope;
 import com.carrotsearch.randomizedtesting.annotations.ThreadLeakZombies;
 import com.carrotsearch.randomizedtesting.annotations.ThreadLeakZombies.Consequence;
 
-import org.elasticsearch.cluster.service.ClusterService;
-import org.elasticsearch.common.settings.Settings;
-import org.elasticsearch.test.ESSingleNodeTestCase;
+import org.opensearch.cluster.service.ClusterService;
+import org.opensearch.common.settings.Settings;
+import org.opensearch.test.OpenSearchSingleNodeTestCase;
 import org.junit.Test;
 
-import static org.elasticsearch.test.hamcrest.ElasticsearchAssertions.assertAcked;
+import static org.opensearch.test.hamcrest.OpenSearchAssertions.assertAcked;
 import static org.junit.Assert.assertTrue;
 
 /**
@@ -37,10 +37,10 @@ import static org.junit.Assert.assertTrue;
 // OpenSearchSingleNodeTestCase carries NONE in source, but concrete Elassandra classes must repeat it here or leak checks run with SUITE semantics.
 @ThreadLeakScope(Scope.NONE)
 @ThreadLeakZombies(Consequence.CONTINUE)
-public class ClusterSettingsTests extends ESSingleNodeTestCase {
+public class ClusterSettingsTests extends OpenSearchSingleNodeTestCase {
 
     /**
-     * {@link ESSingleNodeTestCase#tearDown()} asserts no persistent cluster settings remain; this test sets
+     * {@link OpenSearchSingleNodeTestCase#tearDown()} asserts no persistent cluster settings remain; this test sets
      * {@code cluster.search_strategy_class} and must clear it even if the method body or {@code finally} fails.
      */
     @Override

@@ -1,4 +1,15 @@
 /*
+ * SPDX-License-Identifier: Apache-2.0
+ *
+ * The OpenSearch Contributors require contributions made to
+ * this file be licensed under the Apache-2.0 license or a
+ * compatible open source license.
+ *
+ * Modifications Copyright OpenSearch Contributors. See
+ * GitHub history for details.
+ */
+
+/*
  * Licensed to Elasticsearch under one or more contributor
  * license agreements. See the NOTICE file distributed with
  * this work for additional information regarding copyright
@@ -17,35 +28,35 @@
  * under the License.
  */
 
-apply plugin: 'elasticsearch.build'
+apply plugin: 'opensearch.build'
 apply plugin: 'application'
 
-group = 'org.elasticsearch.client'
+group = 'org.opensearch.client'
 
 // Not published so no need to assemble
 assemble.enabled = true
 
 archivesBaseName = 'client-benchmarks'
-mainClassName = 'org.elasticsearch.client.benchmark.BenchmarkMain'
+mainClassName = 'org.opensearch.client.benchmark.BenchmarkMain'
 
 // never try to invoke tests on the benchmark project - there aren't any
-unitTest.enabled = false
+test.enabled = false
 
 dependencies {
-  compile 'org.apache.commons:commons-math3:3.2'
+  api 'org.apache.commons:commons-math3:3.6.1'
 
-  compile("org.elasticsearch.client:elasticsearch-rest-client:${version}")
-  // bottleneck should be the client, not Elasticsearch
-  compile project(path: ':client:client-benchmark-noop-api-plugin')
+  api project(":client:rest")
+  // bottleneck should be the client, not OpenSearch
+  api project(path: ':client:client-benchmark-noop-api-plugin')
   // for transport client
-  compile("org.elasticsearch:elasticsearch:${version}")
-  compile("org.elasticsearch.client:transport:${version}")
-  compile project(path: ':modules:transport-netty4', configuration: 'runtime')
-  compile project(path: ':modules:reindex', configuration: 'runtime')
-  compile project(path: ':modules:lang-mustache', configuration: 'runtime')
-  compile project(path: ':modules:percolator', configuration: 'runtime')
+  api project(":server")
+  api project(":client:transport")
+  api project(':modules:transport-netty4')
+  api project(':modules:reindex')
+  api project(':modules:lang-mustache')
+  api project(':modules:percolator')
 }
 
 // No licenses for our benchmark deps (we don't ship benchmarks)
-dependencyLicenses.enabled = false
+tasks.named("dependencyLicenses").configure { it.enabled = false }
 dependenciesInfo.enabled = false

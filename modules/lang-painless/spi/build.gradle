@@ -1,4 +1,15 @@
 /*
+ * SPDX-License-Identifier: Apache-2.0
+ *
+ * The OpenSearch Contributors require contributions made to
+ * this file be licensed under the Apache-2.0 license or a
+ * compatible open source license.
+ *
+ * Modifications Copyright OpenSearch Contributors. See
+ * GitHub history for details.
+ */
+
+/*
  * Licensed to Elasticsearch under one or more contributor
  * license agreements. See the NOTICE file distributed with
  * this work for additional information regarding copyright
@@ -17,24 +28,15 @@
  * under the License.
  */
 
-apply plugin: 'elasticsearch.build'
-apply plugin: 'nebula.maven-base-publish'
-apply plugin: 'nebula.maven-scm'
+apply plugin: 'opensearch.build'
+apply plugin: 'opensearch.publish'
 
-group = 'org.elasticsearch.plugin'
-archivesBaseName = 'elasticsearch-scripting-painless-spi'
-
-publishing {
-  publications {
-    nebula {
-      artifactId = archivesBaseName
-    }
-  }
-}
+group = 'org.opensearch.plugin'
+archivesBaseName = 'opensearch-scripting-painless-spi'
 
 dependencies {
-  compile "org.elasticsearch:elasticsearch:${version}"
+  api project(":server")
 }
 
 // no tests...yet?
-unitTest.enabled = false
+test.enabled = false

@@ -14,7 +14,7 @@ import java.util.List;
 import java.util.Objects;
 
 /**
- * Minimal stored-field list for Elassandra query flattening (OpenSearch removed {@code org.elasticsearch.index.get.GetField}).
+ * Minimal stored-field list for Elassandra query flattening (OpenSearch removed {@code org.opensearch.index.get.GetField}).
  */
 public class GetField implements Iterable<Object> {
 

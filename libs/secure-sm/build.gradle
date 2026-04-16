@@ -1,4 +1,15 @@
 /*
+ * SPDX-License-Identifier: Apache-2.0
+ *
+ * The OpenSearch Contributors require contributions made to
+ * this file be licensed under the Apache-2.0 license or a
+ * compatible open source license.
+ *
+ * Modifications Copyright OpenSearch Contributors. See
+ * GitHub history for details.
+ */
+
+/*
  * Licensed to Elasticsearch under one or more contributor
  * license agreements. See the NOTICE file distributed with
  * this work for additional information regarding copyright
@@ -16,43 +27,32 @@
  * specific language governing permissions and limitations
  * under the License.
  */
-apply plugin: 'nebula.maven-base-publish'
-apply plugin: 'nebula.maven-scm'
-
-archivesBaseName = 'elasticsearch-secure-sm'
-
-publishing {
-    publications {
-        nebula {
-            artifactId = archivesBaseName
-        }
-    }
-}
+apply plugin: 'opensearch.publish'
 
 dependencies {
-    // do not add non-test compile dependencies to secure-sm without a good reason to do so
+  // do not add non-test compile dependencies to secure-sm without a good reason to do so
 
-    testCompile "com.carrotsearch.randomizedtesting:randomizedtesting-runner:${versions.randomizedrunner}"
-    testCompile "junit:junit:${versions.junit}"
-    testCompile "org.hamcrest:hamcrest-all:${versions.hamcrest}"
-    
-    testCompile(project(":test:framework")) {
-        exclude group: 'org.elasticsearch', module: 'elasticsearch-secure-sm'
-    }
+  testImplementation "com.carrotsearch.randomizedtesting:randomizedtesting-runner:${versions.randomizedrunner}"
+  testImplementation "junit:junit:${versions.junit}"
+  testImplementation "org.hamcrest:hamcrest:${versions.hamcrest}"
+
+  testImplementation(project(":test:framework")) {
+    exclude group: 'org.opensearch', module: 'opensearch-secure-sm'
+  }
 }
 
-forbiddenApisMain {
-    replaceSignatureFiles 'jdk-signatures'
+tasks.named('forbiddenApisMain').configure {
+  replaceSignatureFiles 'jdk-signatures'
 }
 
 // JAR hell is part of core which we do not want to add as a dependency
 jarHell.enabled = false
 
 testingConventions {
-    naming.clear()
-    naming {
-        Tests {
-            baseClass 'junit.framework.TestCase'
-        }
+  naming.clear()
+  naming {
+    Tests {
+      baseClass 'junit.framework.TestCase'
     }
+  }
 }

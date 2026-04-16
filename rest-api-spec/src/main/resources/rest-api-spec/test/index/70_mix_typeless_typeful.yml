@@ -2,8 +2,8 @@
 "Index with typeless API on an index that has types":
 
  - skip:
-      version: " - 6.6.99"
-      reason:  Typeless APIs were introduced in 6.7.0
+      version: " - 6.99.99"
+      reason:  Typeless APIs were introduced in 7.0.0
 
  - do:
       indices.create: # not using include_type_name: false on purpose
@@ -19,7 +19,6 @@
  - do:
       index:
           index:  index
-          type:   _doc
           id:     1
           body:   { foo: bar }
 
@@ -44,7 +43,6 @@
  - do:
       index:
           index:  index
-          type:   _doc
           body:   { foo: bar }
 
  - match:   { _index:   "index" }
@@ -68,8 +66,8 @@
 "Index call that introduces new field mappings":
 
   - skip:
-      version: " - 6.6.99"
-      reason:  Typeless APIs were introduced in 6.7.0
+      version: " - 6.99.99"
+      reason:  Typeless APIs were introduced in 7.0.0
 
   - do:
       indices.create: # not using include_type_name: false on purpose
@@ -84,7 +82,6 @@
   - do:
       index:
         index:  index
-        type:   _doc
         id:     2
         body:   { new_field: value }
 

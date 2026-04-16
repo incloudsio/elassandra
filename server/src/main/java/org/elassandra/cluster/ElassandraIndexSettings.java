@@ -1,13 +1,13 @@
 /*
- * Elassandra-only index {@link org.elasticsearch.common.settings.Setting}s (fork parity with
- * {@link org.elasticsearch.cluster.metadata.IndexMetaData}). Stock OpenSearch {@code IndexMetadata}
+ * Elassandra-only index {@link org.opensearch.common.settings.Setting}s (fork parity with
+ * {@link org.opensearch.cluster.metadata.IndexMetadata}). Stock OpenSearch {@code IndexMetadata}
  * does not declare these; side-car code uses this class after package rewrites.
  */
 package org.elassandra.cluster;
 
-import org.elasticsearch.cluster.service.ClusterService;
-import org.elasticsearch.common.settings.Setting;
-import org.elasticsearch.common.settings.Setting.Property;
+import org.opensearch.cluster.service.ClusterService;
+import org.opensearch.common.settings.Setting;
+import org.opensearch.common.settings.Setting.Property;
 
 /**
  * Boolean index settings referenced by {@code ElasticSecondaryIndex.ImmutableMappingInfo}.

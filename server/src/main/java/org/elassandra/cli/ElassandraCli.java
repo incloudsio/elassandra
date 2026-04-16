@@ -1,9 +1,9 @@
 package org.elassandra.cli;
 
 import org.apache.lucene.util.IOUtils;
-import org.elasticsearch.cli.Command;
-import org.elasticsearch.cli.LoggingAwareMultiCommand;
-import org.elasticsearch.cli.Terminal;
+import org.opensearch.cli.Command;
+import org.opensearch.cli.LoggingAwareMultiCommand;
+import org.opensearch.cli.Terminal;
 
 import java.io.IOException;
 import java.util.Collection;

@@ -1,4 +1,12 @@
 /*
+ * SPDX-License-Identifier: Apache-2.0
+ *
+ * The OpenSearch Contributors require contributions made to
+ * this file be licensed under the Apache-2.0 license or a
+ * compatible open source license.
+ */
+
+/*
  * Licensed to Elasticsearch under one or more contributor
  * license agreements. See the NOTICE file distributed with
  * this work for additional information regarding copyright
@@ -16,9 +24,14 @@
  * specific language governing permissions and limitations
  * under the License.
  */
+/*
+ * Modifications Copyright OpenSearch Contributors. See
+ * GitHub history for details.
+ */
+
 package org.apache.lucene.queries;
 
-import org.elasticsearch.index.mapper.RangeFieldMapper;
+import org.opensearch.index.mapper.RangeType;
 
 public class FloatRandomBinaryDocValuesRangeQueryTests extends BaseRandomBinaryDocValuesRangeQueryTestCase {
 
@@ -28,8 +41,8 @@ public class FloatRandomBinaryDocValuesRangeQueryTests extends BaseRandomBinaryD
     }
 
     @Override
-    protected RangeFieldMapper.RangeType rangeType() {
-        return RangeFieldMapper.RangeType.FLOAT;
+    protected RangeType rangeType() {
+        return RangeType.FLOAT;
     }
 
     @Override
@@ -99,13 +112,13 @@ public class FloatRandomBinaryDocValuesRangeQueryTests extends BaseRandomBinaryD
 
         @Override
         protected boolean isDisjoint(Range o) {
-            FloatTestRange other = (FloatTestRange)o;
+            FloatTestRange other = (FloatTestRange) o;
             return this.min > other.max || this.max < other.min;
         }
 
         @Override
         protected boolean isWithin(Range o) {
-            FloatTestRange other = (FloatTestRange)o;
+            FloatTestRange other = (FloatTestRange) o;
             if ((this.min >= other.min && this.max <= other.max) == false) {
                 // not within:
                 return false;

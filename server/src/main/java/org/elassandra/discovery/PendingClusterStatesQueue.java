@@ -20,9 +20,9 @@
 package org.elassandra.discovery;
 
 import org.apache.logging.log4j.Logger;
-import org.elasticsearch.ElasticsearchException;
-import org.elasticsearch.cluster.ClusterState;
-import org.elasticsearch.discovery.zen.PendingClusterStateStats;
+import org.opensearch.OpenSearchException;
+import org.opensearch.cluster.ClusterState;
+import org.opensearch.discovery.zen.PendingClusterStateStats;
 
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -92,7 +92,7 @@ public class PendingClusterStatesQueue {
 
     /** Add an incoming, not yet committed cluster state */
     public void addPending(ClusterState state, StateProcessedListener listener) {
-        logger.trace("adding cluster state version={} metadata={}", state.version(), state.metaData().x2());
+        logger.trace("adding cluster state version={} metadata={}", state.version(), state.metadata().x2());
         StateProcessedListener previousListener = pendingStates.put(state, listener);
         if (previousListener != null) {
             // Same version+UUID key: duplicate publish before applier removed the first entry (e.g. concurrent
@@ -103,14 +103,14 @@ public class PendingClusterStatesQueue {
                 state.stateUUID()
             );
             previousListener.onNewClusterStateFailed(
-                new ElasticsearchException("superseded by duplicate concurrent cluster state publish")
+                new OpenSearchException("superseded by duplicate concurrent cluster state publish")
             );
         }
 
         if (pendingStates.size() > maxQueueSize) {
             Map.Entry<ClusterState, StateProcessedListener> entry = pendingStates.firstEntry();
             logger.warn("dropping pending state.version=[{}] more than [{}] pending states.", entry.getKey().version(), maxQueueSize);
-            pendingStates.remove(entry.getKey()).onNewClusterStateFailed(new ElasticsearchException("too many pending states ([{}] pending)", maxQueueSize));
+            pendingStates.remove(entry.getKey()).onNewClusterStateFailed(new OpenSearchException("too many pending states ([{}] pending)", maxQueueSize));
         }
     }
 
@@ -131,11 +131,11 @@ public class PendingClusterStatesQueue {
         }
 
         logger.debug("failing state.version={} metatdata.version={} batch size={}",
-                state.version(), state.metaData().x2(), processedStates.size());
+                state.version(), state.metadata().x2(), processedStates.size());
 
         processedStates.entrySet().forEach( entry -> {
             logger.trace("failing state.version={} metatdata.version={} with state.version={}",
-                    entry.getKey().version(), entry.getKey().metaData().x2(), state.version());
+                    entry.getKey().version(), entry.getKey().metadata().x2(), state.version());
             entry.getValue().onNewClusterStateFailed(reason);
             this.pendingStates.remove(entry.getKey());
         });
@@ -155,10 +155,10 @@ public class PendingClusterStatesQueue {
         }
 
         ConcurrentNavigableMap<ClusterState, StateProcessedListener> processedStates = pendingStates.headMap(state, true);
-        logger.debug("processed state.version={} metatdata.version={} batch size={}", state.version(), state.metaData().x2(), processedStates.size());
+        logger.debug("processed state.version={} metatdata.version={} batch size={}", state.version(), state.metadata().x2(), processedStates.size());
         processedStates.entrySet().forEach( entry -> {
             logger.trace("processed state.version={} metatdata.version={} with state.version={}",
-                    entry.getKey().version(), entry.getKey().metaData().x2(), state.version());
+                    entry.getKey().version(), entry.getKey().metadata().x2(), state.version());
             entry.getValue().onNewClusterStateProcessed();
             this.pendingStates.remove(entry.getKey());
         });
@@ -183,7 +183,7 @@ public class PendingClusterStatesQueue {
         }
 
         Map.Entry<ClusterState, StateProcessedListener> lastEntry = pendingStates.lastEntry();
-        logger.trace("peek most recent clusterState.version={} metadata=[{}]", lastEntry.getKey().version(), lastEntry.getKey().metaData().x2());
+        logger.trace("peek most recent clusterState.version={} metadata=[{}]", lastEntry.getKey().version(), lastEntry.getKey().metadata().x2());
         return lastEntry.getKey();
     }
 

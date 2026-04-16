@@ -6,17 +6,17 @@ import org.apache.cassandra.exceptions.InvalidRequestException;
 import org.apache.cassandra.utils.Hex;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
-import org.elasticsearch.cli.LoggingAwareCommand;
-import org.elasticsearch.cli.Terminal;
-import org.elasticsearch.cluster.metadata.IndexMetaData;
-import org.elasticsearch.cluster.metadata.MetaData;
-import org.elasticsearch.common.xcontent.LoggingDeprecationHandler;
-import org.elasticsearch.common.xcontent.NamedXContentRegistry;
-import org.elasticsearch.common.xcontent.ToXContent;
-import org.elasticsearch.common.xcontent.XContentBuilder;
-import org.elasticsearch.common.xcontent.XContentFactory;
-import org.elasticsearch.common.xcontent.XContentParser;
-import org.elasticsearch.common.xcontent.XContentType;
+import org.opensearch.cli.LoggingAwareCommand;
+import org.opensearch.cli.Terminal;
+import org.opensearch.cluster.metadata.IndexMetadata;
+import org.opensearch.cluster.metadata.Metadata;
+import org.opensearch.common.xcontent.LoggingDeprecationHandler;
+import org.opensearch.common.xcontent.NamedXContentRegistry;
+import org.opensearch.common.xcontent.ToXContent;
+import org.opensearch.common.xcontent.XContentBuilder;
+import org.opensearch.common.xcontent.XContentFactory;
+import org.opensearch.common.xcontent.XContentParser;
+import org.opensearch.common.xcontent.XContentType;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
@@ -55,7 +55,7 @@ public class DecodeIndexMetaDataCommand extends LoggingAwareCommand {
             LoggingDeprecationHandler.INSTANCE,
             bytes
         )) {
-            IndexMetaData indexMetaData = IndexMetaData.Builder.fromXContent(parser);
+            IndexMetadata indexMetaData = IndexMetadata.Builder.fromXContent(parser);
 
             XContentBuilder builder = XContentFactory.contentBuilder(XContentType.JSON);
             builder.prettyPrint();
@@ -63,7 +63,7 @@ public class DecodeIndexMetaDataCommand extends LoggingAwareCommand {
 
             Map<String, String> params = new HashMap<>(1);
             params.put(CONTEXT_CASSANDRA_PARAM, "true");
-            IndexMetaData.Builder.toXContent(indexMetaData, builder, new ToXContent.MapParams(params));
+            IndexMetadata.Builder.toXContent(indexMetaData, builder, new ToXContent.MapParams(params));
             builder.endObject();
 
             builder.flush();

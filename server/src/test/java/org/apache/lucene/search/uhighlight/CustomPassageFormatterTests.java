@@ -1,4 +1,12 @@
 /*
+ * SPDX-License-Identifier: Apache-2.0
+ *
+ * The OpenSearch Contributors require contributions made to
+ * this file be licensed under the Apache-2.0 license or a
+ * compatible open source license.
+ */
+
+/*
  * Licensed to Elasticsearch under one or more contributor
  * license agreements. See the NOTICE file distributed with
  * this work for additional information regarding copyright
@@ -17,18 +25,22 @@
  * under the License.
  */
 
+/*
+ * Modifications Copyright OpenSearch Contributors. See
+ * GitHub history for details.
+ */
+
 package org.apache.lucene.search.uhighlight;
 
 import org.apache.lucene.search.highlight.DefaultEncoder;
 import org.apache.lucene.search.highlight.SimpleHTMLEncoder;
 import org.apache.lucene.util.BytesRef;
-import org.elasticsearch.test.ESTestCase;
+import org.opensearch.test.OpenSearchTestCase;
 
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.CoreMatchers.notNullValue;
 
-
-public class CustomPassageFormatterTests extends ESTestCase {
+public class CustomPassageFormatterTests extends OpenSearchTestCase {
     public void testSimpleFormat() {
         String content = "This is a really cool highlighter. Unified highlighter gives nice snippets back. No matches here.";
 
@@ -42,7 +54,7 @@ public class CustomPassageFormatterTests extends ESTestCase {
         int start = content.indexOf(match);
         int end = start + match.length();
         passage1.setStartOffset(0);
-        passage1.setEndOffset(end + 2); //lets include the whitespace at the end to make sure we trim it
+        passage1.setEndOffset(end + 2); // lets include the whitespace at the end to make sure we trim it
         passage1.addMatch(start, end, matchBytesRef, 1);
         passages[0] = passage1;
 
@@ -83,7 +95,7 @@ public class CustomPassageFormatterTests extends ESTestCase {
         int start = content.indexOf(match);
         int end = start + match.length();
         passage1.setStartOffset(0);
-        passage1.setEndOffset(end + 6); //lets include the whitespace at the end to make sure we trim it
+        passage1.setEndOffset(end + 6); // lets include the whitespace at the end to make sure we trim it
         passage1.addMatch(start, end, matchBytesRef, 1);
         passages[0] = passage1;
 

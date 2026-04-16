@@ -49,15 +49,15 @@ import org.apache.cassandra.serializers.MapSerializer;
 import org.apache.cassandra.serializers.MarshalException;
 import org.apache.cassandra.transport.ProtocolVersion;
 import org.apache.cassandra.utils.ByteBufferUtil;
-import org.elasticsearch.cluster.service.ClusterService;
-import org.elasticsearch.common.bytes.BytesReference;
-import org.elasticsearch.common.geo.GeoPoint;
-import org.elasticsearch.common.logging.Loggers;
-import org.elasticsearch.common.xcontent.XContentBuilder;
-import org.elasticsearch.common.xcontent.XContentFactory;
-import org.elasticsearch.index.mapper.*;
-import org.elasticsearch.index.mapper.RangeFieldMapper.Range;
-import org.elasticsearch.index.query.RangeQueryBuilder;
+import org.opensearch.cluster.service.ClusterService;
+import org.opensearch.common.bytes.BytesReference;
+import org.opensearch.common.geo.GeoPoint;
+import org.opensearch.common.logging.Loggers;
+import org.opensearch.common.xcontent.XContentBuilder;
+import org.opensearch.common.xcontent.XContentFactory;
+import org.opensearch.index.mapper.*;
+import org.opensearch.index.mapper.RangeFieldMapper.Range;
+import org.opensearch.index.query.RangeQueryBuilder;
 
 import java.io.IOException;
 import java.math.BigDecimal;
@@ -160,10 +160,10 @@ public class Serializer {
                 // parse a range field to serialized C* UDT
                 RangeFieldMapper rangeFieldMapper = (RangeFieldMapper)mapper;
                 Range range = rangeFieldMapper.parse(value);
-                components[i++]=serialize(ksName, cfName, udt.fieldType(0), RangeQueryBuilder.FROM_FIELD.getPreferredName(), rangeFieldMapper.fieldType().cqlValue(range.from), null);
-                components[i++]=serialize(ksName, cfName, udt.fieldType(1), RangeQueryBuilder.TO_FIELD.getPreferredName(), rangeFieldMapper.fieldType().cqlValue(range.to), null);
-                components[i++]=serialize(ksName, cfName, udt.fieldType(2), "include_lower", range.includeFrom, null);
-                components[i++]=serialize(ksName, cfName, udt.fieldType(3), "include_upper", range.includeTo, null);
+                components[i++]=serialize(ksName, cfName, udt.fieldType(0), RangeQueryBuilder.FROM_FIELD.getPreferredName(), rangeFieldMapper.fieldType().cqlValue(range.getFrom()), null);
+                components[i++]=serialize(ksName, cfName, udt.fieldType(1), RangeQueryBuilder.TO_FIELD.getPreferredName(), rangeFieldMapper.fieldType().cqlValue(range.getTo()), null);
+                components[i++]=serialize(ksName, cfName, udt.fieldType(2), "include_lower", range.isIncludeFrom(), null);
+                components[i++]=serialize(ksName, cfName, udt.fieldType(3), "include_upper", range.isIncludeTo(), null);
             } else if (SchemaManager.GEO_POINT_TYPE.equals(ByteBufferUtil.string(udt.name))) {
                 GeoPoint geoPoint = new GeoPoint();
                 if (value instanceof String) {
@@ -172,11 +172,11 @@ public class Serializer {
                 } else {
                     // parse from lat, lon fields as map
                     Map<String, Object> mapValue = (Map<String, Object>) value;
-                    geoPoint.reset(convertToDouble(mapValue.get(org.elasticsearch.common.geo.GeoUtils.LATITUDE)),
-                                   convertToDouble(mapValue.get(org.elasticsearch.common.geo.GeoUtils.LONGITUDE)));
+                    geoPoint.reset(convertToDouble(mapValue.get(org.opensearch.common.geo.GeoUtils.LATITUDE)),
+                                   convertToDouble(mapValue.get(org.opensearch.common.geo.GeoUtils.LONGITUDE)));
                 }
-                components[i++]=serialize(ksName, cfName, udt.fieldType(0), org.elasticsearch.common.geo.GeoUtils.LATITUDE, geoPoint.lat(), null);
-                components[i++]=serialize(ksName, cfName, udt.fieldType(1), org.elasticsearch.common.geo.GeoUtils.LONGITUDE, geoPoint.lon(), null);
+                components[i++]=serialize(ksName, cfName, udt.fieldType(0), org.opensearch.common.geo.GeoUtils.LATITUDE, geoPoint.lat(), null);
+                components[i++]=serialize(ksName, cfName, udt.fieldType(1), org.opensearch.common.geo.GeoUtils.LONGITUDE, geoPoint.lon(), null);
             } else if (SchemaManager.COMPLETION_TYPE.equals(ByteBufferUtil.string(udt.name))) {
                 // input list<text>, output text, weight int, payload text
                 Map<String, Object> mapValue = (Map<String, Object>) value;
@@ -206,8 +206,8 @@ public class Serializer {
                 UserType udt = (UserType)elementType;
                 List<Double> values = (List<Double>)value;
                 ByteBuffer[] elements = new ByteBuffer[] {
-                    serialize(ksName, cfName, udt.fieldType(0), org.elasticsearch.common.geo.GeoUtils.LATITUDE, values.get(1), null),
-                    serialize(ksName, cfName, udt.fieldType(1), org.elasticsearch.common.geo.GeoUtils.LONGITUDE, values.get(0), null)
+                    serialize(ksName, cfName, udt.fieldType(0), org.opensearch.common.geo.GeoUtils.LATITUDE, values.get(1), null),
+                    serialize(ksName, cfName, udt.fieldType(1), org.opensearch.common.geo.GeoUtils.LONGITUDE, values.get(0), null)
                 };
                 ByteBuffer geo_point = TupleType.buildValue(elements);
                 return CollectionSerializer.pack(ImmutableList.of(geo_point), 1, ProtocolVersion.CURRENT);
@@ -299,9 +299,9 @@ public class Serializer {
 
             if (SchemaManager.GEO_POINT_TYPE.equals(ByteBufferUtil.string(udt.name))) {
                 if (components[0] != null)
-                    mapValue.put(org.elasticsearch.common.geo.GeoUtils.LATITUDE, deserialize(udt.type(0), components[0], null));
+                    mapValue.put(org.opensearch.common.geo.GeoUtils.LATITUDE, deserialize(udt.type(0), components[0], null));
                 if (components[1] != null)
-                    mapValue.put(org.elasticsearch.common.geo.GeoUtils.LONGITUDE, deserialize(udt.type(1), components[1], null));
+                    mapValue.put(org.opensearch.common.geo.GeoUtils.LONGITUDE, deserialize(udt.type(1), components[1], null));
             } else {
                 for (int i = 0; i < components.length; i++) {
                     String fieldName = UTF8Type.instance.compose(udt.fieldName(i).bytes);
@@ -368,12 +368,12 @@ public class Serializer {
                        if (geoMapper.fieldType() instanceof LegacyGeoPointFieldType && ((LegacyGeoPointFieldType)geoMapper.fieldType()).isLatLonEnabled()) {
                            Iterator<Mapper> it = geoMapper.iterator();
                            switch(subField) {
-                           case org.elasticsearch.index.mapper.BaseGeoPointFieldMapper.Names.LAT:
-                               toXContent(builder, it.next(), org.elasticsearch.index.mapper.BaseGeoPointFieldMapper.Names.LAT, map.get(org.elasticsearch.index.mapper.BaseGeoPointFieldMapper.Names.LAT));
+                           case org.opensearch.index.mapper.BaseGeoPointFieldMapper.Names.LAT:
+                               toXContent(builder, it.next(), org.opensearch.index.mapper.BaseGeoPointFieldMapper.Names.LAT, map.get(org.opensearch.index.mapper.BaseGeoPointFieldMapper.Names.LAT));
                                break;
-                           case org.elasticsearch.index.mapper.BaseGeoPointFieldMapper.Names.LON:
+                           case org.opensearch.index.mapper.BaseGeoPointFieldMapper.Names.LON:
                                it.next();
-                               toXContent(builder, it.next(), org.elasticsearch.index.mapper.BaseGeoPointFieldMapper.Names.LON, map.get(org.elasticsearch.index.mapper.BaseGeoPointFieldMapper.Names.LON));
+                               toXContent(builder, it.next(), org.opensearch.index.mapper.BaseGeoPointFieldMapper.Names.LON, map.get(org.opensearch.index.mapper.BaseGeoPointFieldMapper.Names.LON));
                                break;
                            }
                        } else {

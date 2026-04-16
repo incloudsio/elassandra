@@ -7,63 +7,56 @@ setup:
           index:  test
           body:
             mappings:
-              test:
-                dynamic: false
-                properties:
-                  binary:
-                    type: binary
-                    doc_values: true
-                  boolean:
-                    type: boolean
-                  date:
-                    type: date
-                  geo_point:
-                    type: geo_point
-                  geo_shape:
-                    type: geo_shape
-                  ip:
-                    type: ip
-                  keyword:
-                    type: keyword
-                  byte:
-                    type: byte
-                  double:
-                    type: double
-                  float:
-                    type: float
-                  half_float:
-                    type: half_float
-                  integer:
-                    type: integer
-                  long:
-                    type: long
-                  short:
-                    type: short
-                  object:
-                    type: object
-                    properties:
-                      inner1:
-                        type: keyword
-                      inner2:
-                        type: keyword
-                  text:
-                    type: text
-  
+              dynamic: false
+              properties:
+                binary:
+                  type: binary
+                  doc_values: true
+                boolean:
+                  type: boolean
+                date:
+                  type: date
+                geo_point:
+                  type: geo_point
+                ip:
+                  type: ip
+                keyword:
+                  type: keyword
+                byte:
+                  type: byte
+                double:
+                  type: double
+                float:
+                  type: float
+                half_float:
+                  type: half_float
+                integer:
+                  type: integer
+                long:
+                  type: long
+                short:
+                  type: short
+                object:
+                  type: object
+                  properties:
+                    inner1:
+                      type: keyword
+                    inner2:
+                      type: keyword
+                text:
+                  type: text
+
   - do:
       headers:
         Content-Type: application/json
       index:
           index:  "test"
-          type:   "test"
           id:     1
           body:
             binary: "YWJjZGUxMjM0"
             boolean: true
             date: "2017-01-01"
             geo_point: [0.0, 20.0]
-            geo_shape: 
-              type: "point"
-              coordinates: [0.0, 20.0]
             ip: "192.168.0.1"
             keyword: "foo"
             byte: 1
@@ -73,26 +66,22 @@ setup:
             integer: 1
             long: 1
             short: 1
-            object: 
+            object:
               inner1: "foo"
               inner2: "bar"
             text: "foo bar"
-  
+
   - do:
       headers:
         Content-Type: application/json
       index:
           index:  "test"
-          type:   "test"
           id:     2
           body:
             binary: "YWJjZGUxMjM0"
             boolean: false
             date: "2017-01-01"
             geo_point: [0.0, 20.0]
-            geo_shape: 
-              type: "point"
-              coordinates: [0.0, 20.0]
             ip: "192.168.0.1"
             keyword: "foo"
             byte: 1
@@ -102,16 +91,15 @@ setup:
             integer: 1
             long: 1
             short: 1
-            object: 
+            object:
               inner1: "foo"
             text: "foo bar"
-  
+
   - do:
       headers:
         Content-Type: application/json
       index:
           index:  "test"
-          type:   "test"
           id:     3
           routing: "route_me"
           body:
@@ -119,9 +107,6 @@ setup:
             boolean: true
             date: "2017-01-01"
             geo_point: [0.0, 20.0]
-            geo_shape: 
-              type: "point"
-              coordinates: [0.0, 20.0]
             ip: "192.168.0.1"
             keyword: "foo"
             byte: 1
@@ -131,14 +116,13 @@ setup:
             integer: 1
             long: 1
             short: 1
-            object: 
+            object:
               inner2: "bar"
             text: "foo bar"
-  
+
   - do:
       index:
           index:  "test"
-          type:   "test"
           id:     4
           body: {}
 
@@ -147,79 +131,71 @@ setup:
           index:  test-no-dv
           body:
             mappings:
-              test:
-                dynamic: false
-                properties:
-                  binary:
-                    type: binary
-                    doc_values: false
-                    store: true
-                  boolean:
-                    type: boolean
-                    doc_values: false
-                  date:
-                    type: date
-                    doc_values: false
-                  geo_point:
-                    type: geo_point
-                    doc_values: false
-                  geo_shape:
-                    type: geo_shape
-                  ip:
-                    type: ip
-                    doc_values: false
-                  keyword:
-                    type: keyword
-                    doc_values: false
-                  byte:
-                    type: byte
-                    doc_values: false
-                  double:
-                    type: double
-                    doc_values: false
-                  float:
-                    type: float
-                    doc_values: false
-                  half_float:
-                    type: half_float
-                    doc_values: false
-                  integer:
-                    type: integer
-                    doc_values: false
-                  long:
-                    type: long
-                    doc_values: false
-                  short:
-                    type: short
-                    doc_values: false
-                  object:
-                    type: object
-                    properties:
-                      inner1:
-                        type: keyword
-                        doc_values: false
-                      inner2:
-                        type: keyword
-                        doc_values: false
-                  text:
-                    type: text
-                    doc_values: false
-  
+              dynamic: false
+              properties:
+                binary:
+                  type: binary
+                  doc_values: false
+                  store: true
+                boolean:
+                  type: boolean
+                  doc_values: false
+                date:
+                  type: date
+                  doc_values: false
+                geo_point:
+                  type: geo_point
+                  doc_values: false
+                ip:
+                  type: ip
+                  doc_values: false
+                keyword:
+                  type: keyword
+                  doc_values: false
+                byte:
+                  type: byte
+                  doc_values: false
+                double:
+                  type: double
+                  doc_values: false
+                float:
+                  type: float
+                  doc_values: false
+                half_float:
+                  type: half_float
+                  doc_values: false
+                integer:
+                  type: integer
+                  doc_values: false
+                long:
+                  type: long
+                  doc_values: false
+                short:
+                  type: short
+                  doc_values: false
+                object:
+                  type: object
+                  properties:
+                    inner1:
+                      type: keyword
+                      doc_values: false
+                    inner2:
+                      type: keyword
+                      doc_values: false
+                text:
+                  type: text
+
   - do:
       headers:
         Content-Type: application/json
       index:
           index:  "test-no-dv"
-          type:   "test"
           id:     1
           body:
             binary: "YWJjZGUxMjM0"
             boolean: true
             date: "2017-01-01"
             geo_point: [0.0, 20.0]
-            geo_shape: 
-              type: "point"
-              coordinates: [0.0, 20.0]
             ip: "192.168.0.1"
             keyword: "foo"
             byte: 1
@@ -229,26 +205,22 @@ setup:
             integer: 1
             long: 1
             short: 1
-            object: 
+            object:
               inner1: "foo"
               inner2: "bar"
             text: "foo bar"
-  
+
   - do:
       headers:
         Content-Type: application/json
       index:
           index:  "test-no-dv"
-          type:   "test"
           id:     2
           body:
             binary: "YWJjZGUxMjM0"
             boolean: false
             date: "2017-01-01"
             geo_point: [0.0, 20.0]
-            geo_shape: 
-              type: "point"
-              coordinates: [0.0, 20.0]
             ip: "192.168.0.1"
             keyword: "foo"
             byte: 1
@@ -258,16 +230,15 @@ setup:
             integer: 1
             long: 1
             short: 1
-            object: 
+            object:
               inner1: "foo"
             text: "foo bar"
-  
+
   - do:
       headers:
         Content-Type: application/json
       index:
           index:  "test-no-dv"
-          type:   "test"
           id:     3
           routing: "route_me"
           body:
@@ -275,9 +246,6 @@ setup:
             boolean: true
             date: "2017-01-01"
             geo_point: [0.0, 20.0]
-            geo_shape: 
-              type: "point"
-              coordinates: [0.0, 20.0]
             ip: "192.168.0.1"
             keyword: "foo"
             byte: 1
@@ -287,14 +255,13 @@ setup:
             integer: 1
             long: 1
             short: 1
-            object: 
+            object:
               inner2: "bar"
             text: "foo bar"
-  
+
   - do:
       index:
           index:  "test-no-dv"
-          type:   "test"
           id:     4
           body: {}
 
@@ -303,18 +270,16 @@ setup:
           index:  test-unmapped
           body:
             mappings:
-              test:
-                dynamic: false
-                properties:
-                  unrelated:
-                    type: keyword
-  
+              dynamic: false
+              properties:
+                unrelated:
+                  type: keyword
+
   - do:
       index:
           index:  "test-unmapped"
-          type:   "test"
           id:     1
-          body: 
+          body:
             unrelated: "foo"
 
   - do:
@@ -322,44 +287,41 @@ setup:
           index:  test-empty
           body:
             mappings:
-              test:
-                dynamic: false
-                properties:
-                  binary:
-                    type: binary
-                  date:
-                    type: date
-                  geo_point:
-                    type: geo_point
-                  geo_shape:
-                    type: geo_shape
-                  ip:
-                    type: ip
-                  keyword:
-                    type: keyword
-                  byte:
-                    type: byte
-                  double:
-                    type: double
-                  float:
-                    type: float
-                  half_float:
-                    type: half_float
-                  integer:
-                    type: integer
-                  long:
-                    type: long
-                  short:
-                    type: short
-                  object:
-                    type: object
-                    properties:
-                      inner1:
-                        type: keyword
-                      inner2:
-                        type: keyword
-                  text:
-                    type: text
+              dynamic: false
+              properties:
+                binary:
+                  type: binary
+                date:
+                  type: date
+                geo_point:
+                  type: geo_point
+                ip:
+                  type: ip
+                keyword:
+                  type: keyword
+                byte:
+                  type: byte
+                double:
+                  type: double
+                float:
+                  type: float
+                half_float:
+                  type: half_float
+                integer:
+                  type: integer
+                long:
+                  type: long
+                short:
+                  type: short
+                object:
+                  type: object
+                  properties:
+                    inner1:
+                      type: keyword
+                    inner2:
+                      type: keyword
+                text:
+                  type: text
 
   - do:
       indices.refresh:
@@ -369,6 +331,7 @@ setup:
 "Test exists query on mapped binary field":
   - do:
       search:
+          rest_total_hits_as_int: true
           index: test
           body:
             query:
@@ -381,6 +344,7 @@ setup:
 "Test exists query on mapped boolean field":
   - do:
       search:
+          rest_total_hits_as_int: true
           index: test
           body:
             query:
@@ -393,6 +357,7 @@ setup:
 "Test exists query on mapped date field":
   - do:
       search:
+          rest_total_hits_as_int: true
           index: test
           body:
             query:
@@ -405,6 +370,7 @@ setup:
 "Test exists query on mapped geo_point field":
   - do:
       search:
+          rest_total_hits_as_int: true
           index: test
           body:
             query:
@@ -414,21 +380,10 @@ setup:
   - match: {hits.total: 3}
 
 ---
-"Test exists query on mapped geo_shape field":
-  - do:
-      search:
-          index: test
-          body:
-            query:
-              exists:
-                field: geo_shape
-
-  - match: {hits.total: 3}
-
----
 "Test exists query on mapped ip field":
   - do:
       search:
+          rest_total_hits_as_int: true
           index: test
           body:
             query:
@@ -441,6 +396,7 @@ setup:
 "Test exists query on mapped keyword field":
   - do:
       search:
+          rest_total_hits_as_int: true
           index: test
           body:
             query:
@@ -453,6 +409,7 @@ setup:
 "Test exists query on mapped byte field":
   - do:
       search:
+          rest_total_hits_as_int: true
           index: test
           body:
             query:
@@ -465,6 +422,7 @@ setup:
 "Test exists query on mapped double field":
   - do:
       search:
+          rest_total_hits_as_int: true
           index: test
           body:
             query:
@@ -477,6 +435,7 @@ setup:
 "Test exists query on mapped float field":
   - do:
       search:
+          rest_total_hits_as_int: true
           index: test
           body:
             query:
@@ -489,6 +448,7 @@ setup:
 "Test exists query on mapped half_float field":
   - do:
       search:
+          rest_total_hits_as_int: true
           index: test
           body:
             query:
@@ -501,6 +461,7 @@ setup:
 "Test exists query on mapped integer field":
   - do:
       search:
+          rest_total_hits_as_int: true
           index: test
           body:
             query:
@@ -513,6 +474,7 @@ setup:
 "Test exists query on mapped long field":
   - do:
       search:
+          rest_total_hits_as_int: true
           index: test
           body:
             query:
@@ -525,6 +487,7 @@ setup:
 "Test exists query on mapped short field":
   - do:
       search:
+          rest_total_hits_as_int: true
           index: test
           body:
             query:
@@ -537,6 +500,7 @@ setup:
 "Test exists query on mapped object field":
   - do:
       search:
+          rest_total_hits_as_int: true
           index: test
           body:
             query:
@@ -549,6 +513,7 @@ setup:
 "Test exists query on mapped object inner field":
   - do:
       search:
+          rest_total_hits_as_int: true
           index: test
           body:
             query:
@@ -561,6 +526,7 @@ setup:
 "Test exists query on mapped text field":
   - do:
       search:
+          rest_total_hits_as_int: true
           index: test
           body:
             query:
@@ -571,31 +537,14 @@ setup:
 
 ---
 "Test exists query on _id field":
-  - skip:
-      version: " - 6.0.99"
-      reason: exists on _source not supported prior to 6.1.0
   - do:
       search:
+          rest_total_hits_as_int: true
           index: test
           body:
             query:
               exists:
                 field: _id
-
-  - match: {hits.total: 4}
-
----
-"Test exists query on _uid field":
-  - skip:
-      version: " - 6.0.99"
-      reason: exists on _uid not supported prior to 6.1.0
-  - do:
-      search:
-          index: test
-          body:
-            query:
-              exists:
-                field: _uid
 
   - match: {hits.total: 4}
 
@@ -606,6 +555,7 @@ setup:
       reason: exists on _index not supported prior to 6.1.0
   - do:
       search:
+          rest_total_hits_as_int: true
           index: test
           body:
             query:
@@ -621,6 +571,7 @@ setup:
       reason: exists on _type not supported prior to 6.1.0
   - do:
       search:
+          rest_total_hits_as_int: true
           index: test
           body:
             query:
@@ -633,6 +584,7 @@ setup:
 "Test exists query on _routing field":
   - do:
       search:
+          rest_total_hits_as_int: true
           index: test
           body:
             query:
@@ -643,11 +595,9 @@ setup:
 
 ---
 "Test exists query on _seq_no field":
-  - skip:
-      version: " - 6.0.99"
-      reason: exists on _seq_no not supported prior to 6.1.0
   - do:
       search:
+          rest_total_hits_as_int: true
           index: test
           body:
             query:
@@ -664,6 +614,7 @@ setup:
   - do:
       catch: /query_shard_exception/
       search:
+          rest_total_hits_as_int: true
           index: test
           body:
             query:
@@ -674,6 +625,7 @@ setup:
 "Test exists query on _version field":
   - do:
       search:
+          rest_total_hits_as_int: true
           index: test
           body:
             query:
@@ -686,6 +638,7 @@ setup:
 "Test exists query on unmapped binary field":
   - do:
       search:
+          rest_total_hits_as_int: true
           index: test-unmapped
           body:
             query:
@@ -698,6 +651,7 @@ setup:
 "Test exists query on unmapped boolean field":
   - do:
       search:
+          rest_total_hits_as_int: true
           index: test-unmapped
           body:
             query:
@@ -710,6 +664,7 @@ setup:
 "Test exists query on unmapped date field":
   - do:
       search:
+          rest_total_hits_as_int: true
           index: test-unmapped
           body:
             query:
@@ -722,6 +677,7 @@ setup:
 "Test exists query on unmapped geo_point field":
   - do:
       search:
+          rest_total_hits_as_int: true
           index: test-unmapped
           body:
             query:
@@ -731,21 +687,10 @@ setup:
   - match: {hits.total: 0}
 
 ---
-"Test exists query on unmapped geo_shape field":
-  - do:
-      search:
-          index: test-unmapped
-          body:
-            query:
-              exists:
-                field: geo_shape
-
-  - match: {hits.total: 0}
-
----
 "Test exists query on unmapped ip field":
   - do:
       search:
+          rest_total_hits_as_int: true
           index: test-unmapped
           body:
             query:
@@ -758,6 +703,7 @@ setup:
 "Test exists query on unmapped keyword field":
   - do:
       search:
+          rest_total_hits_as_int: true
           index: test-unmapped
           body:
             query:
@@ -770,6 +716,7 @@ setup:
 "Test exists query on unmapped byte field":
   - do:
       search:
+          rest_total_hits_as_int: true
           index: test-unmapped
           body:
             query:
@@ -782,6 +729,7 @@ setup:
 "Test exists query on unmapped double field":
   - do:
       search:
+          rest_total_hits_as_int: true
           index: test-unmapped
           body:
             query:
@@ -794,6 +742,7 @@ setup:
 "Test exists query on unmapped float field":
   - do:
       search:
+          rest_total_hits_as_int: true
           index: test-unmapped
           body:
             query:
@@ -806,6 +755,7 @@ setup:
 "Test exists query on unmapped half_float field":
   - do:
       search:
+          rest_total_hits_as_int: true
           index: test-unmapped
           body:
             query:
@@ -818,6 +768,7 @@ setup:
 "Test exists query on unmapped integer field":
   - do:
       search:
+          rest_total_hits_as_int: true
           index: test-unmapped
           body:
             query:
@@ -830,6 +781,7 @@ setup:
 "Test exists query on unmapped long field":
   - do:
       search:
+          rest_total_hits_as_int: true
           index: test-unmapped
           body:
             query:
@@ -842,6 +794,7 @@ setup:
 "Test exists query on unmapped short field":
   - do:
       search:
+          rest_total_hits_as_int: true
           index: test-unmapped
           body:
             query:
@@ -854,6 +807,7 @@ setup:
 "Test exists query on unmapped object field":
   - do:
       search:
+          rest_total_hits_as_int: true
           index: test-unmapped
           body:
             query:
@@ -866,6 +820,7 @@ setup:
 "Test exists query on unmapped object inner field":
   - do:
       search:
+          rest_total_hits_as_int: true
           index: test-unmapped
           body:
             query:
@@ -878,6 +833,7 @@ setup:
 "Test exists query on unmapped text field":
   - do:
       search:
+          rest_total_hits_as_int: true
           index: test-unmapped
           body:
             query:
@@ -890,6 +846,7 @@ setup:
 "Test exists query on binary field in empty index":
   - do:
       search:
+          rest_total_hits_as_int: true
           index: test-empty
           body:
             query:
@@ -902,6 +859,7 @@ setup:
 "Test exists query on boolean field in empty index":
   - do:
       search:
+          rest_total_hits_as_int: true
           index: test-empty
           body:
             query:
@@ -914,6 +872,7 @@ setup:
 "Test exists query on date field in empty index":
   - do:
       search:
+          rest_total_hits_as_int: true
           index: test-empty
           body:
             query:
@@ -926,6 +885,7 @@ setup:
 "Test exists query on geo_point field in empty index":
   - do:
       search:
+          rest_total_hits_as_int: true
           index: test-empty
           body:
             query:
@@ -935,21 +895,10 @@ setup:
   - match: {hits.total: 0}
 
 ---
-"Test exists query on geo_shape field in empty index":
-  - do:
-      search:
-          index: test-empty
-          body:
-            query:
-              exists:
-                field: geo_shape
-
-  - match: {hits.total: 0}
-
----
 "Test exists query on ip field in empty index":
   - do:
       search:
+          rest_total_hits_as_int: true
           index: test-empty
           body:
             query:
@@ -962,6 +911,7 @@ setup:
 "Test exists query on keyword field in empty index":
   - do:
       search:
+          rest_total_hits_as_int: true
           index: test-empty
           body:
             query:
@@ -974,6 +924,7 @@ setup:
 "Test exists query on byte field in empty index":
   - do:
       search:
+          rest_total_hits_as_int: true
           index: test-empty
           body:
             query:
@@ -986,6 +937,7 @@ setup:
 "Test exists query on double field in empty index":
   - do:
       search:
+          rest_total_hits_as_int: true
           index: test-empty
           body:
             query:
@@ -998,6 +950,7 @@ setup:
 "Test exists query on float field in empty index":
   - do:
       search:
+          rest_total_hits_as_int: true
           index: test-empty
           body:
             query:
@@ -1010,6 +963,7 @@ setup:
 "Test exists query on half_float field in empty index":
   - do:
       search:
+          rest_total_hits_as_int: true
           index: test-empty
           body:
             query:
@@ -1022,6 +976,7 @@ setup:
 "Test exists query on integer field in empty index":
   - do:
       search:
+          rest_total_hits_as_int: true
           index: test-empty
           body:
             query:
@@ -1034,6 +989,7 @@ setup:
 "Test exists query on long field in empty index":
   - do:
       search:
+          rest_total_hits_as_int: true
           index: test-empty
           body:
             query:
@@ -1046,6 +1002,7 @@ setup:
 "Test exists query on short field in empty index":
   - do:
       search:
+          rest_total_hits_as_int: true
           index: test-empty
           body:
             query:
@@ -1058,6 +1015,7 @@ setup:
 "Test exists query on object field in empty index":
   - do:
       search:
+          rest_total_hits_as_int: true
           index: test-empty
           body:
             query:
@@ -1070,6 +1028,7 @@ setup:
 "Test exists query on object inner field in empty index":
   - do:
       search:
+          rest_total_hits_as_int: true
           index: test-empty
           body:
             query:
@@ -1082,6 +1041,7 @@ setup:
 "Test exists query on text field in empty index":
   - do:
       search:
+          rest_total_hits_as_int: true
           index: test-empty
           body:
             query:
@@ -1094,6 +1054,7 @@ setup:
 "Test exists query on mapped binary field with no doc values":
   - do:
       search:
+          rest_total_hits_as_int: true
           index: test-no-dv
           body:
             query:
@@ -1106,6 +1067,7 @@ setup:
 "Test exists query on mapped boolean field with no doc values":
   - do:
       search:
+          rest_total_hits_as_int: true
           index: test-no-dv
           body:
             query:
@@ -1118,6 +1080,7 @@ setup:
 "Test exists query on mapped date field with no doc values":
   - do:
       search:
+          rest_total_hits_as_int: true
           index: test-no-dv
           body:
             query:
@@ -1130,6 +1093,7 @@ setup:
 "Test exists query on mapped geo_point field with no doc values":
   - do:
       search:
+          rest_total_hits_as_int: true
           index: test-no-dv
           body:
             query:
@@ -1138,22 +1102,12 @@ setup:
 
   - match: {hits.total: 3}
 
----
-"Test exists query on mapped geo_shape field with no doc values":
-  - do:
-      search:
-          index: test-no-dv
-          body:
-            query:
-              exists:
-                field: geo_shape
-
-  - match: {hits.total: 3}
 
 ---
 "Test exists query on mapped ip field with no doc values":
   - do:
       search:
+          rest_total_hits_as_int: true
           index: test-no-dv
           body:
             query:
@@ -1166,6 +1120,7 @@ setup:
 "Test exists query on mapped keyword field with no doc values":
   - do:
       search:
+          rest_total_hits_as_int: true
           index: test-no-dv
           body:
             query:
@@ -1178,6 +1133,7 @@ setup:
 "Test exists query on mapped byte field with no doc values":
   - do:
       search:
+          rest_total_hits_as_int: true
           index: test-no-dv
           body:
             query:
@@ -1190,6 +1146,7 @@ setup:
 "Test exists query on mapped double field with no doc values":
   - do:
       search:
+          rest_total_hits_as_int: true
           index: test-no-dv
           body:
             query:
@@ -1202,6 +1159,7 @@ setup:
 "Test exists query on mapped float field with no doc values":
   - do:
       search:
+          rest_total_hits_as_int: true
           index: test-no-dv
           body:
             query:
@@ -1214,6 +1172,7 @@ setup:
 "Test exists query on mapped half_float field with no doc values":
   - do:
       search:
+          rest_total_hits_as_int: true
           index: test-no-dv
           body:
             query:
@@ -1226,6 +1185,7 @@ setup:
 "Test exists query on mapped integer field with no doc values":
   - do:
       search:
+          rest_total_hits_as_int: true
           index: test-no-dv
           body:
             query:
@@ -1238,6 +1198,7 @@ setup:
 "Test exists query on mapped long field with no doc values":
   - do:
       search:
+          rest_total_hits_as_int: true
           index: test-no-dv
           body:
             query:
@@ -1250,6 +1211,7 @@ setup:
 "Test exists query on mapped short field with no doc values":
   - do:
       search:
+          rest_total_hits_as_int: true
           index: test-no-dv
           body:
             query:
@@ -1262,6 +1224,7 @@ setup:
 "Test exists query on mapped object field with no doc values":
   - do:
       search:
+          rest_total_hits_as_int: true
           index: test-no-dv
           body:
             query:
@@ -1274,6 +1237,7 @@ setup:
 "Test exists query on mapped object inner field with no doc values":
   - do:
       search:
+          rest_total_hits_as_int: true
           index: test-no-dv
           body:
             query:
@@ -1286,6 +1250,7 @@ setup:
 "Test exists query on mapped text field with no doc values":
   - do:
       search:
+          rest_total_hits_as_int: true
           index: test-no-dv
           body:
             query:

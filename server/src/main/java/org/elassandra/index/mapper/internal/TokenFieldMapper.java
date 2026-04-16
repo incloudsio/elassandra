@@ -1,135 +1,89 @@
 /*
  * Copyright (c) 2017 Strapdata (http://www.strapdata.com)
  * Contains some code from Elasticsearch (http://www.elastic.co)
+ * OpenSearch 1.3 side-car overlay — MetadataFieldMapper / SimpleMappedFieldType APIs.
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except in compliance with
  * the License. You may obtain a copy of the License at
  *
  *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
  */
+
 package org.elassandra.index.mapper.internal;
 
 import org.apache.lucene.document.LongPoint;
 import org.apache.lucene.document.NumericDocValuesField;
-import org.apache.lucene.document.SortedNumericDocValuesField;
-import org.apache.lucene.index.DocValuesType;
-import org.apache.lucene.index.IndexableField;
 import org.apache.lucene.search.DocValuesFieldExistsQuery;
 import org.apache.lucene.search.MatchNoDocsQuery;
 import org.apache.lucene.search.Query;
 import org.apache.lucene.util.BytesRef;
-import org.elasticsearch.common.Nullable;
-import org.elasticsearch.common.settings.Settings;
-import org.elasticsearch.common.xcontent.XContentBuilder;
-import org.elasticsearch.index.fielddata.IndexFieldData;
-import org.elasticsearch.index.fielddata.IndexNumericFieldData.NumericType;
-import org.elasticsearch.index.fielddata.plain.DocValuesIndexFieldData;
-import org.elasticsearch.index.mapper.EnabledAttributeMapper;
-import org.elasticsearch.index.mapper.MappedFieldType;
-import org.elasticsearch.index.mapper.Mapper;
-import org.elasticsearch.index.mapper.MapperParsingException;
-import org.elasticsearch.index.mapper.MetadataFieldMapper;
-import org.elasticsearch.index.mapper.ParseContext;
-import org.elasticsearch.index.mapper.SimpleMappedFieldType;
-import org.elasticsearch.index.query.QueryShardContext;
+import org.opensearch.common.Explicit;
+import org.opensearch.common.Nullable;
+import org.opensearch.index.fielddata.IndexFieldData;
+import org.opensearch.index.fielddata.IndexNumericFieldData.NumericType;
+import org.opensearch.index.fielddata.plain.SortedNumericIndexFieldData;
+import org.opensearch.index.mapper.FieldMapper;
+import org.opensearch.index.mapper.MetadataFieldMapper;
+import org.opensearch.index.mapper.ParametrizedFieldMapper;
+import org.opensearch.index.mapper.ParametrizedFieldMapper.Parameter;
+import org.opensearch.index.mapper.ParseContext;
+import org.opensearch.index.mapper.SimpleMappedFieldType;
+import org.opensearch.index.mapper.TextSearchInfo;
+import org.opensearch.index.mapper.ValueFetcher;
+import org.opensearch.index.mapper.MapperService;
+import org.opensearch.index.query.QueryShardContext;
+import org.opensearch.search.lookup.SearchLookup;
 
 import java.io.IOException;
-import java.util.Iterator;
+import java.util.Collections;
 import java.util.List;
-import java.util.Map;
 import java.util.Optional;
 
-import static org.elasticsearch.common.xcontent.support.XContentMapValues.nodeBooleanValue;
-
 /**
- *  Mapper for the _token field, the cassandra row token.
- **/
+ * Mapper for the _token field (Cassandra partition token).
+ */
 public class TokenFieldMapper extends MetadataFieldMapper {
 
     public static final String NAME = "_token";
     public static final String CONTENT_TYPE = "_token";
 
-    public static class Defaults {
-        public static final String NAME = TokenFieldMapper.NAME;
-        public static final TokenFieldType TOKEN_FIELD_TYPE = new TokenFieldType();
-
-        static {
-            TOKEN_FIELD_TYPE.setName(NAME);
-            TOKEN_FIELD_TYPE.setDocValuesType(DocValuesType.SORTED_NUMERIC);
-            TOKEN_FIELD_TYPE.setHasDocValues(true);
-            TOKEN_FIELD_TYPE.freeze();
-        }
-        public static final EnabledAttributeMapper ENABLED_STATE = EnabledAttributeMapper.ENABLED;
-        public static final long DEFAULT = -1;
+    private static TokenFieldMapper toType(FieldMapper in) {
+        return (TokenFieldMapper) in;
     }
 
-    public static class Builder extends MetadataFieldMapper.Builder<Builder, TokenFieldMapper> {
+    public static class Builder extends MetadataFieldMapper.Builder {
 
-        private EnabledAttributeMapper enabledState = EnabledAttributeMapper.UNSET_DISABLED;
+        private final Parameter<Explicit<Boolean>> enabled = MetadataFieldMapper.updateableBoolParam("enabled", m -> toType(m).enabledState, true);
 
         public Builder() {
-            super(Defaults.NAME, Defaults.TOKEN_FIELD_TYPE, Defaults.TOKEN_FIELD_TYPE);
+            super(NAME);
         }
 
-        public Builder enabled(EnabledAttributeMapper enabled) {
-            this.enabledState = enabled;
-            return builder;
+        @Override
+        protected List<Parameter<?>> getParameters() {
+            return Collections.singletonList(enabled);
         }
 
         @Override
         public TokenFieldMapper build(BuilderContext context) {
-            setupFieldType(context);
-            return new TokenFieldMapper(fieldType, enabledState, 0, context.indexSettings());
+            return new TokenFieldMapper(enabled.getValue());
         }
     }
 
-    public static class TypeParser implements MetadataFieldMapper.TypeParser {
-        @Override
-        public MetadataFieldMapper.Builder<?, ?> parse(String name, Map<String, Object> node, ParserContext parserContext) throws MapperParsingException {
-            Builder builder = new Builder();
-            for (Iterator<Map.Entry<String, Object>> iterator = node.entrySet().iterator(); iterator.hasNext();) {
-                Map.Entry<String, Object> entry = iterator.next();
-                String fieldName = entry.getKey();
-                Object fieldNode = entry.getValue();
-                if (fieldName.equals("enabled")) {
-                    EnabledAttributeMapper enabledState = nodeBooleanValue(fieldNode, fieldName) ? EnabledAttributeMapper.ENABLED : EnabledAttributeMapper.DISABLED;
-                    builder.enabled(enabledState);
-                    iterator.remove();
-                }
-            }
-            return builder;
-        }
+    public static final MetadataFieldMapper.TypeParser PARSER = new MetadataFieldMapper.ConfigurableTypeParser(
+        c -> new TokenFieldMapper(new Explicit<>(true, false)),
+        c -> new Builder()
+    );
 
-        @Override
-        public MetadataFieldMapper getDefault(MappedFieldType fieldType, ParserContext parserContext) {
-            final Settings indexSettings = parserContext.mapperService().getIndexSettings().getSettings();
-            return new TokenFieldMapper(indexSettings);
-        }
-    }
+    /** Exposed for {@link MetadataFieldMapper#updateableBoolParam} initializer. */
+    private final Explicit<Boolean> enabledState;
 
-    public static final class TokenFieldType extends SimpleMappedFieldType {
+    static final class TokenFieldType extends SimpleMappedFieldType {
 
-        TokenFieldType() {
-        }
+        private static final TokenFieldType INSTANCE = new TokenFieldType();
 
-        protected TokenFieldType(TokenFieldType  ref) {
-            super(ref);
-        }
-
-        @Override
-        public TokenFieldType clone() {
-            return new TokenFieldType(this);
-        }
-
-        @Override
-        public String name() {
-            return NAME;
+        private TokenFieldType() {
+            super(NAME, true, false, true, TextSearchInfo.SIMPLE_MATCH_ONLY, Collections.emptyMap());
         }
 
         @Override
@@ -155,6 +109,11 @@ public class TokenFieldMapper extends MetadataFieldMapper {
         }
 
         @Override
+        public ValueFetcher valueFetcher(MapperService mapperService, SearchLookup lookup, String format) {
+            throw new UnsupportedOperationException("Cannot fetch values for internal field [" + name() + "].");
+        }
+
+        @Override
         public Query existsQuery(QueryShardContext context) {
             return new DocValuesFieldExistsQuery(name());
         }
@@ -175,8 +134,7 @@ public class TokenFieldMapper extends MetadataFieldMapper {
         }
 
         @Override
-        public Query rangeQuery(Object lowerTerm, Object upperTerm, boolean includeLower,
-                                boolean includeUpper, QueryShardContext context) {
+        public Query rangeQuery(Object lowerTerm, Object upperTerm, boolean includeLower, boolean includeUpper, QueryShardContext context) {
             long l = Long.MIN_VALUE;
             long u = Long.MAX_VALUE;
             if (lowerTerm != null) {
@@ -201,29 +159,29 @@ public class TokenFieldMapper extends MetadataFieldMapper {
         }
 
         @Override
-        public IndexFieldData.Builder fielddataBuilder(String fullyQualifiedIndexName) {
+        public IndexFieldData.Builder fielddataBuilder(String fullyQualifiedIndexName, java.util.function.Supplier<SearchLookup> searchLookup) {
             failIfNoDocValues();
-            return new DocValuesIndexFieldData.Builder().numericType(NumericType.LONG);
+            return new SortedNumericIndexFieldData.Builder(name(), NumericType.LONG);
         }
     }
 
-    private EnabledAttributeMapper enabledState;
-
-    private TokenFieldMapper(Settings indexSettings) {
-        super(NAME, Defaults.TOKEN_FIELD_TYPE, Defaults.TOKEN_FIELD_TYPE, indexSettings);
+    private TokenFieldMapper(Explicit<Boolean> enabledState) {
+        super(TokenFieldType.INSTANCE);
+        this.enabledState = enabledState;
     }
 
-    private TokenFieldMapper(MappedFieldType fieldType, EnabledAttributeMapper enabled, long defaultToken, Settings indexSettings) {
-        super(NAME, fieldType, Defaults.TOKEN_FIELD_TYPE, indexSettings);
-        this.enabledState = enabled;
+    public Explicit<Boolean> enabledState() {
+        return enabledState;
     }
 
     @Override
-    public void preParse(ParseContext context) throws IOException {
+    public ParametrizedFieldMapper.Builder getMergeBuilder() {
+        return new Builder().init(this);
     }
 
     @Override
     public void parse(ParseContext context) throws IOException {
+        // Suppress default parse; token is applied in postParse (fork parity).
     }
 
     @Override
@@ -232,39 +190,25 @@ public class TokenFieldMapper extends MetadataFieldMapper {
     }
 
     @Override
-    public void createField(ParseContext context, Object object, Optional<String> fieldName) throws IOException {
-        Long token = (Long) object;
-        if (token != null) {
-            context.doc().add(new LongPoint(TokenFieldMapper.NAME, token));
-            context.doc().add(new SortedNumericDocValuesField(TokenFieldMapper.NAME, token));
+    protected void parseCreateField(ParseContext context) throws IOException {
+        if (context.sourceToParse().token() != null) {
+            Long token = context.sourceToParse().token();
+            context.doc().add(new LongPoint(NAME, token.longValue()));
+            context.doc().add(new NumericDocValuesField(NAME, token.longValue()));
         }
     }
 
     @Override
-    protected void parseCreateField(ParseContext context, List<IndexableField> fields) throws IOException {
-        if (context.sourceToParse().token() != null) {
-            Long token = context.sourceToParse().token();
-            if (token != null) {
-                fields.add(new LongPoint( TokenFieldMapper.NAME, token));
-                fields.add(new NumericDocValuesField(TokenFieldMapper.NAME, token));
-            }
+    public void createField(ParseContext context, Object object, Optional<String> keyName) throws IOException {
+        if (object instanceof Long) {
+            long token = ((Long) object).longValue();
+            context.doc().add(new LongPoint(NAME, token));
+            context.doc().add(new NumericDocValuesField(NAME, token));
         }
     }
-
 
     @Override
     protected String contentType() {
         return CONTENT_TYPE;
     }
-
-    @Override
-    public XContentBuilder toXContent(XContentBuilder builder, Params params) throws IOException {
-        return builder;
-    }
-
-    @Override
-    protected void doMerge(Mapper mergeWith, boolean updateAllTypes) {
-        // nothing to do
-    }
-
 }

@@ -15,9 +15,9 @@
  */
 package org.elassandra;
 
-import org.elasticsearch.ElasticsearchException;
+import org.opensearch.OpenSearchException;
 
-public class PaxosMetaDataUpdateException extends ElasticsearchException {
+public class PaxosMetaDataUpdateException extends OpenSearchException {
 
     public PaxosMetaDataUpdateException(Throwable cause) {
         super(cause);

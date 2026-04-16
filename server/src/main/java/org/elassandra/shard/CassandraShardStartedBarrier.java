@@ -19,16 +19,16 @@ import com.carrotsearch.hppc.cursors.ObjectCursor;
 
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
-import org.elasticsearch.cluster.ClusterChangedEvent;
-import org.elasticsearch.cluster.ClusterState;
-import org.elasticsearch.cluster.ClusterStateApplier;
-import org.elasticsearch.cluster.metadata.IndexMetaData;
-import org.elasticsearch.cluster.service.ClusterService;
-import org.elasticsearch.common.settings.Settings;
-import org.elasticsearch.gateway.GatewayService;
-import org.elasticsearch.index.IndexService;
-import org.elasticsearch.index.shard.IndexShard;
-import org.elasticsearch.index.shard.IndexShardState;
+import org.opensearch.cluster.ClusterChangedEvent;
+import org.opensearch.cluster.ClusterState;
+import org.opensearch.cluster.ClusterStateApplier;
+import org.opensearch.cluster.metadata.IndexMetadata;
+import org.opensearch.cluster.service.ClusterService;
+import org.opensearch.common.settings.Settings;
+import org.opensearch.gateway.GatewayService;
+import org.opensearch.index.IndexService;
+import org.opensearch.index.shard.IndexShard;
+import org.opensearch.index.shard.IndexShardState;
 
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
@@ -86,9 +86,9 @@ public class CassandraShardStartedBarrier implements ClusterStateApplier  {
             readyToIndex = false;
         } else {
             readyToIndex = true;
-            for(ObjectCursor<IndexMetaData> cursor : clusterState.metaData().indices().values()) {
-                IndexMetaData indexMetaData = cursor.value;
-                if (indexMetaData.getState() == IndexMetaData.State.OPEN) {
+            for(ObjectCursor<IndexMetadata> cursor : clusterState.metadata().indices().values()) {
+                IndexMetadata indexMetaData = cursor.value;
+                if (indexMetaData.getState() == IndexMetadata.State.OPEN) {
                     IndexService indexService = clusterService.getIndicesService().indexService(indexMetaData.getIndex());
                     if (indexService == null) {
                         readyToIndex = false;

@@ -27,37 +27,37 @@ import org.apache.cassandra.exceptions.ConfigurationException;
 import org.apache.cassandra.utils.FBUtilities;
 import org.apache.cassandra.utils.NativeLibrary;
 import org.apache.cassandra.utils.WindowsTimer;
+import org.apache.cassandra.service.StorageService;
+import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.elassandra.env.EnvironmentLoader;
 import org.elassandra.index.ElasticSecondaryIndex;
-import org.elasticsearch.ExceptionsHelper;
-import org.elasticsearch.Version;
-import org.elasticsearch.bootstrap.Bootstrap;
-import org.elasticsearch.bootstrap.BootstrapCheck;
-import org.elasticsearch.bootstrap.BootstrapChecks;
-import org.elasticsearch.bootstrap.BootstrapContext;
-import org.elasticsearch.cli.Terminal;
-import org.elasticsearch.client.Client;
-import org.elasticsearch.cluster.service.ClusterService;
-import org.elasticsearch.common.inject.CreationException;
-import org.elasticsearch.common.inject.Injector;
-import org.elasticsearch.common.inject.spi.Message;
-import org.elasticsearch.common.logging.LogConfigurator;
-import org.elasticsearch.common.logging.Loggers;
-import org.elasticsearch.common.settings.Settings;
-import org.elasticsearch.common.transport.BoundTransportAddress;
-import org.elasticsearch.env.Environment;
-import org.elasticsearch.monitor.jvm.JvmInfo;
-import org.elasticsearch.monitor.process.ProcessProbe;
-import org.elasticsearch.node.InternalSettingsPreparer;
-import org.elasticsearch.node.Node;
-import org.elasticsearch.node.NodeValidationException;
-import org.elasticsearch.plugins.ClusterPlugin;
-import org.elasticsearch.plugins.Plugin;
+import org.opensearch.ExceptionsHelper;
+import org.opensearch.Version;
+
+import org.opensearch.bootstrap.BootstrapCheck;
+
+import org.opensearch.bootstrap.BootstrapContext;
+import org.opensearch.client.Client;
+import org.opensearch.cluster.service.ClusterService;
+import org.opensearch.common.inject.CreationException;
+import org.opensearch.common.inject.Injector;
+import org.opensearch.common.inject.spi.Message;
+import org.opensearch.common.settings.Settings;
+import org.opensearch.common.transport.BoundTransportAddress;
+import org.opensearch.env.Environment;
+import org.opensearch.monitor.jvm.JvmInfo;
+import org.opensearch.monitor.process.ProcessProbe;
+import org.opensearch.node.InternalSettingsPreparer;
+import org.opensearch.node.Node;
+import org.opensearch.node.NodeValidationException;
+import org.opensearch.plugins.ClusterPlugin;
+import org.opensearch.plugins.Plugin;
 
 import java.io.File;
 import java.io.IOException;
 import java.lang.management.ManagementFactory;
+import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.security.AccessController;
 import java.security.PrivilegedAction;
@@ -89,7 +89,7 @@ import static com.google.common.collect.Sets.newHashSet;
  *
  */
 public class ElassandraDaemon extends CassandraDaemon {
-    private static final Logger logger = Loggers.getLogger(ElassandraDaemon.class);
+    private static final Logger logger = LogManager.getLogger(ElassandraDaemon.class);
 
     private static volatile Thread keepAliveThread;
     private static volatile CountDownLatch keepAliveLatch;
@@ -124,6 +124,9 @@ public class ElassandraDaemon extends CassandraDaemon {
     public void activate(boolean addShutdownHook, boolean createNode, Settings settings, Environment env, Collection<Class<? extends Plugin>> pluginList) {
         try
         {
+            // OpenSearchSingleNodeTestCase calls DatabaseDescriptor.daemonInitialization(…) with a programmatic Config
+            // before activate(). A second no-arg daemonInitialization() here reloads cassandra.yaml and can corrupt
+            // state or abort the forked test JVM early (Gradle exit 100).
             // Must match OpenSearchSingleNodeTestCase default (true): when unset, skip second init so programmatic
             // Config (storage_port 17100) from initElassandraDeamon is not replaced by yaml/default 7000.
             if (!Boolean.parseBoolean(System.getProperty("elassandra.test.config.override", "true"))) {
@@ -150,14 +153,16 @@ public class ElassandraDaemon extends CassandraDaemon {
         NativeLibrary.tryMlockall();
 
         //setup(addShutdownHook, settings, env, pluginList);
-        org.elasticsearch.bootstrap.Bootstrap.initializeNatives(
-                env.tmpFile(),
-                settings.getAsBoolean("bootstrap.memory_lock", true),
-                settings.getAsBoolean("bootstrap.system_call_filter", false),
-                settings.getAsBoolean("bootstrap.ctrlhandler", true));
-
-        // initialize probes before the security manager is installed
-        org.elasticsearch.bootstrap.Bootstrap.initializeProbes();
+        // BootstrapForTesting (OpenSearch test JVM) already ran Bootstrap.initializeNatives / initializeProbes.
+        // Calling them again here trips JNA/JNI (e.g. exit 100 in Docker) when ElassandraDaemon.activate runs.
+        if (Boolean.parseBoolean(System.getProperty("tests.gradle", "false")) == false) {
+            OpenSearchBootstrap.initNatives(
+                    env.tmpFile(),
+                    settings.getAsBoolean("bootstrap.memory_lock", true),
+                    settings.getAsBoolean("bootstrap.system_call_filter", false),
+                    settings.getAsBoolean("bootstrap.ctrlhandler", true));
+            OpenSearchBootstrap.initProbes();
+        }
 
         if (addShutdownHook) {
           Runtime.getRuntime().addShutdownHook(new Thread() {
@@ -178,17 +183,14 @@ public class ElassandraDaemon extends CassandraDaemon {
             // add ElassandraDaemon as a ClusterPlugin
             List<Class<? extends Plugin>> pluginList2 = Lists.newArrayList(pluginList);
             pluginList2.add(ElassandraPlugin.class);
-            this.node = new Node(getSettings(), pluginList2, true) {
+            Settings mergedSettings = getSettings();
+            Environment nodeEnv = new Environment(mergedSettings, env.configFile());
+            this.node = new Node(nodeEnv, pluginList2, true) {
                 @Override
                 protected void validateNodeBeforeAcceptingRequests(
                     final BootstrapContext context,
                     final BoundTransportAddress boundTransportAddress, List<BootstrapCheck> checks) throws NodeValidationException {
-                    BootstrapChecks.check(context, boundTransportAddress, checks);
-                }
-
-                @Override
-                protected void registerDerivedNodeNameWithLogger(String nodeName) {
-                    LogConfigurator.setNodeName(nodeName);
+                    OpenSearchBootstrap.runBootstrapChecks(context, boundTransportAddress, checks);
                 }
             };
         }
@@ -216,7 +218,7 @@ public class ElassandraDaemon extends CassandraDaemon {
 
         if (this.node != null) {
             try {
-                this.node.clusterService().submitNumberOfShardsAndReplicasUpdate("user-keyspaces-bootstraped");
+                this.node.injector().getInstance(ClusterService.class).submitNumberOfShardsAndReplicasUpdate("user-keyspaces-bootstraped", null);
                 // Must run before start(): gateway recovery (clears STATE_NOT_RECOVERED_BLOCK) runs in activate().
                 // If start() runs first, ringReady()'s second activate() is a lifecycle no-op and the barrier never clears.
                 this.node.activate();
@@ -240,7 +242,7 @@ public class ElassandraDaemon extends CassandraDaemon {
         logger.debug("User keyspaces initialized");
         if (node != null && (SystemKeyspace.bootstrapComplete() || DatabaseDescriptor.getAutoSnapshot() == false)) {
             try {
-                this.hasMetadata = this.node.clusterService().hasMetaDataTable();
+                this.hasMetadata = this.node.injector().getInstance(ClusterService.class).hasMetaDataTable();
                 if (this.hasMetadata) {
                     activateAndWaitShards("before opening user keyspaces");
                 }
@@ -259,7 +261,7 @@ public class ElassandraDaemon extends CassandraDaemon {
         if (node != null) {
             try {
                 // load mapping from schema jsut before bootstrapping C*
-                this.hasMetadata = this.node.clusterService().hasMetaDataTable();
+                this.hasMetadata = this.node.injector().getInstance(ClusterService.class).hasMetaDataTable();
                 activateAndWaitShards("before cassandra boostraping");
             } catch(Throwable e) {
                 logger.error("Failed to load Elasticsearch mapping from CQL schema before bootstraping:", e);
@@ -334,7 +336,7 @@ public class ElassandraDaemon extends CassandraDaemon {
                         logger.info("waiting for schema information to complete");
                         MigrationManager.waitUntilReadyForBootstrap();
                     }
-                    this.hasMetadata = this.node.clusterService().hasMetaDataTable();
+                    this.hasMetadata = this.node.injector().getInstance(ClusterService.class).hasMetaDataTable();
                 } catch(Throwable e)
                 {
                     logger.warn("Failed to load elasticsearch mapping from CQL schema after after joining without boostraping:", e);
@@ -349,8 +351,12 @@ public class ElassandraDaemon extends CassandraDaemon {
         if (!activated) {
             activated = true;
             logger.info("Activating Elasticsearch, shards starting "+source);
-            node.activate();
-            node.clusterService().blockUntilShardsStarted();
+            try {
+                node.activate();
+            } catch (NodeValidationException e) {
+                throw new RuntimeException(e);
+            }
+            node.injector().getInstance(ClusterService.class).blockUntilShardsStarted();
             logger.info("Elasticsearch shards started, ready to go on.");
         }
     }
@@ -369,8 +375,13 @@ public class ElassandraDaemon extends CassandraDaemon {
     @Override
     public void stop() {
         super.stop();
-        if (node != null)
-            node.stop();
+        if (node != null) {
+            try {
+                node.close();
+            } catch (IOException e) {
+                throw new RuntimeException(e);
+            }
+        }
     }
 
     /**
@@ -386,8 +397,13 @@ public class ElassandraDaemon extends CassandraDaemon {
      */
     @Override
     public void activate() {
-        if (node != null)
-            node.activate();
+        if (node != null) {
+            try {
+                node.activate();
+            } catch (NodeValidationException e) {
+                throw new RuntimeException(e);
+            }
+        }
     }
 
     /**
@@ -416,17 +432,13 @@ public class ElassandraDaemon extends CassandraDaemon {
         // add ElassandraDaemon as a ClusterPlugin
         List<Class<? extends Plugin>> classpathPlugins2 = Lists.newArrayList(classpathPlugins);
         classpathPlugins2.add(ElassandraPlugin.class);
-        this.node = new Node(nodeSettings, classpathPlugins2, forbidPrivateIndexSettings)  {
+        Environment nodeEnv = new Environment(nodeSettings, env.configFile());
+        this.node = new Node(nodeEnv, classpathPlugins2, forbidPrivateIndexSettings)  {
             @Override
             protected void validateNodeBeforeAcceptingRequests(
                 final BootstrapContext context,
                 final BoundTransportAddress boundTransportAddress, List<BootstrapCheck> checks) throws NodeValidationException {
-                BootstrapChecks.check(context, boundTransportAddress, checks);
-            }
-
-            @Override
-            protected void registerDerivedNodeNameWithLogger(String nodeName) {
-                LogConfigurator.setNodeName(nodeName);
+                OpenSearchBootstrap.runBootstrapChecks(context, boundTransportAddress, checks);
             }
         };
 
@@ -516,13 +528,13 @@ public class ElassandraDaemon extends CassandraDaemon {
         }
 
         if (System.getProperty("es.max-open-files", "false").equals("true")) {
-            Logger logger = Loggers.getLogger(Bootstrap.class);
+            Logger logger = LogManager.getLogger(ElassandraDaemon.class);
             logger.info("max_open_files [{}]", ProcessProbe.getInstance().getMaxFileDescriptorCount());
         }
 
         // warn if running using the client VM
         if (JvmInfo.jvmInfo().getVmName().toLowerCase(Locale.ROOT).contains("client")) {
-            Logger logger = Loggers.getLogger(Bootstrap.class);
+            Logger logger = LogManager.getLogger(ElassandraDaemon.class);
             logger.warn("jvm uses the client vm, make sure to run `java` with the server vm for best performance by adding `-server` to the command line");
         }
 
@@ -530,7 +542,7 @@ public class ElassandraDaemon extends CassandraDaemon {
         AccessController.doPrivileged(new PrivilegedAction<Object>() {
             @Override
             public Object run() {
-                System.setProperty("es.set.netty.runtime.available.processors", "false");
+                System.setProperty("opensearch.set.netty.runtime.available.processors", "false");
                 return null;
             }
         });
@@ -553,9 +565,9 @@ public class ElassandraDaemon extends CassandraDaemon {
                                                             .put("node.name","node0")
                                                             .put("path.home", homeDir)
                                                             .build(),
-                                                            foreground ? Terminal.DEFAULT : null,
-                                                            Collections.EMPTY_MAP,
-                                                            Paths.get(configDir));
+                                                            Collections.emptyMap(),
+                                                            Paths.get(configDir),
+                                                            () -> "node0");
                                                 }
                                             }
                                            : FBUtilities.<EnvironmentLoader>construct(envLoaderClass, "elasticsearch environment loader");
@@ -595,7 +607,7 @@ public class ElassandraDaemon extends CassandraDaemon {
                         // bail out
                     }
                 }
-            }, "elasticsearch[keepAlive/" + Version.CURRENT + "]");
+            }, "opensearch[keepAlive/" + Version.CURRENT + "]");
             keepAliveThread.setDaemon(false);
             keepAliveThread.start();
         } catch (Throwable e) {
@@ -605,9 +617,79 @@ public class ElassandraDaemon extends CassandraDaemon {
                 System.err.flush();
                 //Loggers.disableConsoleLogging();
             }
-            Logger logger = Loggers.getLogger(ElassandraDaemon.class);
+            Logger logger = LogManager.getLogger(ElassandraDaemon.class);
             logger.error("Exception", e);
             System.exit(3);
+        }
+    }
+
+    /**
+     * {@link org.opensearch.bootstrap.Bootstrap} and {@link org.opensearch.bootstrap.BootstrapChecks} are package-private
+     * to {@code org.opensearch.bootstrap}; ElassandraDaemon lives in {@code org.apache.cassandra.service}.
+     */
+    private static final class OpenSearchBootstrap {
+        private OpenSearchBootstrap() {}
+
+        static void initNatives(
+            Path tmpFile,
+            boolean memoryLock,
+            boolean systemCallFilter,
+            boolean ctrlHandler
+        ) {
+            try {
+                Class<?> c = Class.forName("org.opensearch.bootstrap.Bootstrap");
+                java.lang.reflect.Method m = c.getDeclaredMethod(
+                    "initializeNatives",
+                    Path.class,
+                    boolean.class,
+                    boolean.class,
+                    boolean.class
+                );
+                m.setAccessible(true);
+                m.invoke(null, tmpFile, memoryLock, systemCallFilter, ctrlHandler);
+            } catch (Exception e) {
+                throw new RuntimeException(e);
+            }
+        }
+
+        static void initProbes() {
+            try {
+                Class<?> c = Class.forName("org.opensearch.bootstrap.Bootstrap");
+                java.lang.reflect.Method m = c.getDeclaredMethod("initializeProbes");
+                m.setAccessible(true);
+                m.invoke(null);
+            } catch (Exception e) {
+                throw new RuntimeException(e);
+            }
+        }
+
+        static void runBootstrapChecks(
+            BootstrapContext context,
+            BoundTransportAddress boundTransportAddress,
+            List<BootstrapCheck> checks
+        ) throws NodeValidationException {
+            try {
+                Class<?> bc = Class.forName("org.opensearch.bootstrap.BootstrapChecks");
+                java.lang.reflect.Method m = bc.getDeclaredMethod(
+                    "check",
+                    BootstrapContext.class,
+                    BoundTransportAddress.class,
+                    List.class
+                );
+                m.setAccessible(true);
+                m.invoke(null, context, boundTransportAddress, checks);
+            } catch (java.lang.reflect.InvocationTargetException e) {
+                Throwable c = e.getCause();
+                if (c instanceof NodeValidationException) {
+                    throw (NodeValidationException) c;
+                }
+                if (c instanceof RuntimeException) {
+                    throw (RuntimeException) c;
+                }
+                throw new RuntimeException(c);
+            } catch (Exception e) {
+                throw new RuntimeException(e);
+            }
         }
     }
 
@@ -637,7 +719,7 @@ public class ElassandraDaemon extends CassandraDaemon {
         } else {
             errorMessage.append("- ").append(ExceptionsHelper.detailedMessage(e));
         }
-        if (Loggers.getLogger(ElassandraDaemon.class).isDebugEnabled()) {
+        if (logger.isDebugEnabled()) {
             errorMessage.append("\n").append(ExceptionsHelper.stackTrace(e));
         }
         return errorMessage.toString();

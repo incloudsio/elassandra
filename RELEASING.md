@@ -16,20 +16,17 @@
 
 Document the active branch and its Cassandra/OpenSearch baseline in the release notes for every publish.
 
-## Version scheme (current 6.8 line)
+## Version scheme (current Cassandra 4.0 + OpenSearch 1.3 line)
 
-Releases use the Elasticsearch-compatible quad **plus** a Cassandra patch segment, for example **6.8.4.16**, defined in [buildSrc/version.properties](buildSrc/version.properties) (`elasticsearch` and `cassandra` coordinates).
-
-- Bump `elasticsearch` / `elasticsearch_vanilla` when changing the search-engine baseline.
-- Bump the Cassandra artifact version (`cassandra`) when the `server/cassandra` submodule produces a new `cassandra-all` build.
-
-## Version scheme (future Cassandra 4.0 + OpenSearch 1.3)
-
-When the [OpenSearch 1.3.x](https://github.com/opensearch-project/OpenSearch) rebase ships, publish versions that make the stack obvious to operators, for example:
+Publish versions that make the stack obvious to operators, for example:
 
 `4.0.20-1.3.20.1` — Apache Cassandra **4.0.20**, OpenSearch **1.3.20**, Elassandra patch **1**.
 
-Document the mapping in release notes and in [docs/elassandra/source/migration.rst](docs/elassandra/source/migration.rst).
+Document the mapping in release notes and in [docs/elassandra/source/migration.rst](docs/elassandra/source/migration.rst). The authoritative pins live in [buildSrc/version.properties](buildSrc/version.properties) as `cassandra`, `opensearch`, `opensearch_port`, and `lucene_opensearch`.
+
+## Version scheme (legacy 6.8 line)
+
+Historical Elasticsearch-based releases used the Elasticsearch-compatible quad **plus** a Cassandra patch segment, for example **6.8.4.16**. Keep that scheme only for older maintenance branches that still ship the legacy Elasticsearch 6.8 / Cassandra 3.11 line.
 
 ## Build release artifacts
 
@@ -47,8 +44,8 @@ For each release, publish a short matrix:
 
 | Elassandra version | Cassandra base | Search engine | Minimum Java | REST compatibility |
 |--------------------|----------------|---------------|--------------|---------------------|
-| 6.8.4.x (this tree) | Strapdata 3.11.9.x | Elasticsearch 6.8.4 | 8 (C*), 12 (ES) | ES 6.8 |
-| Future | Apache 4.0.x + fork | OpenSearch 1.3.x | 11 | OpenSearch 1.x / ES 7.10-style |
+| 4.0.x-1.3.20.n (current line) | Apache 4.0.x + fork | OpenSearch 1.3.x | 11 | OpenSearch 1.x / ES 7.10-style |
+| 6.8.4.x (legacy line) | Strapdata 3.11.9.x | Elasticsearch 6.8.4 | 8 (C*), 12 (ES) | ES 6.8 |
 
 ## Docker / deb / rpm
 

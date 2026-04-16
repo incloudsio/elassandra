@@ -16,11 +16,11 @@
 
 package org.elassandra.cluster.routing;
 
-import org.elasticsearch.cluster.ClusterState;
-import org.elasticsearch.cluster.routing.ShardRoutingState;
-import org.elasticsearch.common.Nullable;
-import org.elasticsearch.common.transport.TransportAddress;
-import org.elasticsearch.index.Index;
+import org.opensearch.cluster.ClusterState;
+import org.opensearch.cluster.routing.ShardRoutingState;
+import org.opensearch.common.Nullable;
+import org.opensearch.common.transport.TransportAddress;
+import org.opensearch.index.Index;
 
 import java.util.UUID;
 import java.util.function.BiFunction;

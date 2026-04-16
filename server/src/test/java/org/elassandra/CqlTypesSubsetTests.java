@@ -15,21 +15,27 @@
  */
 package org.elassandra;
 
+import org.apache.cassandra.config.DatabaseDescriptor;
 import org.apache.cassandra.db.ConsistencyLevel;
-import org.elasticsearch.action.DocWriteResponse;
-import org.elasticsearch.common.xcontent.XContentType;
-import org.elasticsearch.index.query.QueryBuilders;
-import org.elasticsearch.test.ESSingleNodeTestCase;
+import org.opensearch.action.DocWriteResponse;
+import org.opensearch.common.xcontent.XContentType;
+import org.opensearch.index.query.QueryBuilders;
+import org.opensearch.test.OpenSearchSingleNodeTestCase;
 import org.junit.Test;
 
-import static org.elasticsearch.test.hamcrest.ElasticsearchAssertions.assertAcked;
+import static org.opensearch.test.hamcrest.OpenSearchAssertions.assertAcked;
 import static org.hamcrest.Matchers.equalTo;
 
-public class CqlTypesSubsetTests extends ESSingleNodeTestCase {
+public class CqlTypesSubsetTests extends OpenSearchSingleNodeTestCase {
 
     @Test
     public void testClusteringOrderColumnDiscover() throws Exception {
-        process(ConsistencyLevel.ONE, "CREATE KEYSPACE ks WITH replication = {'class': 'NetworkTopologyStrategy', 'DC1': 1};");
+        process(
+            ConsistencyLevel.ONE,
+            "CREATE KEYSPACE ks WITH replication = {'class': 'NetworkTopologyStrategy', '"
+                + DatabaseDescriptor.getLocalDataCenter()
+                + "': 1};"
+        );
         process(ConsistencyLevel.ONE, "CREATE TABLE ks.test (id int, timestamp timestamp, PRIMARY KEY (id, timestamp)) WITH CLUSTERING ORDER BY (timestamp DESC)");
         assertAcked(client().admin().indices().prepareCreate("ks").addMapping("test", discoverMapping("test")));
     }
@@ -46,7 +52,7 @@ public class CqlTypesSubsetTests extends ESSingleNodeTestCase {
         assertThat(client().prepareIndex("test", "typeA", "3").setSource("{ \"c\":\"1\", \"x\":\"aaa\" }", XContentType.JSON).get().getResult(),
             equalTo(DocWriteResponse.Result.CREATED));
 
-        assertThat(client().prepareSearch().setIndices("test").setQuery(QueryBuilders.queryStringQuery("q=aaa")).get().getHits().getTotalHits(),
+        assertThat(client().prepareSearch().setIndices("test").setQuery(QueryBuilders.queryStringQuery("q=aaa")).get().getHits().getTotalHits().value,
             equalTo(3L));
     }
 }

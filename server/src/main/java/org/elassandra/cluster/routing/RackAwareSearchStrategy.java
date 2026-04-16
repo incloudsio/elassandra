@@ -15,7 +15,7 @@
  */
 package org.elassandra.cluster.routing;
 
-import org.elasticsearch.cluster.node.DiscoveryNode;
+import org.opensearch.cluster.node.DiscoveryNode;
 
 import java.util.Collections;
 import java.util.Comparator;

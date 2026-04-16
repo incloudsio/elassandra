@@ -27,15 +27,21 @@ fi
 
 # AllEntries (removed in OpenSearch; Elassandra still references it)
 AE_SRC="$ROOT/server/src/main/java/org/elasticsearch/common/lucene/all/AllEntries.java"
+if [[ ! -f "$AE_SRC" ]] && [[ -f "$ROOT/server/src/main/java/org/opensearch/common/lucene/all/AllEntries.java" ]]; then
+  AE_SRC="$ROOT/server/src/main/java/org/opensearch/common/lucene/all/AllEntries.java"
+fi
 AE_DST="$DEST/server/src/main/java/org/opensearch/common/lucene/all/AllEntries.java"
 if [[ -f "$AE_SRC" ]]; then
   mkdir -p "$(dirname "$AE_DST")"
-  perl -pe 's/^package org\.elasticsearch\.common\.lucene\.all/package org.opensearch.common.lucene.all/' "$AE_SRC" > "$AE_DST"
+  perl -pe 's/^package org\.elasticsearch\.common\.lucene\.all/package org.opensearch.common.lucene.all/; s/^package org\.opensearch\.common\.lucene\.all/package org.opensearch.common.lucene.all/' "$AE_SRC" > "$AE_DST"
   echo "Wrote $AE_DST"
 fi
 
 # DeleteByQuery top-level (paired with Engine patch in the clone)
 DBQ_SRC="$ROOT/server/src/main/java/org/elasticsearch/index/engine/DeleteByQuery.java"
+if [[ ! -f "$DBQ_SRC" ]] && [[ -f "$ROOT/server/src/main/java/org/opensearch/index/engine/DeleteByQuery.java" ]]; then
+  DBQ_SRC="$ROOT/server/src/main/java/org/opensearch/index/engine/DeleteByQuery.java"
+fi
 DBQ_DST="$DEST/server/src/main/java/org/opensearch/index/engine/DeleteByQuery.java"
 if [[ -f "$DBQ_SRC" ]]; then
   mkdir -p "$(dirname "$DBQ_DST")"
@@ -75,6 +81,9 @@ echo "Wrote stub $ISW"
 CFP_DST="$DEST/server/src/main/java/org/opensearch/search/fetch/CqlFetchPhase.java"
 CFP_STUB="$ROOT/scripts/templates/opensearch-sidecar/CqlFetchPhase.java"
 CFP_SRC="$ROOT/server/src/main/java/org/elasticsearch/search/fetch/CqlFetchPhase.java"
+if [[ ! -f "$CFP_SRC" ]] && [[ -f "$ROOT/server/src/main/java/org/opensearch/search/fetch/CqlFetchPhase.java" ]]; then
+  CFP_SRC="$ROOT/server/src/main/java/org/opensearch/search/fetch/CqlFetchPhase.java"
+fi
 mkdir -p "$(dirname "$CFP_DST")"
 if [[ "${ELASSANDRA_OVERLAY_OPENSEARCH_CQL_FETCH_FULL:-}" == "1" && -f "$CFP_SRC" ]]; then
   cp "$CFP_SRC" "$CFP_DST"

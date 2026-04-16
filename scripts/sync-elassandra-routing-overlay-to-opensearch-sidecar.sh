@@ -10,6 +10,12 @@ DEST="${1:?OpenSearch clone root}"
 
 IRT_SRC="$ROOT/server/src/main/java/org/elasticsearch/cluster/routing/IndexRoutingTable.java"
 RT_SRC="$ROOT/server/src/main/java/org/elasticsearch/cluster/routing/RoutingTable.java"
+if [[ ! -f "$IRT_SRC" ]] && [[ -f "$ROOT/server/src/main/java/org/opensearch/cluster/routing/IndexRoutingTable.java" ]]; then
+  IRT_SRC="$ROOT/server/src/main/java/org/opensearch/cluster/routing/IndexRoutingTable.java"
+fi
+if [[ ! -f "$RT_SRC" ]] && [[ -f "$ROOT/server/src/main/java/org/opensearch/cluster/routing/RoutingTable.java" ]]; then
+  RT_SRC="$ROOT/server/src/main/java/org/opensearch/cluster/routing/RoutingTable.java"
+fi
 IRT_DST="$DEST/server/src/main/java/org/opensearch/cluster/routing/IndexRoutingTable.java"
 RT_DST="$DEST/server/src/main/java/org/opensearch/cluster/routing/RoutingTable.java"
 

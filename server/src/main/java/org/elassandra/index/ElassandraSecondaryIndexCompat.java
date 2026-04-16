@@ -6,19 +6,19 @@ package org.elassandra.index;
 
 import org.apache.cassandra.db.marshal.AbstractType;
 import org.apache.lucene.search.Query;
-import org.elasticsearch.ElasticsearchException;
-import org.elasticsearch.Version;
-import org.elasticsearch.index.IndexService;
-import org.elasticsearch.index.IndexSettings;
-import org.elasticsearch.index.engine.Engine;
-import org.elasticsearch.index.mapper.FieldMapper;
-import org.elasticsearch.index.mapper.MappedFieldType;
-import org.elasticsearch.index.mapper.MapperService;
-import org.elasticsearch.index.mapper.NumberFieldMapper;
-import org.elasticsearch.index.mapper.ObjectMapper;
-import org.elasticsearch.index.mapper.ParseContext;
-import org.elasticsearch.index.query.QueryShardContext;
-import org.elasticsearch.index.shard.IndexShard;
+import org.opensearch.OpenSearchException;
+import org.opensearch.Version;
+import org.opensearch.index.IndexService;
+import org.opensearch.index.IndexSettings;
+import org.opensearch.index.engine.Engine;
+import org.opensearch.index.mapper.FieldMapper;
+import org.opensearch.index.mapper.MappedFieldType;
+import org.opensearch.index.mapper.MapperService;
+import org.opensearch.index.mapper.NumberFieldMapper;
+import org.opensearch.index.mapper.ObjectMapper;
+import org.opensearch.index.mapper.ParseContext;
+import org.opensearch.index.query.QueryShardContext;
+import org.opensearch.index.shard.IndexShard;
 
 import java.io.IOException;
 import java.lang.reflect.InvocationTargetException;
@@ -44,10 +44,10 @@ public final class ElassandraSecondaryIndexCompat {
                 Object md = gm.invoke(indexService);
                 return ((Number) md.getClass().getMethod("getVersion").invoke(md)).longValue();
             } catch (ReflectiveOperationException e2) {
-                throw new ElasticsearchException("Could not read index metadata version from IndexService", e2);
+                throw new OpenSearchException("Could not read index metadata version from IndexService", e2);
             }
         } catch (ReflectiveOperationException e) {
-            throw new ElasticsearchException("Could not read index metadata version from IndexService", e);
+            throw new OpenSearchException("Could not read index metadata version from IndexService", e);
         }
     }
 
@@ -165,7 +165,7 @@ public final class ElassandraSecondaryIndexCompat {
                 last = e;
             }
         }
-        throw new ElasticsearchException("NumberType.rangeQuery: no compatible overload on " + type, last);
+        throw new OpenSearchException("NumberType.rangeQuery: no compatible overload on " + type, last);
     }
 
     public static Query ipFieldTypeTermQuery(MappedFieldType fieldType, Object value) {
@@ -175,7 +175,7 @@ public final class ElassandraSecondaryIndexCompat {
         } catch (NoSuchMethodException e) {
             return ipFieldTypeTermQueryOs(fieldType, value);
         } catch (ReflectiveOperationException e) {
-            throw new ElasticsearchException("IpFieldType.termQuery compatibility", e);
+            throw new OpenSearchException("IpFieldType.termQuery compatibility", e);
         }
     }
 
@@ -185,7 +185,7 @@ public final class ElassandraSecondaryIndexCompat {
             Method m = fieldType.getClass().getMethod("termQuery", Object.class, qsc);
             return (Query) m.invoke(fieldType, value, null);
         } catch (ReflectiveOperationException e) {
-            throw new ElasticsearchException("IpFieldType.termQuery compatibility", e);
+            throw new OpenSearchException("IpFieldType.termQuery compatibility", e);
         }
     }
 
@@ -198,7 +198,7 @@ public final class ElassandraSecondaryIndexCompat {
         } catch (NoSuchMethodException e) {
             return ipFieldTypeRangeQueryOs(fieldType, lowerTerm, upperTerm, includeLower, includeUpper);
         } catch (ReflectiveOperationException e) {
-            throw new ElasticsearchException("IpFieldType.rangeQuery compatibility", e);
+            throw new OpenSearchException("IpFieldType.rangeQuery compatibility", e);
         }
     }
 
@@ -209,7 +209,7 @@ public final class ElassandraSecondaryIndexCompat {
             Method m = fieldType.getClass().getMethod("rangeQuery", Object.class, Object.class, boolean.class, boolean.class, qsc);
             return (Query) m.invoke(fieldType, lowerTerm, upperTerm, includeLower, includeUpper, null);
         } catch (ReflectiveOperationException e) {
-            throw new ElasticsearchException("IpFieldType.rangeQuery compatibility", e);
+            throw new OpenSearchException("IpFieldType.rangeQuery compatibility", e);
         }
     }
 
@@ -222,7 +222,7 @@ public final class ElassandraSecondaryIndexCompat {
         } catch (NoSuchMethodException e) {
             return booleanFieldTypeRangeQueryOs(fieldType, lowerTerm, upperTerm, includeLower, includeUpper);
         } catch (ReflectiveOperationException e) {
-            throw new ElasticsearchException("BooleanFieldType.rangeQuery compatibility", e);
+            throw new OpenSearchException("BooleanFieldType.rangeQuery compatibility", e);
         }
     }
 
@@ -233,7 +233,7 @@ public final class ElassandraSecondaryIndexCompat {
             Method m = fieldType.getClass().getMethod("rangeQuery", Object.class, Object.class, boolean.class, boolean.class, qsc);
             return (Query) m.invoke(fieldType, lowerTerm, upperTerm, includeLower, includeUpper, null);
         } catch (ReflectiveOperationException e) {
-            throw new ElasticsearchException("BooleanFieldType.rangeQuery compatibility", e);
+            throw new OpenSearchException("BooleanFieldType.rangeQuery compatibility", e);
         }
     }
 
@@ -246,16 +246,16 @@ public final class ElassandraSecondaryIndexCompat {
                 m.setAccessible(true);
                 return (Engine) m.invoke(shard);
             } catch (ReflectiveOperationException e2) {
-                throw new ElasticsearchException("IndexShard.getEngine", e2);
+                throw new OpenSearchException("IndexShard.getEngine", e2);
             }
         } catch (InvocationTargetException e) {
             Throwable c = e.getCause();
             if (c instanceof RuntimeException) {
                 throw (RuntimeException) c;
             }
-            throw new ElasticsearchException(c);
+            throw new OpenSearchException(c);
         } catch (ReflectiveOperationException e) {
-            throw new ElasticsearchException(e);
+            throw new OpenSearchException(e);
         }
     }
 
@@ -271,19 +271,19 @@ public final class ElassandraSecondaryIndexCompat {
                 try {
                     return (IndexService) IndexShard.class.getMethod("getIndexService").invoke(shard);
                 } catch (ReflectiveOperationException e3) {
-                    throw new ElasticsearchException("IndexShard indexService accessor", e3);
+                    throw new OpenSearchException("IndexShard indexService accessor", e3);
                 }
             } catch (ReflectiveOperationException e2) {
-                throw new ElasticsearchException("IndexShard indexService accessor", e2);
+                throw new OpenSearchException("IndexShard indexService accessor", e2);
             }
         } catch (InvocationTargetException e) {
             Throwable c = e.getCause();
             if (c instanceof RuntimeException) {
                 throw (RuntimeException) c;
             }
-            throw new ElasticsearchException(c);
+            throw new OpenSearchException(c);
         } catch (ReflectiveOperationException e) {
-            throw new ElasticsearchException(e);
+            throw new OpenSearchException(e);
         }
     }
 
@@ -295,7 +295,7 @@ public final class ElassandraSecondaryIndexCompat {
             return (Boolean) vCreated.getClass().getMethod("onOrAfter", legacy).invoke(vCreated, marker);
         } catch (Exception e) {
             try {
-                Class<?> ver = Class.forName("org.elasticsearch.Version");
+                Class<?> ver = Class.forName("org.opensearch.Version");
                 Object marker = ver.getField("V_6_0_0_beta1").get(null);
                 Object vCreated = settings.getIndexVersionCreated();
                 return (Boolean) vCreated.getClass().getMethod("onOrAfter", ver).invoke(vCreated, marker);
@@ -331,7 +331,7 @@ public final class ElassandraSecondaryIndexCompat {
             return (Boolean) vCreated.getClass().getMethod("onOrAfter", legacy).invoke(vCreated, v65);
         } catch (Exception e) {
             try {
-                Class<?> ver = Class.forName("org.elasticsearch.Version");
+                Class<?> ver = Class.forName("org.opensearch.Version");
                 Object v65 = ver.getField("V_6_5_0").get(null);
                 Object vCreated = settings.getIndexVersionCreated();
                 return (Boolean) vCreated.getClass().getMethod("onOrAfter", ver).invoke(vCreated, v65);

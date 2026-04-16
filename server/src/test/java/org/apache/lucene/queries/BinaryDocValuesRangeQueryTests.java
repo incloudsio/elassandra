@@ -1,4 +1,12 @@
 /*
+ * SPDX-License-Identifier: Apache-2.0
+ *
+ * The OpenSearch Contributors require contributions made to
+ * this file be licensed under the Apache-2.0 license or a
+ * compatible open source license.
+ */
+
+/*
  * Licensed to Elasticsearch under one or more contributor
  * license agreements. See the NOTICE file distributed with
  * this work for additional information regarding copyright
@@ -16,6 +24,11 @@
  * specific language governing permissions and limitations
  * under the License.
  */
+/*
+ * Modifications Copyright OpenSearch Contributors. See
+ * GitHub history for details.
+ */
+
 package org.apache.lucene.queries;
 
 import org.apache.lucene.document.BinaryDocValuesField;
@@ -26,8 +39,9 @@ import org.apache.lucene.search.IndexSearcher;
 import org.apache.lucene.search.Query;
 import org.apache.lucene.store.Directory;
 import org.apache.lucene.util.BytesRef;
-import org.elasticsearch.index.mapper.RangeFieldMapper;
-import org.elasticsearch.test.ESTestCase;
+import org.opensearch.index.mapper.RangeFieldMapper;
+import org.opensearch.index.mapper.RangeType;
+import org.opensearch.test.OpenSearchTestCase;
 
 import java.io.IOException;
 
@@ -37,65 +51,64 @@ import static org.apache.lucene.queries.BinaryDocValuesRangeQuery.QueryType.CROS
 import static org.apache.lucene.queries.BinaryDocValuesRangeQuery.QueryType.INTERSECTS;
 import static org.apache.lucene.queries.BinaryDocValuesRangeQuery.QueryType.WITHIN;
 
-public class BinaryDocValuesRangeQueryTests extends ESTestCase {
+public class BinaryDocValuesRangeQueryTests extends OpenSearchTestCase {
 
     public void testBasics() throws Exception {
         String fieldName = "long_field";
-        RangeFieldMapper.RangeType rangeType = RangeFieldMapper.RangeType.LONG;
+        RangeType rangeType = RangeType.LONG;
         try (Directory dir = newDirectory()) {
             try (RandomIndexWriter writer = new RandomIndexWriter(random(), dir)) {
                 // intersects (within)
                 Document document = new Document();
-                BytesRef encodedRange =
-                        rangeType.encodeRanges(singleton(new RangeFieldMapper.Range(rangeType, -10L, 9L, true , true)));
+                BytesRef encodedRange = rangeType.encodeRanges(singleton(new RangeFieldMapper.Range(rangeType, -10L, 9L, true, true)));
                 document.add(new BinaryDocValuesField(fieldName, encodedRange));
                 writer.addDocument(document);
 
                 // intersects (crosses)
                 document = new Document();
-                encodedRange = rangeType.encodeRanges(singleton(new RangeFieldMapper.Range(rangeType, 10L, 20L, true , true)));
+                encodedRange = rangeType.encodeRanges(singleton(new RangeFieldMapper.Range(rangeType, 10L, 20L, true, true)));
                 document.add(new BinaryDocValuesField(fieldName, encodedRange));
                 writer.addDocument(document);
 
                 // intersects (contains, crosses)
                 document = new Document();
-                encodedRange = rangeType.encodeRanges(singleton(new RangeFieldMapper.Range(rangeType, -20L, 30L, true , true)));
+                encodedRange = rangeType.encodeRanges(singleton(new RangeFieldMapper.Range(rangeType, -20L, 30L, true, true)));
                 document.add(new BinaryDocValuesField(fieldName, encodedRange));
                 writer.addDocument(document);
 
                 // intersects (within)
                 document = new Document();
-                encodedRange = rangeType.encodeRanges(singleton(new RangeFieldMapper.Range(rangeType, -11L, 1L, true , true)));
+                encodedRange = rangeType.encodeRanges(singleton(new RangeFieldMapper.Range(rangeType, -11L, 1L, true, true)));
                 document.add(new BinaryDocValuesField(fieldName, encodedRange));
                 writer.addDocument(document);
 
                 // intersects (crosses)
                 document = new Document();
-                encodedRange = rangeType.encodeRanges(singleton(new RangeFieldMapper.Range(rangeType, 12L, 15L, true , true)));
+                encodedRange = rangeType.encodeRanges(singleton(new RangeFieldMapper.Range(rangeType, 12L, 15L, true, true)));
                 document.add(new BinaryDocValuesField(fieldName, encodedRange));
                 writer.addDocument(document);
 
                 // disjoint
                 document = new Document();
-                encodedRange = rangeType.encodeRanges(singleton(new RangeFieldMapper.Range(rangeType, -122L, -115L, true , true)));
+                encodedRange = rangeType.encodeRanges(singleton(new RangeFieldMapper.Range(rangeType, -122L, -115L, true, true)));
                 document.add(new BinaryDocValuesField(fieldName, encodedRange));
                 writer.addDocument(document);
 
                 // intersects (crosses)
                 document = new Document();
-                encodedRange = rangeType.encodeRanges(singleton(new RangeFieldMapper.Range(rangeType, Long.MIN_VALUE, -11L, true , true)));
+                encodedRange = rangeType.encodeRanges(singleton(new RangeFieldMapper.Range(rangeType, Long.MIN_VALUE, -11L, true, true)));
                 document.add(new BinaryDocValuesField(fieldName, encodedRange));
                 writer.addDocument(document);
 
                 // equal (within, contains, intersects)
                 document = new Document();
-                encodedRange = rangeType.encodeRanges(singleton(new RangeFieldMapper.Range(rangeType, -11L, 15L, true , true)));
+                encodedRange = rangeType.encodeRanges(singleton(new RangeFieldMapper.Range(rangeType, -11L, 15L, true, true)));
                 document.add(new BinaryDocValuesField(fieldName, encodedRange));
                 writer.addDocument(document);
 
                 // intersects, within
                 document = new Document();
-                encodedRange = rangeType.encodeRanges(singleton(new RangeFieldMapper.Range(rangeType, 5L, 10L, true , true)));
+                encodedRange = rangeType.encodeRanges(singleton(new RangeFieldMapper.Range(rangeType, 5L, 10L, true, true)));
                 document.add(new BinaryDocValuesField(fieldName, encodedRange));
                 writer.addDocument(document);
 
@@ -127,7 +140,7 @@ public class BinaryDocValuesRangeQueryTests extends ESTestCase {
 
     public void testNoField() throws IOException {
         String fieldName = "long_field";
-        RangeFieldMapper.RangeType rangeType = RangeFieldMapper.RangeType.LONG;
+        RangeType rangeType = RangeType.LONG;
 
         // no field in index
         try (Directory dir = newDirectory()) {
@@ -146,8 +159,7 @@ public class BinaryDocValuesRangeQueryTests extends ESTestCase {
             try (RandomIndexWriter writer = new RandomIndexWriter(random(), dir)) {
                 // intersects (within)
                 Document document = new Document();
-                BytesRef encodedRange =
-                    rangeType.encodeRanges(singleton(new RangeFieldMapper.Range(rangeType, 0L, 0L, true , true)));
+                BytesRef encodedRange = rangeType.encodeRanges(singleton(new RangeFieldMapper.Range(rangeType, 0L, 0L, true, true)));
                 document.add(new BinaryDocValuesField(fieldName, encodedRange));
                 writer.addDocument(document);
                 writer.commit();

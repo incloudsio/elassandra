@@ -1,15 +1,15 @@
 ---
 "Shrink index ignores target template mapping":
     - skip:
-        version: " - 6.3.99"
-        reason: expects warnings that pre-6.4.0 will not send
-        features: "warnings"
+        version: " - 6.9.99"
+        reason: expects warnings that pre-7.0.0 will not send
+        features: [warnings, arbitrary_key]
 
     - do:
-        cluster.state: {}
-        # Get master node id
-
-    - set: { master_node: master }
+        nodes.info:
+          node_id: data:true
+    - set:
+        nodes._arbitrary_key_: node_id
 
   # create index
     - do:
@@ -19,19 +19,18 @@
           body:
             settings:
               # ensure everything is allocated on a single node
-              index.routing.allocation.include._id: $master
-              number_of_replicas: 0
+              index.routing.allocation.include._id: $node_id
+              index.number_of_shards: 2
+              index.number_of_replicas: 0
             mappings:
-              test:
-                properties:
-                  count:
-                    type: text
+              properties:
+                count:
+                  type: text
 
     # index document
     - do:
         index:
           index: source
-          type:  test
           id:    "1"
           body:  { "count": "1" }
 
@@ -42,10 +41,9 @@
           body:
             index_patterns: targ*
             mappings:
-              test:
-                properties:
-                  count:
-                    type: integer
+              properties:
+                count:
+                  type: integer
 
     # make it read-only
     - do:
@@ -70,11 +68,7 @@
           body:
             settings:
               index.number_of_replicas: 0
-        warnings:
-          - "resize operations without copying settings is deprecated; set parameter [copy_settings] to [true] for future default behavior"
 
     - do:
         cluster.health:
           wait_for_status: green
-
-

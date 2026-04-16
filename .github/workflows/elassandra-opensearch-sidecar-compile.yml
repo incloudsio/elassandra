@@ -1,4 +1,4 @@
-# Compile Elassandra org.elasticsearch.* sources synced into OpenSearch 1.3.x (see scripts/opensearch-sidecar-compile-try.sh).
+# Compile the OpenSearch 1.3 merged Elassandra tree in the side-car harness (see scripts/opensearch-sidecar-compile-try.sh).
 name: Elassandra OpenSearch side-car compile
 on:
   workflow_dispatch:

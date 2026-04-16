@@ -1,4 +1,12 @@
 /*
+ * SPDX-License-Identifier: Apache-2.0
+ *
+ * The OpenSearch Contributors require contributions made to
+ * this file be licensed under the Apache-2.0 license or a
+ * compatible open source license.
+ */
+
+/*
  * Licensed to Elasticsearch under one or more contributor
  * license agreements. See the NOTICE file distributed with
  * this work for additional information regarding copyright
@@ -17,6 +25,11 @@
  * under the License.
  */
 
+/*
+ * Modifications Copyright OpenSearch Contributors. See
+ * GitHub history for details.
+ */
+
 package org.apache.lucene.analysis.miscellaneous;
 
 import org.apache.lucene.analysis.FilteringTokenFilter;
@@ -24,7 +37,7 @@ import org.apache.lucene.analysis.TokenFilter;
 import org.apache.lucene.analysis.TokenStream;
 import org.apache.lucene.analysis.tokenattributes.TermToBytesRefAttribute;
 import org.apache.lucene.util.BytesRef;
-import org.elasticsearch.common.hash.MurmurHash3;
+import org.opensearch.common.hash.MurmurHash3;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -34,14 +47,14 @@ import java.util.ArrayList;
  * have a minimum length - 6 is a good heuristic as it avoids filtering common
  * idioms/phrases but detects longer sections that are typical of cut+paste
  * copies of text.
- * 
+ *
  * <p>
  * Internally each token is hashed/moduloed into a single byte (so 256 possible
  * values for each token) and then recorded in a trie of seen byte sequences
  * using a {@link DuplicateByteSequenceSpotter}. This trie is passed into the
  * TokenFilter constructor so a single object can be reused across multiple
  * documents.
- * 
+ *
  * <p>
  * The emitDuplicates setting controls if duplicate tokens are filtered from
  * results or are output (the {@link DuplicateSequenceAttribute} attribute can
@@ -57,7 +70,7 @@ public class DeDuplicatingTokenFilter extends FilteringTokenFilter {
     }
 
     /**
-     * 
+     *
      * @param in
      *            The input token stream
      * @param byteStreamDuplicateSpotter
@@ -92,7 +105,6 @@ public class DeDuplicatingTokenFilter extends FilteringTokenFilter {
             this.windowSize = DuplicateByteSequenceSpotter.TREE_DEPTH;
         }
 
-
         @Override
         public final boolean incrementToken() throws IOException {
             if (allTokens == null) {
@@ -110,9 +122,9 @@ public class DeDuplicatingTokenFilter extends FilteringTokenFilter {
         }
 
         public void loadAllTokens() throws IOException {
-            // TODO consider changing this implementation to emit tokens as-we-go 
-            // rather than buffering all. However this array is perhaps not the 
-            // bulk of memory usage (in practice the dupSequenceSpotter requires 
+            // TODO consider changing this implementation to emit tokens as-we-go
+            // rather than buffering all. However this array is perhaps not the
+            // bulk of memory usage (in practice the dupSequenceSpotter requires
             // ~5x the original content size in its internal tree ).
             allTokens = new ArrayList<State>(256);
 

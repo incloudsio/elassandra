@@ -1,12 +1,9 @@
 ---
 "PUT mapping with typeless API on an index that has types":
 
- - skip:
-      version: " - 6.6.99"
-      reason:  include_type_name was introduced in 6.7.0
-
  - do:
       indices.create: # not using include_type_name: false on purpose
+          include_type_name: true
           index: index
           body:
               mappings:
@@ -44,6 +41,7 @@
  - do:
       catch: /the final mapping would have more than 1 type/
       indices.put_mapping:
+          include_type_name: true
           index: index
           type: some_other_type
           body:
@@ -57,12 +55,13 @@
 "PUT mapping with _doc on an index that has types":
 
  - skip:
-      version: " - 6.1.99"
-      reason: _doc as a type name was only allowed as of 6.2
+      version: " - 6.6.99"
+      reason: include_type_name is only supported as of 6.7
 
 
  - do:
       indices.create:
+          include_type_name: true
           index: index
           body:
               mappings:
@@ -74,6 +73,7 @@
  - do:
       catch: /the final mapping would have more than 1 type/
       indices.put_mapping:
+          include_type_name: true
           index: index
           type: _doc
           body:

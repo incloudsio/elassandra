@@ -20,21 +20,21 @@ import org.apache.cassandra.service.QueryState;
 import org.apache.cassandra.transport.ProtocolVersion;
 import org.apache.cassandra.transport.messages.ResultMessage;
 import org.elassandra.index.ElasticIncomingPayload;
-import org.elasticsearch.common.SuppressForbidden;
-import org.elasticsearch.common.settings.Settings;
-import org.elasticsearch.common.xcontent.ToXContent;
-import org.elasticsearch.common.xcontent.XContentBuilder;
-import org.elasticsearch.common.xcontent.XContentFactory;
-import org.elasticsearch.common.xcontent.XContentType;
-import org.elasticsearch.index.query.MatchAllQueryBuilder;
-import org.elasticsearch.search.aggregations.AggregationBuilders;
-import org.elasticsearch.search.aggregations.bucket.histogram.DateHistogramAggregationBuilder;
-import org.elasticsearch.search.aggregations.bucket.histogram.DateHistogramInterval;
-import org.elasticsearch.search.aggregations.bucket.histogram.HistogramAggregationBuilder;
-import org.elasticsearch.search.aggregations.bucket.terms.TermsAggregationBuilder;
-import org.elasticsearch.search.aggregations.metrics.sum.SumAggregationBuilder;
-import org.elasticsearch.search.builder.SearchSourceBuilder;
-import org.elasticsearch.test.ESSingleNodeTestCase;
+import org.opensearch.common.SuppressForbidden;
+import org.opensearch.common.settings.Settings;
+import org.opensearch.common.xcontent.ToXContent;
+import org.opensearch.common.xcontent.XContentBuilder;
+import org.opensearch.common.xcontent.XContentFactory;
+import org.opensearch.common.xcontent.XContentType;
+import org.opensearch.index.query.MatchAllQueryBuilder;
+import org.opensearch.search.aggregations.AggregationBuilders;
+import org.opensearch.search.aggregations.bucket.histogram.DateHistogramAggregationBuilder;
+import org.opensearch.search.aggregations.bucket.histogram.DateHistogramInterval;
+import org.opensearch.search.aggregations.bucket.histogram.HistogramAggregationBuilder;
+import org.opensearch.search.aggregations.bucket.terms.TermsAggregationBuilder;
+import org.opensearch.search.aggregations.metrics.SumAggregationBuilder;
+import org.opensearch.search.builder.SearchSourceBuilder;
+import org.opensearch.test.OpenSearchSingleNodeTestCase;
 import org.junit.Test;
 
 import java.io.IOException;
@@ -46,13 +46,13 @@ import java.util.GregorianCalendar;
 import java.util.TimeZone;
 import java.util.concurrent.TimeUnit;
 
-import static org.elasticsearch.test.hamcrest.ElasticsearchAssertions.assertAcked;
+import static org.opensearch.test.hamcrest.OpenSearchAssertions.assertAcked;
 import static org.hamcrest.Matchers.equalTo;
 import static org.hamcrest.Matchers.greaterThan;
 
 @ThreadLeakScope(Scope.NONE)
 @ThreadLeakZombies(Consequence.CONTINUE)
-public class CqlHandlerTests extends ESSingleNodeTestCase {
+public class CqlHandlerTests extends OpenSearchSingleNodeTestCase {
 
     public CqlHandlerTests() {
         super();
@@ -265,9 +265,9 @@ public class CqlHandlerTests extends ESSingleNodeTestCase {
             assertBusy(() -> {
                 try {
                     client().admin().indices().prepareRefresh(index).get();
-                    org.elasticsearch.action.search.SearchResponse directAggregationResponse =
+                    org.opensearch.action.search.SearchResponse directAggregationResponse =
                             client().prepareSearch(index).setSource(new SearchSourceBuilder().query(new MatchAllQueryBuilder()).size(0)).get();
-                    assertThat(directAggregationResponse.getHits().getTotalHits(), equalTo(240L));
+                    assertThat(directAggregationResponse.getHits().getTotalHits().value, equalTo(240L));
                 } catch (Exception e) {
                     throw new AssertionError(e);
                 }

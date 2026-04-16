@@ -9,9 +9,9 @@
 
 package org.elassandra.discovery;
 
-import org.elasticsearch.common.settings.Settings;
-import org.elasticsearch.plugins.DiscoveryPlugin;
-import org.elasticsearch.plugins.Plugin;
+import org.opensearch.common.settings.Settings;
+import org.opensearch.plugins.DiscoveryPlugin;
+import org.opensearch.plugins.Plugin;
 
 /**
  * Elasticsearch 6.8 registered Cassandra discovery via {@code DiscoveryPlugin#getDiscoveryTypes}. OpenSearch 1.3 removed

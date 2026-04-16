@@ -1,4 +1,15 @@
 /*
+ * SPDX-License-Identifier: Apache-2.0
+ *
+ * The OpenSearch Contributors require contributions made to
+ * this file be licensed under the Apache-2.0 license or a
+ * compatible open source license.
+ *
+ * Modifications Copyright OpenSearch Contributors. See
+ * GitHub history for details.
+ */
+
+/*
  * Licensed to Elasticsearch under one or more contributor
  * license agreements. See the NOTICE file distributed with
  * this work for additional information regarding copyright
@@ -18,21 +29,22 @@
  */
 
 configure(subprojects.findAll { it.parent.path == project.path }) {
-  group = 'org.elasticsearch.plugin' // for modules which publish client jars
-  apply plugin: 'elasticsearch.esplugin'
+  group = 'org.opensearch.plugin' // for modules which publish client jars
+  apply plugin: 'opensearch.testclusters'
+  apply plugin: 'opensearch.opensearchplugin'
 
-  esplugin {
-    // for local ES plugins, the name of the plugin is the same as the directory
+  opensearchplugin {
+    // for local OpenSearch plugins, the name of the plugin is the same as the directory
     name project.name
   }
 
   if (project.file('src/main/packaging').exists()) {
-    throw new InvalidModelException("Modules cannot contain packaging files") 
+    throw new InvalidModelException("Modules cannot contain packaging files")
   }
   if (project.file('src/main/bin').exists()) {
-    throw new InvalidModelException("Modules cannot contain bin files") 
+    throw new InvalidModelException("Modules cannot contain bin files")
   }
   if (project.file('src/main/config').exists()) {
-    throw new InvalidModelException("Modules cannot contain config files") 
+    throw new InvalidModelException("Modules cannot contain config files")
   }
 }

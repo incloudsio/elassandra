@@ -6,14 +6,13 @@ setup:
             settings:
               number_of_replicas: 0
             mappings:
-              doc:
-                properties:
-                  int_field:
-                     type : integer
-                  double_field:
-                     type : double
-                  string_field:
-                     type: keyword
+              properties:
+                int_field:
+                   type : integer
+                double_field:
+                   type : double
+                string_field:
+                   type: keyword
 
   - do:
        bulk:
@@ -21,28 +20,24 @@ setup:
          body:
            - index:
                _index: test_1
-               _type:  doc
                _id:    1
            - int_field: 1
              double_field: 1.0
              string_field: foo
            - index:
                _index: test_1
-               _type:  doc
                _id:    2
            - int_field: 51
              double_field: 51.0
              string_field: foo
            - index:
                _index: test_1
-               _type:  doc
                _id:    3
            - int_field: 101
              double_field: 101.0
              string_field: foo
            - index:
                _index: test_1
-               _type:  doc
                _id:    4
            - int_field: 151
              double_field: 151.0
@@ -50,12 +45,10 @@ setup:
 
 ---
 "Basic test":
-  - skip:
-      version: " - 6.2.99"
-      reason: "upgrading t-digest changed the values we expect"
 
   - do:
       search:
+        rest_total_hits_as_int: true
         body:
           aggs:
             percentiles_int:
@@ -86,6 +79,7 @@ setup:
 
   - do:
       search:
+        rest_total_hits_as_int: true
         body:
           aggs:
             percentiles_int:
@@ -119,14 +113,13 @@ setup:
   - match:  { aggregations.percentiles_double.values.95\.0: 151.0 }
   - match:  { aggregations.percentiles_double.values.99\.0: 151.0 }
 
+
 ---
 "Only aggs test":
-  - skip:
-      version: " - 6.2.99"
-      reason: "upgrading t-digest changed the values we expect"
 
   - do:
       search:
+        rest_total_hits_as_int: true
         body:
           size: 0
           aggs:
@@ -155,15 +148,15 @@ setup:
   - match:  { aggregations.percentiles_double.values.75\.0: 126.0 }
   - match:  { aggregations.percentiles_double.values.95\.0: 151.0 }
   - match:  { aggregations.percentiles_double.values.99\.0: 151.0 }
-  
+
+
+
 ---
 "Filtered test":
-  - skip:
-      version: " - 6.2.99"
-      reason: "upgrading t-digest changed the values we expect"
 
   - do:
       search:
+        rest_total_hits_as_int: true
         body:
           query:
             constant_score:
@@ -203,6 +196,7 @@ setup:
 
   - do:
       search:
+        rest_total_hits_as_int: true
         body:
           aggs:
             percentiles_missing:
@@ -226,6 +220,7 @@ setup:
 
   - do:
       search:
+        rest_total_hits_as_int: true
         body:
           aggs:
             percentiles_missing:
@@ -238,12 +233,10 @@ setup:
 
 ---
 "Metadata test":
-  - skip:
-      version: " - 6.2.99"
-      reason: "upgrading t-digest changed the values we expect"
 
   - do:
       search:
+        rest_total_hits_as_int: true
         body:
           aggs:
             percentiles_int:
@@ -269,8 +262,9 @@ setup:
 "Invalid params test":
 
   - do:
-      catch: /\[compression\] must be greater than or equal to 0. Found \[-1.0\] in \[percentiles_int\]/
+      catch: /\[compression\] must be greater than or equal to 0. Found \[-1.0\]/
       search:
+        rest_total_hits_as_int: true
         body:
           aggs:
             percentiles_int:
@@ -282,6 +276,18 @@ setup:
   - do:
       catch: bad_request
       search:
+        rest_total_hits_as_int: true
+        body:
+          aggs:
+            percentiles_int:
+              percentiles:
+                field: int_field
+                percents: []
+
+  - do:
+      catch: bad_request
+      search:
+        rest_total_hits_as_int: true
         body:
           aggs:
             percentiles_int:
@@ -292,6 +298,7 @@ setup:
   - do:
       catch: bad_request
       search:
+        rest_total_hits_as_int: true
         body:
           aggs:
             percentiles_int:
@@ -302,6 +309,7 @@ setup:
   - do:
       catch: bad_request
       search:
+        rest_total_hits_as_int: true
         body:
           aggs:
             percentiles_string:
@@ -309,31 +317,11 @@ setup:
                 field: string_field
 
 ---
-"Invalid params, new to 6.x":
-  - skip:
-      version:     " - 5.99.99"
-      reason:      Some params were made stricter in 6.0+
-
-  - do:
-      catch: /\[percents\] must not be empty/
-      search:
-        body:
-          aggs:
-            percentiles_int:
-              percentiles:
-                field: int_field
-                hdr: {}
-                percents: []
-
-
----
 "Explicit Percents test":
-  - skip:
-      version: " - 6.2.99"
-      reason: "upgrading t-digest changed the values we expect"
 
   - do:
       search:
+        rest_total_hits_as_int: true
         body:
           aggs:
             percentiles_int:
@@ -357,15 +345,12 @@ setup:
   - match: { aggregations.percentiles_double.values.25\.0: 26.0 }
   - match: { aggregations.percentiles_double.values.50\.0: 76.0 }
 
-
 ---
 "Non-keyed test":
-  - skip:
-      version: " - 6.2.99"
-      reason: "upgrading t-digest changed the values we expect"
 
   - do:
       search:
+        rest_total_hits_as_int: true
         body:
           aggs:
             percentiles_int:
@@ -384,6 +369,3 @@ setup:
   - match:  { aggregations.percentiles_int.values.1.value:  26.0 }
   - match:  { aggregations.percentiles_int.values.2.key:  50.0 }
   - match:  { aggregations.percentiles_int.values.2.value:  76.0 }
-
-
-

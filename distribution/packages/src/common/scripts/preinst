@@ -1,3 +1,4 @@
+#!/bin/bash
 #
 # This script is executed in the pre-installation phase
 #
@@ -9,44 +10,41 @@
 #       $1=1       : indicates an new install
 #       $1=2       : indicates an upgrade
 
+err_exit() {
+    echo "$@" >&2
+    exit 1
+}
 
-
-# Sets the default values for cassandra variables used in this script
-ES_USER="cassandra"
-ES_GROUP="cassandra"
-
-# Source the default env file
-ES_ENV_FILE="${path.env}"
-if [ -f "$ES_ENV_FILE" ]; then
-    . "$ES_ENV_FILE"
+# source the default env file
+if [ -f "${path.env}" ]; then
+    . "${path.env}"
 fi
 
-if [ "$ES_USER" != "cassandra" ] || [ "$ES_GROUP" != "cassandra" ]; then
-    echo "WARNING: ES_USER and ES_GROUP are deprecated and will be removed in the next major version of cassandra, got: [$ES_USER:$ES_GROUP]"
-fi
+export OPENSEARCH_PATH_CONF=${OPENSEARCH_PATH_CONF:-${path.conf}}
 
 case "$1" in
 
     # Debian ####################################################
     install|upgrade)
 
-        # Create cassandra group if not existing
-        if ! getent group "$ES_GROUP" > /dev/null 2>&1 ; then
-            echo -n "Creating $ES_GROUP group..."
-            addgroup --quiet --system "$ES_GROUP"
+        # Create opensearch group if not existing
+        if ! getent group opensearch > /dev/null 2>&1 ; then
+            echo -n "Creating opensearch group..."
+            addgroup --quiet --system opensearch
             echo " OK"
         fi
 
-        # Create cassandra user if not existing
-        if ! id $ES_USER > /dev/null 2>&1 ; then
-            echo -n "Creating $ES_USER user..."
+        # Create opensearch user if not existing
+        if ! id opensearch > /dev/null 2>&1 ; then
+            echo -n "Creating opensearch user..."
             adduser --quiet \
                     --system \
                     --no-create-home \
-                    --ingroup "$ES_GROUP" \
+                    --home /nonexistent \
+                    --ingroup opensearch \
                     --disabled-password \
                     --shell /bin/false \
-                    "$ES_USER"
+                    opensearch
             echo " OK"
         fi
     ;;
@@ -56,29 +54,29 @@ case "$1" in
     # RedHat ####################################################
     1|2)
 
-        # Create cassandra group if not existing
-        if ! getent group "$ES_GROUP" > /dev/null 2>&1 ; then
-            echo -n "Creating $ES_GROUP group..."
-            groupadd -r "$ES_GROUP"
+        # Create opensearch group if not existing
+        if ! getent group opensearch > /dev/null 2>&1 ; then
+            echo -n "Creating opensearch group..."
+            groupadd -r opensearch
             echo " OK"
         fi
 
-        # Create cassandra user if not existing
-        if ! id $ES_USER > /dev/null 2>&1 ; then
-            echo -n "Creating $ES_USER user..."
-            useradd -r \
-                    -M \
-                    --gid "$ES_GROUP" \
+        # Create opensearch user if not existing
+        if ! id opensearch > /dev/null 2>&1 ; then
+            echo -n "Creating opensearch user..."
+            useradd --system \
+                    --no-create-home \
+                    --home-dir /nonexistent \
+                    --gid opensearch \
                     --shell /sbin/nologin \
-                    --comment "cassandra user" \
-                    "$ES_USER"
+                    --comment "opensearch user" \
+                    opensearch
             echo " OK"
         fi
     ;;
 
     *)
-        echo "pre install script called with unknown argument \`$1'" >&2
-        exit 1
+        err_exit "pre install script called with unknown argument \`$1'"
     ;;
 esac
 

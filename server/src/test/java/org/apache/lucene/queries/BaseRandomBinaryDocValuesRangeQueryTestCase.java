@@ -1,4 +1,12 @@
 /*
+ * SPDX-License-Identifier: Apache-2.0
+ *
+ * The OpenSearch Contributors require contributions made to
+ * this file be licensed under the Apache-2.0 license or a
+ * compatible open source license.
+ */
+
+/*
  * Licensed to Elasticsearch under one or more contributor
  * license agreements. See the NOTICE file distributed with
  * this work for additional information regarding copyright
@@ -16,6 +24,11 @@
  * specific language governing permissions and limitations
  * under the License.
  */
+/*
+ * Modifications Copyright OpenSearch Contributors. See
+ * GitHub history for details.
+ */
+
 package org.apache.lucene.queries;
 
 import org.apache.lucene.document.BinaryDocValuesField;
@@ -23,7 +36,8 @@ import org.apache.lucene.document.Field;
 import org.apache.lucene.search.BaseRangeFieldQueryTestCase;
 import org.apache.lucene.search.Query;
 import org.apache.lucene.util.BytesRef;
-import org.elasticsearch.index.mapper.RangeFieldMapper;
+import org.opensearch.index.mapper.RangeFieldMapper;
+import org.opensearch.index.mapper.RangeType;
 
 import java.io.IOException;
 import java.util.Collections;
@@ -42,15 +56,9 @@ public abstract class BaseRandomBinaryDocValuesRangeQueryTestCase extends BaseRa
     }
 
     @Override
-    public void testRandomBig() throws Exception {
-        // Test regardless whether -Dtests.nightly=true has been specified:
-        super.testRandomBig();
-    }
-
-    @Override
     protected final Field newRangeField(Range box) {
         AbstractRange<?> testRange = (AbstractRange<?>) box;
-        RangeFieldMapper.Range range = new RangeFieldMapper.Range(rangeType(), testRange.getMin(), testRange.getMax(), true , true);
+        RangeFieldMapper.Range range = new RangeFieldMapper.Range(rangeType(), testRange.getMin(), testRange.getMax(), true, true);
         try {
             BytesRef encodeRange = rangeType().encodeRanges(Collections.singleton(range));
             return new BinaryDocValuesField(fieldName(), encodeRange);
@@ -90,7 +98,7 @@ public abstract class BaseRandomBinaryDocValuesRangeQueryTestCase extends BaseRa
 
     protected abstract String fieldName();
 
-    protected abstract RangeFieldMapper.RangeType rangeType();
+    protected abstract RangeType rangeType();
 
     protected abstract static class AbstractRange<T> extends Range {
 

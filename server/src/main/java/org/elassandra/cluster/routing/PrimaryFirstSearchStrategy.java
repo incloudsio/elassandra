@@ -18,11 +18,11 @@ package org.elassandra.cluster.routing;
 import org.apache.cassandra.db.Keyspace;
 import org.apache.cassandra.dht.Token;
 import org.apache.cassandra.service.StorageService;
-import org.elasticsearch.cluster.ClusterState;
-import org.elasticsearch.cluster.node.DiscoveryNode;
-import org.elasticsearch.cluster.routing.ShardRoutingState;
-import org.elasticsearch.common.transport.TransportAddress;
-import org.elasticsearch.index.Index;
+import org.opensearch.cluster.ClusterState;
+import org.opensearch.cluster.node.DiscoveryNode;
+import org.opensearch.cluster.routing.ShardRoutingState;
+import org.opensearch.common.transport.TransportAddress;
+import org.opensearch.index.Index;
 
 import java.net.InetAddress;
 import java.util.BitSet;
@@ -81,7 +81,7 @@ public class PrimaryFirstSearchStrategy extends AbstractSearchStrategy {
                     this.greenShards.get(node).set(tokenIndex, false);
                 } else {
                     if (logger.isTraceEnabled())
-                        logger.trace("uuid={} for replica={} node found", node.uuid(), node.getName());
+                        logger.trace("uuid={} for replica={} node found", node.getId(), node.getName());
                 } 
             }
 

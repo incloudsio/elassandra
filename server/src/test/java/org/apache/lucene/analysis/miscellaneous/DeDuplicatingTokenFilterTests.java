@@ -1,4 +1,12 @@
 /*
+ * SPDX-License-Identifier: Apache-2.0
+ *
+ * The OpenSearch Contributors require contributions made to
+ * this file be licensed under the Apache-2.0 license or a
+ * compatible open source license.
+ */
+
+/*
  * Licensed to Elasticsearch under one or more contributor
  * license agreements. See the NOTICE file distributed with
  * this work for additional information regarding copyright
@@ -17,6 +25,11 @@
  * under the License.
  */
 
+/*
+ * Modifications Copyright OpenSearch Contributors. See
+ * GitHub history for details.
+ */
+
 package org.apache.lucene.analysis.miscellaneous;
 
 import org.apache.lucene.analysis.Analyzer;
@@ -24,13 +37,13 @@ import org.apache.lucene.analysis.MockTokenizer;
 import org.apache.lucene.analysis.TokenStream;
 import org.apache.lucene.analysis.Tokenizer;
 import org.apache.lucene.analysis.tokenattributes.CharTermAttribute;
-import org.elasticsearch.test.ESTestCase;
+import org.opensearch.test.OpenSearchTestCase;
 
 import java.io.IOException;
 
 import static org.hamcrest.Matchers.equalTo;
 
-public class DeDuplicatingTokenFilterTests extends ESTestCase {
+public class DeDuplicatingTokenFilterTests extends OpenSearchTestCase {
     public void testSimple() throws IOException {
         DuplicateByteSequenceSpotter bytesDeDuper = new DuplicateByteSequenceSpotter();
         Analyzer analyzer = new Analyzer() {
@@ -57,7 +70,7 @@ public class DeDuplicatingTokenFilterTests extends ESTestCase {
         assertThat(output, equalTo(expectedOutput));
 
     }
-    
+
     public void testHitCountLimits() throws IOException {
         DuplicateByteSequenceSpotter bytesDeDuper = new DuplicateByteSequenceSpotter();
         long peakMemoryUsed = 0;
@@ -111,9 +124,9 @@ public class DeDuplicatingTokenFilterTests extends ESTestCase {
             short[] expectedFrequencies = { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 0, 0, 2, 2, 2, 2, 2, 2, 2 };
             TokenStream test = analyzer.tokenStream("test", input);
             DuplicateSequenceAttribute seqAtt = test.addAttribute(DuplicateSequenceAttribute.class);
-    
+
             test.reset();
-    
+
             for (int i = 0; i < expectedFrequencies.length; i++) {
                 assertThat(test.incrementToken(), equalTo(true));
                 assertThat(seqAtt.getNumPriorUsesInASequence(), equalTo(expectedFrequencies[i]));

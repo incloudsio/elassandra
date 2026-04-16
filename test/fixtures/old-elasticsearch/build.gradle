@@ -1,4 +1,15 @@
 /*
+ * SPDX-License-Identifier: Apache-2.0
+ *
+ * The OpenSearch Contributors require contributions made to
+ * this file be licensed under the Apache-2.0 license or a
+ * compatible open source license.
+ *
+ * Modifications Copyright OpenSearch Contributors. See
+ * GitHub history for details.
+ */
+
+/*
  * Licensed to Elasticsearch under one or more contributor
  * license agreements. See the NOTICE file distributed with
  * this work for additional information regarding copyright
@@ -7,7 +18,7 @@
  * not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *    http://www.apache.org/licenses/LICENSE-2.0
+ *     http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing,
  * software distributed under the License is distributed on an
@@ -23,10 +34,10 @@ These need special handling because they do not support writing
 a "ports" file with the port on which Elasticsearch is running.
 """
 
-apply plugin: 'elasticsearch.build'
-unitTest.enabled = false
+apply plugin: 'opensearch.java'
+test.enabled = false
 
 dependencies {
   // Just for the constants....
-  compile "org.apache.lucene:lucene-core:${versions.lucene}"
+  api "org.apache.lucene:lucene-core:${versions.lucene}"
 }

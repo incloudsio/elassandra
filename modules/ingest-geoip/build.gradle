@@ -1,4 +1,15 @@
 /*
+ * SPDX-License-Identifier: Apache-2.0
+ *
+ * The OpenSearch Contributors require contributions made to
+ * this file be licensed under the Apache-2.0 license or a
+ * compatible open source license.
+ *
+ * Modifications Copyright OpenSearch Contributors. See
+ * GitHub history for details.
+ */
+
+/*
  * Licensed to Elasticsearch under one or more contributor
  * license agreements. See the NOTICE file distributed with
  * this work for additional information regarding copyright
@@ -17,54 +28,67 @@
  * under the License.
  */
 
-esplugin {
+import org.apache.tools.ant.taskdefs.condition.Os
+
+apply plugin: 'opensearch.yaml-rest-test'
+apply plugin: 'opensearch.internal-cluster-test'
+
+opensearchplugin {
   description 'Ingest processor that uses looksup geo data based on ip adresses using the Maxmind geo database'
-  classname 'org.elasticsearch.ingest.geoip.IngestGeoIpPlugin'
+  classname 'org.opensearch.ingest.geoip.IngestGeoIpPlugin'
 }
 
 dependencies {
-  // Upgrade to 2.10.0 or higher when jackson-core gets upgraded to 2.9.x. Blocked by #27032
-  compile ('com.maxmind.geoip2:geoip2:2.9.0')
+  api('com.maxmind.geoip2:geoip2:2.16.1')
   // geoip2 dependencies:
-  // do not hardcode this to the version in version.properties, it needs to be upgraded separately with geoip2
-  compile("com.fasterxml.jackson.core:jackson-annotations:2.8.11")
-  compile("com.fasterxml.jackson.core:jackson-databind:2.8.11.6")
-  compile('com.maxmind.db:maxmind-db:1.2.2')
+  api("com.fasterxml.jackson.core:jackson-annotations:${versions.jackson}")
+  api("com.fasterxml.jackson.core:jackson-databind:${versions.jackson_databind}")
+  api('com.maxmind.db:maxmind-db:2.0.0')
 
-  testCompile 'org.elasticsearch:geolite2-databases:20180911'
+  testImplementation 'org.elasticsearch:geolite2-databases:20191119'
 }
 
-task copyDefaultGeoIp2DatabaseFiles(type: Copy) {
-  from { zipTree(configurations.testCompile.files.find { it.name.contains('geolite2-databases')}) }
+restResources {
+  restApi {
+    includeCore '_common', 'indices', 'index', 'cluster', 'nodes', 'get', 'ingest'
+  }
+}
+
+tasks.register("copyDefaultGeoIp2DatabaseFiles", Copy) {
+  from { zipTree(configurations.testCompileClasspath.files.find { it.name.contains('geolite2-databases') }) }
   into "${project.buildDir}/ingest-geoip"
   include "*.mmdb"
 }
 
-project.bundlePlugin.dependsOn(copyDefaultGeoIp2DatabaseFiles)
-
-compileJava.options.compilerArgs << "-Xlint:-rawtypes,-unchecked,-serial"
-compileTestJava.options.compilerArgs << "-Xlint:-rawtypes,-unchecked"
-
-bundlePlugin {
+tasks.named("bundlePlugin").configure {
+  dependsOn("copyDefaultGeoIp2DatabaseFiles")
   from("${project.buildDir}/ingest-geoip") {
     into '/'
   }
 }
 
-thirdPartyAudit.ignoreMissingClasses (
-  // geoip WebServiceClient needs apache http client, but we're not using WebServiceClient:
-  'org.apache.http.HttpEntity',
-  'org.apache.http.HttpHost',
-  'org.apache.http.HttpResponse',
-  'org.apache.http.StatusLine',
-  'org.apache.http.auth.UsernamePasswordCredentials',
-  'org.apache.http.client.config.RequestConfig$Builder',
-  'org.apache.http.client.config.RequestConfig',
-  'org.apache.http.client.methods.CloseableHttpResponse',
-  'org.apache.http.client.methods.HttpGet',
-  'org.apache.http.client.utils.URIBuilder',
-  'org.apache.http.impl.auth.BasicScheme',
-  'org.apache.http.impl.client.CloseableHttpClient',
-  'org.apache.http.impl.client.HttpClientBuilder',
-  'org.apache.http.util.EntityUtils'
-)
+tasks.named("thirdPartyAudit").configure {
+  ignoreMissingClasses(
+          // geoip WebServiceClient needs apache http client, but we're not using WebServiceClient:
+          'org.apache.http.HttpEntity',
+          'org.apache.http.HttpResponse',
+          'org.apache.http.StatusLine',
+          'org.apache.http.client.config.RequestConfig$Builder',
+          'org.apache.http.client.config.RequestConfig',
+          'org.apache.http.client.methods.CloseableHttpResponse',
+          'org.apache.http.client.methods.HttpGet',
+          'org.apache.http.client.utils.URIBuilder',
+          'org.apache.http.impl.auth.BasicScheme',
+          'org.apache.http.impl.client.CloseableHttpClient',
+          'org.apache.http.impl.client.HttpClientBuilder',
+          'org.apache.http.util.EntityUtils'
+  )
+}
+
+if (Os.isFamily(Os.FAMILY_WINDOWS)) {
+  tasks.named("test").configure {
+    // Windows cannot cleanup database files properly unless it loads everything on heap.
+    // See https://github.com/maxmind/MaxMind-DB-Reader-java#file-lock-on-windows for more information
+    systemProperty 'opensearch.geoip.load_db_on_heap', 'true'
+  }
+}

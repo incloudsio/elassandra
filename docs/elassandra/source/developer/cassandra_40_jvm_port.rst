@@ -3,7 +3,9 @@
 Cassandra 4.0 JVM port (Elassandra integration code)
 =====================================================
 
-The default ``server/cassandra`` submodule stays on the **3.11.x** Elassandra line so this repository continues to **compile and ship** the Elasticsearch 6.8 stack. Moving to **Cassandra 4.0** requires updating Java in **this** repo (not only the fork):
+This repository now ships the **Cassandra 4.0.x + OpenSearch 1.3.x** line. This note remains useful as
+an inventory of the API shifts that were required to move the Elassandra integration from the old
+3.11 / Elasticsearch stack to the merged modern baseline:
 
 #. Run ``scripts/use-cassandra-40-submodule.sh`` — aligns ``buildSrc/version.properties`` ``cassandra=`` with ``server/cassandra/build.xml`` ``base.version`` and checks out ``cassandra-4.0.x-elassandra``.
 #. Port Elassandra-specific classes against **4.0 APIs** (types and method signatures differ from 3.11; mechanical rename is not enough).
@@ -21,9 +23,9 @@ Primary touchpoints in this repo
 
 * ``org.elassandra.index.ElasticSecondaryIndex`` / ``ExtendedElasticSecondaryIndex``
 * ``org.elassandra.cluster.SchemaManager``, ``QueryManager``, ``SchemaListener``, ``ColumnDescriptor``
-* ``org.elasticsearch.cluster.service.ClusterService`` and metadata services that bridge C* schema to Elasticsearch mappings
+* ``org.opensearch.cluster.service.ClusterService`` and metadata services that bridge C* schema to OpenSearch mappings
 * Tests under ``server/src/test/java/org/elassandra/``
 
-After the port compiles, run ``./scripts/check-cassandra-submodule.sh`` and ``./gradlew :server:compileJava`` (JDK **8** for C* / legacy ES tree on this branch, unless you have already rebased the search engine to OpenSearch and raised the minimum Java version).
+For current-tree validation, run ``./scripts/check-cassandra-submodule.sh`` and ``./gradlew :server:compileJava`` with **Java 11+**.
 
-**Progress in-tree:** ``ElasticSecondaryIndex`` / ``ExtendedElasticSecondaryIndex`` are updated for Cassandra **4.0** index APIs (``TableMetadata``, ``ColumnMetadata``, ``RegularAndStaticColumns``, ``WriteContext``). Remaining modules still reference ``CFMetaData`` / ``ColumnDefinition`` and must be ported using ``Schema.instance.getTableMetadata`` / ``KeyspaceMetadata`` helpers from the 4.0 sources — notably ``org.elassandra.cluster.SchemaManager``, ``QueryManager``, ``ColumnDescriptor``, ``SchemaListener``, and Elasticsearch bridge classes under ``org.elasticsearch.cluster`` / ``org.elasticsearch.index.mapper`` that import Cassandra schema types.
+**Merged in-tree:** ``ElasticSecondaryIndex`` / ``ExtendedElasticSecondaryIndex`` are updated for Cassandra **4.0** index APIs (``TableMetadata``, ``ColumnMetadata``, ``RegularAndStaticColumns``, ``WriteContext``). The current merged tree uses OpenSearch bridge classes under ``org.opensearch.cluster`` / ``org.opensearch.index.mapper`` together with ``org.elassandra.*`` integration code.

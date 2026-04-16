@@ -23,17 +23,17 @@ import org.apache.cassandra.db.marshal.BytesType;
 import org.apache.cassandra.db.marshal.UTF8Type;
 import org.apache.cassandra.utils.ByteBufferUtil;
 import org.apache.cassandra.utils.UUIDGen;
-import org.elasticsearch.action.DocWriteResponse;
-import org.elasticsearch.cluster.metadata.IndexMetaData;
-import org.elasticsearch.cluster.metadata.MappingMetaData;
-import org.elasticsearch.common.settings.Settings;
-import org.elasticsearch.common.xcontent.XContentBuilder;
-import org.elasticsearch.common.xcontent.XContentFactory;
-import org.elasticsearch.common.xcontent.XContentParser;
-import org.elasticsearch.common.xcontent.XContentType;
-import org.elasticsearch.common.xcontent.json.JsonXContent;
-import org.elasticsearch.index.query.QueryBuilders;
-import org.elasticsearch.test.ESSingleNodeTestCase;
+import org.opensearch.action.DocWriteResponse;
+import org.opensearch.cluster.metadata.IndexMetadata;
+import org.opensearch.cluster.metadata.MappingMetadata;
+import org.opensearch.common.settings.Settings;
+import org.opensearch.common.xcontent.XContentBuilder;
+import org.opensearch.common.xcontent.XContentFactory;
+import org.opensearch.common.xcontent.XContentParser;
+import org.opensearch.common.xcontent.XContentType;
+import org.opensearch.common.xcontent.json.JsonXContent;
+import org.opensearch.index.query.QueryBuilders;
+import org.opensearch.test.OpenSearchSingleNodeTestCase;
 import org.junit.Ignore;
 import org.junit.Test;
 
@@ -43,7 +43,7 @@ import java.time.LocalDateTime;
 import java.time.ZoneOffset;
 import java.util.*;
 
-import static org.elasticsearch.test.hamcrest.ElasticsearchAssertions.assertAcked;
+import static org.opensearch.test.hamcrest.OpenSearchAssertions.assertAcked;
 import static org.hamcrest.Matchers.equalTo;
 
 /**
@@ -52,7 +52,7 @@ import static org.hamcrest.Matchers.equalTo;
  *
  */
 //mvn test -Pdev -pl om.strapdata.elasticsearch:elasticsearch -Dtests.seed=622A2B0618CE4676 -Dtests.class=org.elassandra.PartitionedIndexTests -Des.logger.level=ERROR -Dtests.assertion.disabled=false -Dtests.security.manager=false -Dtests.heap.size=1024m -Dtests.locale=ro-RO -Dtests.timezone=America/Toronto
-public class PartitionedIndexTests extends ESSingleNodeTestCase {
+public class PartitionedIndexTests extends OpenSearchSingleNodeTestCase {
 
     @Test
     @Ignore("Partition-function and virtual-index settings are not currently supported by the OpenSearch 1.3 sidecar.")
@@ -72,7 +72,7 @@ public class PartitionedIndexTests extends ESSingleNodeTestCase {
         }
 
         for(long i=20; i < 30; i++)
-            assertThat(client().prepareSearch().setIndices("ks_"+i).setTypes("t1").setQuery(QueryBuilders.matchAllQuery()).get().getHits().getTotalHits(), equalTo(i));
+            assertThat(client().prepareSearch().setIndices("ks_"+i).setTypes("t1").setQuery(QueryBuilders.matchAllQuery()).get().getHits().getTotalHits().value, equalTo(i));
 
         // test index delete #286
         for(long i=25; i < 30; i++) {
@@ -108,7 +108,7 @@ public class PartitionedIndexTests extends ESSingleNodeTestCase {
         }
 
         for(long i=20; i < 30; i++)
-            assertThat(client().prepareSearch().setIndices("ks_"+i).setTypes("t1").setQuery(QueryBuilders.matchAllQuery()).get().getHits().getTotalHits(), equalTo(i));
+            assertThat(client().prepareSearch().setIndices("ks_"+i).setTypes("t1").setQuery(QueryBuilders.matchAllQuery()).get().getHits().getTotalHits().value, equalTo(i));
     }
 
     @Test
@@ -135,7 +135,7 @@ public class PartitionedIndexTests extends ESSingleNodeTestCase {
 
         for(long i=1; i < 12; i++) {
             String indexName = String.format(Locale.ROOT, "mms_dev_logs-2020.%02d", i);
-            assertThat(client().prepareSearch().setIndices(indexName).setTypes("t1").setQuery(QueryBuilders.matchAllQuery()).get().getHits().getTotalHits(), equalTo(10L));
+            assertThat(client().prepareSearch().setIndices(indexName).setTypes("t1").setQuery(QueryBuilders.matchAllQuery()).get().getHits().getTotalHits().value, equalTo(10L));
         }
     }
 
@@ -172,7 +172,7 @@ public class PartitionedIndexTests extends ESSingleNodeTestCase {
         }
 
         for(long i=20; i < 30; i++)
-            assertThat(client().prepareSearch().setIndices("ks_"+i).setTypes("t1").setQuery(QueryBuilders.matchAllQuery()).get().getHits().getTotalHits(), equalTo(i));
+            assertThat(client().prepareSearch().setIndices("ks_"+i).setTypes("t1").setQuery(QueryBuilders.matchAllQuery()).get().getHits().getTotalHits().value, equalTo(i));
     }
 
     @Test
@@ -201,8 +201,8 @@ public class PartitionedIndexTests extends ESSingleNodeTestCase {
         .setSource("{\"content\": \"ouais\", \"num\": 201, \"conversation\": \"Lisa\", \"author\": \"Barth\", \"date\": 1469968740000, \"recipients\": [\"Lisa\"]}", XContentType.JSON)
         .get();
 
-        assertThat(client().prepareSearch().setIndices("fb").setTypes("messages").get().getHits().getTotalHits(), equalTo(1L));
-        assertThat(client().prepareSearch().setIndices("fb2").setTypes("messages").get().getHits().getTotalHits(), equalTo(1L));
+        assertThat(client().prepareSearch().setIndices("fb").setTypes("messages").get().getHits().getTotalHits().value, equalTo(1L));
+        assertThat(client().prepareSearch().setIndices("fb2").setTypes("messages").get().getHits().getTotalHits().value, equalTo(1L));
     }
 
     @Test
@@ -227,7 +227,7 @@ public class PartitionedIndexTests extends ESSingleNodeTestCase {
         }
 
         for(long i=20; i < 30; i++)
-            assertThat(client().prepareSearch().setIndices("ks_"+i).setTypes("t1").setQuery(QueryBuilders.matchAllQuery()).get().getHits().getTotalHits(), equalTo(i));
+            assertThat(client().prepareSearch().setIndices("ks_"+i).setTypes("t1").setQuery(QueryBuilders.matchAllQuery()).get().getHits().getTotalHits().value, equalTo(i));
 
         // add a doc with new field in ks_25
         assertEquals(client().prepareIndex("ks_25", "t1","xx")
@@ -243,9 +243,9 @@ public class PartitionedIndexTests extends ESSingleNodeTestCase {
         }
 
         // check the doc is inserted in ks_20 and not in the others
-        assertThat(client().prepareSearch().setIndices("ks_"+20).setTypes("t1").setQuery(QueryBuilders.termQuery("content", "ouais")).get().getHits().getTotalHits(), equalTo(1L));
+        assertThat(client().prepareSearch().setIndices("ks_"+20).setTypes("t1").setQuery(QueryBuilders.termQuery("content", "ouais")).get().getHits().getTotalHits().value, equalTo(1L));
         for(long i=21; i < 30; i++)
-            assertThat(client().prepareSearch().setIndices("ks_"+i).setTypes("t1").setQuery(QueryBuilders.termQuery("content", "ouais")).get().getHits().getTotalHits(), equalTo(0L));
+            assertThat(client().prepareSearch().setIndices("ks_"+i).setTypes("t1").setQuery(QueryBuilders.termQuery("content", "ouais")).get().getHits().getTotalHits().value, equalTo(0L));
 
         // check tables extensions indexMetaData has only mappings for the virtual index
         UntypedResultSet rs = process(ConsistencyLevel.ONE,String.format(Locale.ROOT, "SELECT extensions FROM system_schema.tables WHERE keyspace_name='ks' AND table_name='t1'"));
@@ -255,26 +255,26 @@ public class PartitionedIndexTests extends ESSingleNodeTestCase {
         System.out.println("extensions.keys=" + extensions.keySet());
         System.out.println("extensions.ks=0x"+ByteBufferUtil.bytesToHex(extensions.get("elastic_admin/ks")));
 
-        IndexMetaData ksIndexMetaData = clusterService().getIndexMetaDataFromExtension(extensions.get("elastic_admin/ks"));
+        IndexMetadata ksIndexMetaData = clusterService().getIndexMetaDataFromExtension(extensions.get("elastic_admin/ks"));
         assertEquals(1, ksIndexMetaData.getMappings().size());
-        assertEquals(Boolean.TRUE, ksIndexMetaData.getSettings().getAsBoolean(IndexMetaData.INDEX_SETTING_VIRTUAL_SETTING.getKey(), false));
-        assertNull(ksIndexMetaData.getSettings().get(IndexMetaData.INDEX_SETTING_VIRTUAL_INDEX_SETTING.getKey()));
+        assertEquals(Boolean.TRUE, ksIndexMetaData.getSettings().getAsBoolean(IndexMetadata.INDEX_SETTING_VIRTUAL_SETTING.getKey(), false));
+        assertNull(ksIndexMetaData.getSettings().get(IndexMetadata.INDEX_SETTING_VIRTUAL_INDEX_SETTING.getKey()));
         for(long i=20; i < 30; i++) {
-            IndexMetaData indexMetaData = clusterService().getIndexMetaDataFromExtension(extensions.get("elastic_admin/ks_"+i));
+            IndexMetadata indexMetaData = clusterService().getIndexMetaDataFromExtension(extensions.get("elastic_admin/ks_"+i));
             assertEquals(0, indexMetaData.getMappings().size() );
-            assertEquals(Boolean.FALSE, indexMetaData.getSettings().getAsBoolean(IndexMetaData.INDEX_SETTING_VIRTUAL_SETTING.getKey(), false));
-            assertEquals("ks", indexMetaData.getSettings().get(IndexMetaData.INDEX_SETTING_VIRTUAL_INDEX_SETTING.getKey()));
+            assertEquals(Boolean.FALSE, indexMetaData.getSettings().getAsBoolean(IndexMetadata.INDEX_SETTING_VIRTUAL_SETTING.getKey(), false));
+            assertEquals("ks", indexMetaData.getSettings().get(IndexMetadata.INDEX_SETTING_VIRTUAL_INDEX_SETTING.getKey()));
 
-            IndexMetaData ksi = this.clusterService().state().metaData().index("ks_"+i);
-            MappingMetaData mmd = ksi.getMappings().get("t1");
+            IndexMetadata ksi = this.clusterService().state().metadata().index("ks_"+i);
+            MappingMetadata mmd = ksi.getMappings().get("t1");
             Map<String, Object> mapping = mmd.getSourceAsMap();
             Map<String, Object> properties = (Map<String, Object>) mapping.get("properties");
             assertTrue(properties.containsKey("content"));
         }
 
         {
-            IndexMetaData indexMetaDataKs = clusterService().getIndexMetaDataFromExtension(extensions.get("elastic_admin/ks"));
-            MappingMetaData mmd = indexMetaDataKs.getMappings().get("t1");
+            IndexMetadata indexMetaDataKs = clusterService().getIndexMetaDataFromExtension(extensions.get("elastic_admin/ks"));
+            MappingMetadata mmd = indexMetaDataKs.getMappings().get("t1");
             Map<String, Object> mapping = mmd.getSourceAsMap();
             Map<String, Object> properties = (Map<String, Object>) mapping.get("properties");
             assertTrue(properties.containsKey("content"));
@@ -301,15 +301,15 @@ public class PartitionedIndexTests extends ESSingleNodeTestCase {
             Map<String, Object> md = client().admin().indices().prepareGetMappings("ks_"+i).addTypes("t1").get().getMappings().get("ks_"+i).get("t1").getSourceAsMap();
             Map<String, Object> properties = (Map<String, Object>) md.get("properties");
             assertEquals(Boolean.TRUE, properties.containsKey("content2"));
-            IndexMetaData indexMetaDataX = clusterService().getIndexMetaDataFromExtension(extensions.get("elastic_admin/ks_"+i));
+            IndexMetadata indexMetaDataX = clusterService().getIndexMetaDataFromExtension(extensions.get("elastic_admin/ks_"+i));
             assertEquals(0, indexMetaDataX.getMappings().size() );
-            assertEquals(Boolean.FALSE, indexMetaDataX.getSettings().getAsBoolean(IndexMetaData.INDEX_SETTING_VIRTUAL_SETTING.getKey(), false));
-            assertEquals("ks", indexMetaDataX.getSettings().get(IndexMetaData.INDEX_SETTING_VIRTUAL_INDEX_SETTING.getKey()));
+            assertEquals(Boolean.FALSE, indexMetaDataX.getSettings().getAsBoolean(IndexMetadata.INDEX_SETTING_VIRTUAL_SETTING.getKey(), false));
+            assertEquals("ks", indexMetaDataX.getSettings().get(IndexMetadata.INDEX_SETTING_VIRTUAL_INDEX_SETTING.getKey()));
         }
 
         {
-            IndexMetaData indexMetaDataKs = clusterService().getIndexMetaDataFromExtension(extensions.get("elastic_admin/ks"));
-            MappingMetaData mmd = indexMetaDataKs.getMappings().get("t1");
+            IndexMetadata indexMetaDataKs = clusterService().getIndexMetaDataFromExtension(extensions.get("elastic_admin/ks"));
+            MappingMetadata mmd = indexMetaDataKs.getMappings().get("t1");
             Map<String, Object> mapping = mmd.getSourceAsMap();
             Map<String, Object> properties = (Map<String, Object>) mapping.get("properties");
             if (!properties.containsKey("content2")) {

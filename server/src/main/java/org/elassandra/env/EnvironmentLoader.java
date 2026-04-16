@@ -19,10 +19,10 @@
 
 package org.elassandra.env;
 
-import org.elasticsearch.cli.Terminal;
-import org.elasticsearch.common.settings.Settings;
-import org.elasticsearch.env.Environment;
-import org.elasticsearch.node.InternalSettingsPreparer;
+import org.opensearch.cli.Terminal;
+import org.opensearch.common.settings.Settings;
+import org.opensearch.env.Environment;
+import org.opensearch.node.InternalSettingsPreparer;
 
 import java.nio.file.Path;
 import java.nio.file.Paths;

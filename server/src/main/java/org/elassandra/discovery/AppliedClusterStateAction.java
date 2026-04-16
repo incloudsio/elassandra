@@ -22,22 +22,23 @@ package org.elassandra.discovery;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.apache.logging.log4j.message.ParameterizedMessage;
-import org.elasticsearch.action.ActionListener;
-import org.elasticsearch.cluster.ClusterState;
-import org.elasticsearch.cluster.node.DiscoveryNode;
-import org.elasticsearch.common.io.stream.StreamInput;
-import org.elasticsearch.common.io.stream.StreamOutput;
-import org.elasticsearch.common.settings.Settings;
-import org.elasticsearch.discovery.DiscoverySettings;
-import org.elasticsearch.threadpool.ThreadPool;
-import org.elasticsearch.transport.EmptyTransportResponseHandler;
-import org.elasticsearch.transport.TransportChannel;
-import org.elasticsearch.transport.TransportException;
-import org.elasticsearch.transport.TransportRequest;
-import org.elasticsearch.transport.TransportRequestHandler;
-import org.elasticsearch.transport.TransportRequestOptions;
-import org.elasticsearch.transport.TransportResponse;
-import org.elasticsearch.transport.TransportService;
+import org.opensearch.action.ActionListener;
+import org.opensearch.cluster.ClusterState;
+import org.opensearch.cluster.node.DiscoveryNode;
+import org.opensearch.common.io.stream.StreamInput;
+import org.opensearch.common.io.stream.StreamOutput;
+import org.opensearch.common.settings.Settings;
+import org.opensearch.discovery.DiscoverySettings;
+import org.opensearch.tasks.Task;
+import org.opensearch.threadpool.ThreadPool;
+import org.opensearch.transport.EmptyTransportResponseHandler;
+import org.opensearch.transport.TransportChannel;
+import org.opensearch.transport.TransportException;
+import org.opensearch.transport.TransportRequest;
+import org.opensearch.transport.TransportRequestHandler;
+import org.opensearch.transport.TransportRequestOptions;
+import org.opensearch.transport.TransportResponse;
+import org.opensearch.transport.TransportService;
 
 import java.io.IOException;
 
@@ -79,29 +80,29 @@ public class AppliedClusterStateAction {
     public void sendAppliedToNode(final DiscoveryNode node, final ClusterState clusterState, final Exception exception) {
         try {
             logger.trace("sending commit for cluster state [{}] to [{}]",
-                clusterState.metaData().x2(), node);
+                clusterState.metadata().x2(), node);
             TransportRequestOptions options = TransportRequestOptions.builder().withType(TransportRequestOptions.Type.STATE).build();
             // no need to put a timeout on the options here, because we want the response to eventually be received
             // and not log an error if it arrives after the timeout
             transportService.sendRequest(node, APPLIED_ACTION_NAME,
-                    new AppliedClusterStateRequest(transportService.getLocalNode().getId(), clusterState.metaData().x2(), exception),
+                    new AppliedClusterStateRequest(transportService.getLocalNode().getId(), clusterState.metadata().x2(), exception),
                     options,
                     new EmptyTransportResponseHandler(ThreadPool.Names.SAME) {
                         @Override
                         public void handleResponse(TransportResponse.Empty response) {
-                            logger.debug("node {} responded to cluster state commit [{}]", node, clusterState.metaData().x2());
+                            logger.debug("node {} responded to cluster state commit [{}]", node, clusterState.metadata().x2());
                         }
 
                         @Override
                         public void handleException(TransportException exp) {
                             logger.debug((org.apache.logging.log4j.util.Supplier<?>) () ->
-                                new ParameterizedMessage("failed to commit cluster state [{}] to {}", clusterState.metaData().x2(), node), exp);
+                                new ParameterizedMessage("failed to commit cluster state [{}] to {}", clusterState.metadata().x2(), node), exp);
                         }
                     }
                     );
         } catch (Exception t) {
             logger.warn((org.apache.logging.log4j.util.Supplier<?>) () ->
-                new ParameterizedMessage("error sending cluster state commit state [{}] to {}", clusterState.metaData().x2(), node), t);
+                new ParameterizedMessage("error sending cluster state commit state [{}] to {}", clusterState.metadata().x2(), node), t);
         }
     }
 
@@ -133,7 +134,7 @@ public class AppliedClusterStateAction {
 
     private class AppliedClusterStateRequestHandler implements TransportRequestHandler<AppliedClusterStateRequest> {
         @Override
-        public void messageReceived(AppliedClusterStateRequest request, final TransportChannel channel) throws Exception {
+        public void messageReceived(AppliedClusterStateRequest request, final TransportChannel channel, Task task) throws Exception {
             handleAppliedRequest(request, channel);
         }
     }

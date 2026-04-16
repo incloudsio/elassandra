@@ -1,4 +1,12 @@
 /*
+ * SPDX-License-Identifier: Apache-2.0
+ *
+ * The OpenSearch Contributors require contributions made to
+ * this file be licensed under the Apache-2.0 license or a
+ * compatible open source license.
+ */
+
+/*
  * Licensed to Elasticsearch under one or more contributor
  * license agreements. See the NOTICE file distributed with
  * this work for additional information regarding copyright
@@ -16,6 +24,11 @@
  * specific language governing permissions and limitations
  * under the License.
  */
+/*
+ * Modifications Copyright OpenSearch Contributors. See
+ * GitHub history for details.
+ */
+
 package org.apache.lucene.grouping;
 
 import org.apache.lucene.document.Document;
@@ -28,24 +41,29 @@ import org.apache.lucene.index.IndexReader;
 import org.apache.lucene.index.IndexReaderContext;
 import org.apache.lucene.index.LeafReaderContext;
 import org.apache.lucene.index.RandomIndexWriter;
+import org.apache.lucene.search.CheckHits;
 import org.apache.lucene.search.Collector;
 import org.apache.lucene.search.FieldDoc;
 import org.apache.lucene.search.IndexSearcher;
 import org.apache.lucene.search.MatchAllDocsQuery;
+import org.apache.lucene.search.Query;
+import org.apache.lucene.search.ScoreMode;
 import org.apache.lucene.search.Sort;
 import org.apache.lucene.search.SortField;
 import org.apache.lucene.search.SortedNumericSortField;
 import org.apache.lucene.search.SortedSetSortField;
 import org.apache.lucene.search.TopFieldCollector;
 import org.apache.lucene.search.TopFieldDocs;
+import org.apache.lucene.search.TotalHits;
 import org.apache.lucene.search.Weight;
 import org.apache.lucene.search.grouping.CollapseTopFieldDocs;
 import org.apache.lucene.search.grouping.CollapsingTopDocsCollector;
 import org.apache.lucene.store.Directory;
 import org.apache.lucene.util.BytesRef;
 import org.apache.lucene.util.NumericUtils;
-import org.apache.lucene.util.TestUtil;
-import org.elasticsearch.test.ESTestCase;
+import org.opensearch.index.mapper.MappedFieldType;
+import org.opensearch.index.mapper.MockFieldMapper;
+import org.opensearch.test.OpenSearchTestCase;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -54,9 +72,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 
-import static org.hamcrest.core.IsEqual.equalTo;
-
-public class CollapsingTopDocsCollectorTests extends ESTestCase {
+public class CollapsingTopDocsCollectorTests extends OpenSearchTestCase {
     private static class SegmentSearcher extends IndexSearcher {
         private final List<LeafReaderContext> ctx;
 
@@ -75,7 +91,7 @@ public class CollapsingTopDocsCollectorTests extends ESTestCase {
         }
     }
 
-    interface CollapsingDocValuesProducer<T extends Comparable> {
+    interface CollapsingDocValuesProducer<T extends Comparable<?>> {
         T randomGroup(int maxGroup);
 
         void add(Document doc, T value, boolean multivalued);
@@ -83,16 +99,16 @@ public class CollapsingTopDocsCollectorTests extends ESTestCase {
         SortField sortField(boolean multivalued);
     }
 
-    <T extends Comparable> void assertSearchCollapse(CollapsingDocValuesProducer<T> dvProducers, boolean numeric) throws IOException {
-        assertSearchCollapse(dvProducers, numeric, true, true);
-        assertSearchCollapse(dvProducers, numeric, true, false);
-        assertSearchCollapse(dvProducers, numeric, false, true);
-        assertSearchCollapse(dvProducers, numeric, false, false);
+    <T extends Comparable<T>> void assertSearchCollapse(CollapsingDocValuesProducer<T> dvProducers, boolean numeric) throws IOException {
+        assertSearchCollapse(dvProducers, numeric, true);
+        assertSearchCollapse(dvProducers, numeric, false);
     }
 
-    private <T extends Comparable> void assertSearchCollapse(CollapsingDocValuesProducer<T> dvProducers,
-                                                             boolean numeric, boolean multivalued,
-                                                             boolean trackMaxScores) throws IOException {
+    private <T extends Comparable<T>> void assertSearchCollapse(
+        CollapsingDocValuesProducer<T> dvProducers,
+        boolean numeric,
+        boolean multivalued
+    ) throws IOException {
         final int numDocs = randomIntBetween(1000, 2000);
         int maxGroup = randomIntBetween(2, 500);
         final Directory dir = newDirectory();
@@ -109,6 +125,7 @@ public class CollapsingTopDocsCollectorTests extends ESTestCase {
             w.addDocument(doc);
             totalHits++;
         }
+
         List<T> valueList = new ArrayList<>(values);
         Collections.sort(valueList);
         final IndexReader reader = w.getReader();
@@ -118,34 +135,29 @@ public class CollapsingTopDocsCollectorTests extends ESTestCase {
         final SortField sort2 = new SortField("sort2", SortField.Type.LONG);
         Sort sort = new Sort(sort1, sort2, collapseField);
 
+        MappedFieldType fieldType = new MockFieldMapper.FakeFieldType(collapseField.getField());
+
         int expectedNumGroups = values.size();
 
-        final CollapsingTopDocsCollector collapsingCollector;
+        final CollapsingTopDocsCollector<?> collapsingCollector;
         if (numeric) {
-            collapsingCollector =
-                CollapsingTopDocsCollector.createNumeric(collapseField.getField(), sort, expectedNumGroups, trackMaxScores);
+            collapsingCollector = CollapsingTopDocsCollector.createNumeric(collapseField.getField(), fieldType, sort, expectedNumGroups);
         } else {
-            collapsingCollector =
-                CollapsingTopDocsCollector.createKeyword(collapseField.getField(), sort, expectedNumGroups, trackMaxScores);
+            collapsingCollector = CollapsingTopDocsCollector.createKeyword(collapseField.getField(), fieldType, sort, expectedNumGroups);
         }
 
-        TopFieldCollector topFieldCollector =
-            TopFieldCollector.create(sort, totalHits, true, trackMaxScores, trackMaxScores, true);
-
-        searcher.search(new MatchAllDocsQuery(), collapsingCollector);
-        searcher.search(new MatchAllDocsQuery(), topFieldCollector);
+        TopFieldCollector topFieldCollector = TopFieldCollector.create(sort, totalHits, Integer.MAX_VALUE);
+        Query query = new MatchAllDocsQuery();
+        searcher.search(query, collapsingCollector);
+        searcher.search(query, topFieldCollector);
         CollapseTopFieldDocs collapseTopFieldDocs = collapsingCollector.getTopDocs();
         TopFieldDocs topDocs = topFieldCollector.topDocs();
         assertEquals(collapseField.getField(), collapseTopFieldDocs.field);
         assertEquals(expectedNumGroups, collapseTopFieldDocs.scoreDocs.length);
-        assertEquals(totalHits, collapseTopFieldDocs.totalHits);
+        assertEquals(totalHits, collapseTopFieldDocs.totalHits.value);
+        assertEquals(TotalHits.Relation.EQUAL_TO, collapseTopFieldDocs.totalHits.relation);
         assertEquals(totalHits, topDocs.scoreDocs.length);
-        assertEquals(totalHits, topDocs.totalHits);
-        if (trackMaxScores) {
-            assertThat(collapseTopFieldDocs.getMaxScore(), equalTo(topDocs.getMaxScore()));
-        } else {
-            assertThat(collapseTopFieldDocs.getMaxScore(), equalTo(Float.NaN));
-        }
+        assertEquals(totalHits, topDocs.totalHits.value);
 
         Set<Object> seen = new HashSet<>();
         // collapse field is the last sort
@@ -169,7 +181,6 @@ public class CollapsingTopDocsCollectorTests extends ESTestCase {
             FieldDoc fieldDoc = (FieldDoc) topDocs.scoreDocs[topDocsIndex];
             assertTrue(seen.contains(fieldDoc.fields[collapseIndex]));
         }
-
 
         // check merge
         final IndexReaderContext ctx = searcher.getTopReaderContext();
@@ -196,32 +207,32 @@ public class CollapsingTopDocsCollectorTests extends ESTestCase {
         }
 
         final CollapseTopFieldDocs[] shardHits = new CollapseTopFieldDocs[subSearchers.length];
-        final Weight weight = searcher.createNormalizedWeight(new MatchAllDocsQuery(), true);
+        final Weight weight = searcher.createWeight(searcher.rewrite(new MatchAllDocsQuery()), ScoreMode.COMPLETE, 1f);
         for (int shardIDX = 0; shardIDX < subSearchers.length; shardIDX++) {
             final SegmentSearcher subSearcher = subSearchers[shardIDX];
-            final CollapsingTopDocsCollector c;
+            final CollapsingTopDocsCollector<?> c;
             if (numeric) {
-                c = CollapsingTopDocsCollector.createNumeric(collapseField.getField(), sort, expectedNumGroups, trackMaxScores);
+                c = CollapsingTopDocsCollector.createNumeric(collapseField.getField(), fieldType, sort, expectedNumGroups);
             } else {
-                c = CollapsingTopDocsCollector.createKeyword(collapseField.getField(), sort, expectedNumGroups, trackMaxScores);
+                c = CollapsingTopDocsCollector.createKeyword(collapseField.getField(), fieldType, sort, expectedNumGroups);
             }
             subSearcher.search(weight, c);
             shardHits[shardIDX] = c.getTopDocs();
         }
         CollapseTopFieldDocs mergedFieldDocs = CollapseTopFieldDocs.merge(sort, 0, expectedNumGroups, shardHits, true);
-        assertTopDocsEquals(mergedFieldDocs, collapseTopFieldDocs);
+        assertTopDocsEquals(query, mergedFieldDocs, collapseTopFieldDocs);
         w.close();
         reader.close();
         dir.close();
     }
 
-    private static void assertTopDocsEquals(CollapseTopFieldDocs topDocs1, CollapseTopFieldDocs topDocs2) {
-        TestUtil.assertEquals(topDocs1, topDocs2);
+    private static void assertTopDocsEquals(Query query, CollapseTopFieldDocs topDocs1, CollapseTopFieldDocs topDocs2) {
+        CheckHits.checkEqual(query, topDocs1.scoreDocs, topDocs2.scoreDocs);
         assertArrayEquals(topDocs1.collapseValues, topDocs2.collapseValues);
     }
 
     public void testCollapseLong() throws Exception {
-        CollapsingDocValuesProducer producer = new CollapsingDocValuesProducer<Long>() {
+        CollapsingDocValuesProducer<Long> producer = new CollapsingDocValuesProducer<Long>() {
             @Override
             public Long randomGroup(int maxGroup) {
                 return randomNonNegativeLong() % maxGroup;
@@ -249,7 +260,7 @@ public class CollapsingTopDocsCollectorTests extends ESTestCase {
     }
 
     public void testCollapseInt() throws Exception {
-        CollapsingDocValuesProducer producer = new CollapsingDocValuesProducer<Integer>() {
+        CollapsingDocValuesProducer<Integer> producer = new CollapsingDocValuesProducer<Integer>() {
             @Override
             public Integer randomGroup(int maxGroup) {
                 return randomIntBetween(0, maxGroup - 1);
@@ -277,7 +288,7 @@ public class CollapsingTopDocsCollectorTests extends ESTestCase {
     }
 
     public void testCollapseFloat() throws Exception {
-        CollapsingDocValuesProducer producer = new CollapsingDocValuesProducer<Float>() {
+        CollapsingDocValuesProducer<Float> producer = new CollapsingDocValuesProducer<Float>() {
             @Override
             public Float randomGroup(int maxGroup) {
                 return Float.valueOf(randomIntBetween(0, maxGroup - 1));
@@ -305,7 +316,7 @@ public class CollapsingTopDocsCollectorTests extends ESTestCase {
     }
 
     public void testCollapseDouble() throws Exception {
-        CollapsingDocValuesProducer producer = new CollapsingDocValuesProducer<Double>() {
+        CollapsingDocValuesProducer<Double> producer = new CollapsingDocValuesProducer<Double>() {
             @Override
             public Double randomGroup(int maxGroup) {
                 return Double.valueOf(randomIntBetween(0, maxGroup - 1));
@@ -333,7 +344,7 @@ public class CollapsingTopDocsCollectorTests extends ESTestCase {
     }
 
     public void testCollapseString() throws Exception {
-        CollapsingDocValuesProducer producer = new CollapsingDocValuesProducer<BytesRef>() {
+        CollapsingDocValuesProducer<BytesRef> producer = new CollapsingDocValuesProducer<BytesRef>() {
             @Override
             public BytesRef randomGroup(int maxGroup) {
                 return new BytesRef(Integer.toString(randomIntBetween(0, maxGroup - 1)));
@@ -380,11 +391,14 @@ public class CollapsingTopDocsCollectorTests extends ESTestCase {
         w.commit();
         final IndexReader reader = w.getReader();
         final IndexSearcher searcher = newSearcher(reader);
+
+        MappedFieldType fieldType = new MockFieldMapper.FakeFieldType("group");
+
         SortField sortField = new SortField("group", SortField.Type.LONG);
         sortField.setMissingValue(Long.MAX_VALUE);
         Sort sort = new Sort(sortField);
-        final CollapsingTopDocsCollector collapsingCollector =
-                CollapsingTopDocsCollector.createNumeric("group", sort, 10, false);
+
+        final CollapsingTopDocsCollector<?> collapsingCollector = CollapsingTopDocsCollector.createNumeric("group", fieldType, sort, 10);
         searcher.search(new MatchAllDocsQuery(), collapsingCollector);
         CollapseTopFieldDocs collapseTopFieldDocs = collapsingCollector.getTopDocs();
         assertEquals(4, collapseTopFieldDocs.scoreDocs.length);
@@ -418,9 +432,12 @@ public class CollapsingTopDocsCollectorTests extends ESTestCase {
         w.commit();
         final IndexReader reader = w.getReader();
         final IndexSearcher searcher = newSearcher(reader);
+
+        MappedFieldType fieldType = new MockFieldMapper.FakeFieldType("group");
+
         Sort sort = new Sort(new SortField("group", SortField.Type.STRING_VAL));
-        final CollapsingTopDocsCollector collapsingCollector =
-            CollapsingTopDocsCollector.createKeyword("group", sort, 10, false);
+
+        final CollapsingTopDocsCollector<?> collapsingCollector = CollapsingTopDocsCollector.createKeyword("group", fieldType, sort, 10);
         searcher.search(new MatchAllDocsQuery(), collapsingCollector);
         CollapseTopFieldDocs collapseTopFieldDocs = collapsingCollector.getTopDocs();
         assertEquals(4, collapseTopFieldDocs.scoreDocs.length);

@@ -2,8 +2,8 @@
 "DELETE with typeless API on an index that has types":
 
  - skip:
-      version: " - 6.6.99"
-      reason:  Typeless APIs were introduced in 6.7.0
+      version: " - 6.99.99"
+      reason:  Typeless APIs were introduced in 7.0.0
 
  - do:
       indices.create: # not using include_type_name: false on purpose
@@ -35,7 +35,6 @@
  - do:
       delete:
           index:  index
-          type:   _doc
           id:     1
 
  - match:   { _index:   "index" }

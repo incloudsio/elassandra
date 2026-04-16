@@ -55,14 +55,14 @@ Implementation status (repository)
    * - Elassandra application repo
      - `incloudsio/elassandra <https://github.com/incloudsio/elassandra>`_ (integration branches may track modernization work).
    * - Cassandra fork
-     - `incloudsio/cassandra <https://github.com/incloudsio/cassandra>`_ — **3.11** line ``cassandra-3.11.9-elassandra`` (default submodule); **4.0** line ``cassandra-4.0.x-elassandra`` (Maven ``groupId`` ``io.inclouds.cassandra``). Switch with ``scripts/use-cassandra-40-submodule.sh`` when porting the JVM.
+     - `incloudsio/cassandra <https://github.com/incloudsio/cassandra>`_ — **4.0** line ``cassandra-4.0.x-elassandra`` (Maven ``groupId`` ``io.inclouds.cassandra``), which is the baseline used by this repository today.
    * - OpenSearch port
-     - Bootstrap side-car tree with ``scripts/opensearch-port-bootstrap.sh`` (branch ``elassandra-os-1.3`` from tag **1.3.20**); port ``org.elassandra.*`` per :ref:`opensearch_porting_guide`.
+     - Main ``server/`` tree is OpenSearch **1.3.20**-based; keep ``scripts/opensearch-port-bootstrap.sh`` and the side-car flow as the rebase harness for future upstream updates and regression waves.
    * - Legacy version verify
-     - Root Gradle ``verifyVersions`` can be skipped with ``-Pelassandra.skipLegacyVersionVerify`` while the stack moves off Strapdata snapshot metadata.
+     - Root Gradle ``verifyVersions`` validates both the legacy Elasticsearch ancestry and the OpenSearch 1.x line. The optional ``-Pelassandra.skipLegacyVersionVerify`` escape hatch remains only for exceptional local debugging.
 
-Target pins (when the modern stack ships)
-------------------------------------------
+Target pins (modern stack)
+--------------------------
 
 These values are recorded in ``buildSrc/version.properties`` as ``opensearch_port`` and ``lucene_opensearch`` (they match upstream OpenSearch **1.3.20**). The Cassandra **4.0** artifact version tracks ``server/cassandra/build.xml`` ``base.version`` after ``scripts/use-cassandra-40-submodule.sh`` (typically **4.0.20** on branch ``cassandra-4.0.x-elassandra``).
 

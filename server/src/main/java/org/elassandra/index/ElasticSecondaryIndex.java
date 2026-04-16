@@ -110,49 +110,48 @@ import org.elassandra.cluster.SchemaManager;
 import org.elassandra.cluster.Serializer;
 import org.elassandra.index.search.LuceneWeights;
 import org.elassandra.index.ElasticSecondaryIndex.ImmutableMappingInfo.WideRowcumentIndexer.WideRowcument;
-import org.elasticsearch.ElasticsearchException;
-import org.elasticsearch.action.admin.indices.flush.FlushRequest;
-import org.elasticsearch.action.index.IndexRequest;
-import org.elasticsearch.cluster.ClusterChangedEvent;
-import org.elasticsearch.cluster.ClusterName;
-import org.elasticsearch.cluster.ClusterState;
-import org.elasticsearch.cluster.ClusterStateTaskConfig.SchemaUpdate;
-import org.elasticsearch.cluster.block.ClusterBlockException;
-import org.elasticsearch.cluster.block.ClusterBlockLevel;
-import org.elasticsearch.cluster.metadata.IndexMetaData;
-import org.elasticsearch.cluster.metadata.MappingMetaData;
-import org.elasticsearch.cluster.metadata.MetaData;
-import org.elasticsearch.cluster.service.ClusterService;
-import org.elasticsearch.common.SuppressForbidden;
-import org.elasticsearch.common.bytes.BytesArray;
-import org.elasticsearch.common.bytes.BytesReference;
-import org.elasticsearch.common.geo.GeoPoint;
-import org.elasticsearch.common.geo.builders.ShapeBuilder;
-import org.elasticsearch.common.geo.parsers.ShapeParser;
-import org.elasticsearch.common.lucene.BytesRefs;
-import org.elasticsearch.common.lucene.all.AllEntries;
-import org.elasticsearch.common.lucene.search.Queries;
-import org.elasticsearch.common.lucene.uid.Versions;
-import org.elasticsearch.common.settings.Setting;
-import org.elasticsearch.common.settings.Settings;
-import org.elasticsearch.common.xcontent.*;
-import org.elasticsearch.common.xcontent.support.XContentMapValues;
-import org.elasticsearch.index.IndexService;
-import org.elasticsearch.index.IndexSettings;
-import org.elasticsearch.index.VersionType;
-import org.elasticsearch.index.engine.Engine;
-import org.elasticsearch.index.engine.DeleteByQuery;
-import org.elasticsearch.index.engine.Engine.IndexResult;
-import org.elasticsearch.index.engine.Engine.Operation;
-import org.elasticsearch.index.engine.EngineException;
-import org.elasticsearch.index.mapper.*;
-import org.elasticsearch.index.mapper.CqlMapper.CqlStruct;
-import org.elasticsearch.index.mapper.ParseContext.Document;
-import org.elasticsearch.index.mapper.SeqNoFieldMapper.SequenceIDFields;
-import org.elasticsearch.index.seqno.SequenceNumbers;
-import org.elasticsearch.index.shard.IndexShard;
-import org.elasticsearch.index.shard.IndexShardState;
-import org.elasticsearch.indices.IndicesService;
+import org.opensearch.OpenSearchException;
+import org.opensearch.action.admin.indices.flush.FlushRequest;
+import org.opensearch.action.index.IndexRequest;
+import org.opensearch.cluster.ClusterChangedEvent;
+import org.opensearch.cluster.ClusterName;
+import org.opensearch.cluster.ClusterState;
+import org.opensearch.cluster.block.ClusterBlockException;
+import org.opensearch.cluster.block.ClusterBlockLevel;
+import org.opensearch.cluster.metadata.IndexMetadata;
+import org.opensearch.cluster.metadata.MappingMetadata;
+import org.opensearch.cluster.metadata.Metadata;
+import org.opensearch.cluster.service.ClusterService;
+import org.opensearch.common.SuppressForbidden;
+import org.opensearch.common.bytes.BytesArray;
+import org.opensearch.common.bytes.BytesReference;
+import org.opensearch.common.geo.GeoPoint;
+import org.opensearch.common.geo.builders.ShapeBuilder;
+import org.opensearch.common.geo.parsers.ShapeParser;
+import org.opensearch.common.lucene.BytesRefs;
+import org.opensearch.common.lucene.all.AllEntries;
+import org.opensearch.common.lucene.search.Queries;
+import org.opensearch.common.lucene.uid.Versions;
+import org.opensearch.common.settings.Setting;
+import org.opensearch.common.settings.Settings;
+import org.opensearch.common.xcontent.*;
+import org.opensearch.common.xcontent.support.XContentMapValues;
+import org.opensearch.index.IndexService;
+import org.opensearch.index.IndexSettings;
+import org.opensearch.index.VersionType;
+import org.opensearch.index.engine.Engine;
+import org.opensearch.index.engine.DeleteByQuery;
+import org.opensearch.index.engine.Engine.IndexResult;
+import org.opensearch.index.engine.Engine.Operation;
+import org.opensearch.index.engine.EngineException;
+import org.opensearch.index.mapper.*;
+import org.opensearch.index.mapper.CqlMapper.CqlStruct;
+import org.opensearch.index.mapper.ParseContext.Document;
+import org.opensearch.index.mapper.SeqNoFieldMapper.SequenceIDFields;
+import org.opensearch.index.seqno.SequenceNumbers;
+import org.opensearch.index.shard.IndexShard;
+import org.opensearch.index.shard.IndexShardState;
+import org.opensearch.indices.IndicesService;
 
 import java.io.File;
 import java.io.IOException;
@@ -196,7 +195,7 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
-import static org.elasticsearch.index.seqno.SequenceNumbers.UNASSIGNED_PRIMARY_TERM;
+import static org.opensearch.index.seqno.SequenceNumbers.UNASSIGNED_PRIMARY_TERM;
 
 
 /**
@@ -330,14 +329,14 @@ public class ElasticSecondaryIndex implements Index {
     }
 
     @SuppressWarnings("unchecked")
-    private static Map<String, Object> mappingRoot(MappingMetaData mappingMetaData, String typeName) throws IOException {
+    private static Map<String, Object> mappingRoot(MappingMetadata mappingMetaData, String typeName) throws IOException {
         Map<String, Object> mappingMap = mappingMetaData.getSourceAsMap();
         Object typedMapping = mappingMap == null ? null : mappingMap.get(typeName);
         return typedMapping instanceof Map ? (Map<String, Object>) typedMapping : mappingMap;
     }
 
-    private static MappingMetaData resolveMappingMetaData(IndexMetaData indexMetaData, String typeName) {
-        MappingMetaData mappingMetaData = indexMetaData.mapping(typeName);
+    private static MappingMetadata resolveMappingMetaData(IndexMetadata indexMetaData, String typeName) {
+        MappingMetadata mappingMetaData = indexMetaData.mapping(typeName);
         if (mappingMetaData == null) {
             mappingMetaData = indexMetaData.mapping();
         }
@@ -430,7 +429,7 @@ public class ElasticSecondaryIndex implements Index {
             } else {
                 // geo_point stored in UDT.
                 Map<String, Double> geo_point = (Map<String, Double>) value;
-                geoPoint = new GeoPoint(geo_point.get(org.elasticsearch.common.geo.GeoUtils.LATITUDE), geo_point.get(org.elasticsearch.common.geo.GeoUtils.LONGITUDE));
+                geoPoint = new GeoPoint(geo_point.get(org.opensearch.common.geo.GeoUtils.LATITUDE), geo_point.get(org.opensearch.common.geo.GeoUtils.LONGITUDE));
             }
             geoPointFieldMapper.parse(context.createExternalValueContext(geoPoint));
         } else if (mapper instanceof FieldMapper) {
@@ -519,7 +518,7 @@ public class ElasticSecondaryIndex implements Index {
                                         String mappingUpdate = BytesReference.bytes(builder).utf8ToString();
                                         logger.info("updating mapping={}", mappingUpdate);
 
-                                        clusterService.blockingMappingUpdate(indexInfo.indexService.index(), context.docMapper().type(), mappingUpdate, SchemaUpdate.UPDATE_ASYNCHRONOUS);
+            // TODO(OpenSearch port): restore dynamic mapping update (blockingMappingUpdate)
                                         DocumentMapper docMapper = resolveDocumentMapper(indexInfo.indexService.mapperService(), indexInfo.type);
                                         ObjectMapper newObjectMapper = docMapper.objectMappers().get(mapper.name());
                                         subMapper = newObjectMapper.getMapper(entry.getKey());
@@ -613,7 +612,7 @@ public class ElasticSecondaryIndex implements Index {
             this.documents.clear();
             this.documents.add(this.document);
             this.id = uid.id();
-            this.uid = new Field(UidFieldMapper.NAME, Uid.createUidAsBytes(uid.type(), uid.id()), UidFieldMapper.Defaults.FIELD_TYPE);
+            this.uid = new Field(IdFieldMapper.NAME, Uid.encodeId(uid.id()), IdFieldMapper.Defaults.FIELD_TYPE);
             this.seqID = null;
             this.allEntries = allFieldMapperEnabledForAllEntries(this.docMapper) ? new AllEntries() : null;
             this.docBoost = 1.0f;
@@ -866,7 +865,7 @@ public class ElasticSecondaryIndex implements Index {
 
             @Override
             public boolean apply(IndexableField input) {
-                if (MapperService.isMetadataField(input.name())) {
+                if (indexInfo.indexService.mapperService().isMetadataField(input.name())) {
                     return true;
                 }
                 int x = input.name().indexOf('.');
@@ -904,7 +903,7 @@ public class ElasticSecondaryIndex implements Index {
             ReadWriteLock dynamicMappingUpdateLock;
             volatile boolean updated = false;
 
-            public ImmutableIndexInfo(String name, IndexService indexService, MappingMetaData mappingMetaData, MetaData metadata, boolean versionLessEngine) throws IOException {
+            public ImmutableIndexInfo(String name, IndexService indexService, MappingMetadata mappingMetaData, Metadata metadata, boolean versionLessEngine) throws IOException {
                 this.name = name;
                 this.versionLessEngine = versionLessEngine;
                 this.indexService = indexService;
@@ -1255,8 +1254,8 @@ public class ElasticSecondaryIndex implements Index {
         final boolean indexOpaqueStorage; // true if one index have index_opaque_storage=true (
 
         ImmutableMappingInfo(final ClusterState state) {
-            this.metadataVersion = state.metaData().version();
-            this.metadataClusterUUID = state.metaData().clusterUUID();
+            this.metadataVersion = state.metadata().version();
+            this.metadataClusterUUID = state.metadata().clusterUUID();
             this.nodeId = state.nodes().getLocalNodeId();
 
             if (state.blocks().hasGlobalBlockWithLevel(ClusterBlockLevel.WRITE)) {
@@ -1279,7 +1278,7 @@ public class ElasticSecondaryIndex implements Index {
             Map<String, ImmutablePartitionFunction> partFuncs = null;
             List<ImmutableIndexInfo> indexList = new ArrayList<ImmutableIndexInfo>();
 
-            for (IndexMetaData indexMetaData : state.metaData()) {
+            for (IndexMetadata indexMetaData : state.metadata()) {
                 if (!ElasticSecondaryIndex.this.baseCfs.metadata.get().keyspace.equals(indexMetaData.keyspace()))
                     continue;
 
@@ -1289,7 +1288,7 @@ public class ElasticSecondaryIndex implements Index {
                 }
 
                 String index = indexMetaData.getIndex().getName();
-                MappingMetaData mappingMetaData = resolveMappingMetaData(indexMetaData, typeName);
+                MappingMetadata mappingMetaData = resolveMappingMetaData(indexMetaData, typeName);
 
                 if (mappingMetaData == null) {
                     if (logger.isDebugEnabled())
@@ -1298,7 +1297,7 @@ public class ElasticSecondaryIndex implements Index {
                 }
 
 
-                if (indexMetaData.getState() != IndexMetaData.State.OPEN) {
+                if (indexMetaData.getState() != IndexMetadata.State.OPEN) {
                     if (logger.isDebugEnabled())
                         logger.debug("ignore, index=[{}] not OPEN", index);
                     continue;
@@ -1320,7 +1319,7 @@ public class ElasticSecondaryIndex implements Index {
                         logger.error("indexService not available for [{}], ignoring", index);
                         continue;
                     }
-                    ImmutableIndexInfo indexInfo = new ImmutableIndexInfo(index, indexService, mappingMetaData, state.metaData(), false);
+                    ImmutableIndexInfo indexInfo = new ImmutableIndexInfo(index, indexService, mappingMetaData, state.metadata(), false);
                     indexList.add(indexInfo);
 
                     Map<String, Object> props = (Map<String, Object>) mappingMap.computeIfAbsent("properties", s -> new HashMap<>());
@@ -1334,7 +1333,7 @@ public class ElasticSecondaryIndex implements Index {
                             fieldsMap.put(fieldName, mandartory);
                         }
                     }
-                    if (mappingMetaData.hasParentField()) {
+                    if (mappingMap.containsKey(ParentFieldMapper.NAME)) {
                         Map<String, Object> parentsProps = (Map<String, Object>) mappingMap.get(ParentFieldMapper.NAME);
                         String pkColumns = (String) parentsProps.get(ParentFieldMapper.CQL_PARENT_PK);
                         if (pkColumns == null) {
@@ -2082,7 +2081,7 @@ public class ElasticSecondaryIndex implements Index {
                     resolveDocumentMapper(indexService.mapperService(), typeName).idFieldMapper().fieldType())) {
                     termUid = new Term(IdFieldMapper.NAME, id);
                 } else {
-                    termUid = new Term(UidFieldMapper.NAME, Uid.createUidAsBytes(typeName, id));
+                    termUid = new Term(IdFieldMapper.NAME, Uid.encodeId(id));
                 }
                 return termUid;
             }
@@ -2518,7 +2517,7 @@ public class ElasticSecondaryIndex implements Index {
             logger.warn(
                 "secondary index=[{}] metadata.version={} mappingInfo.indices={} started shards={}/{}",
                 this.index_name,
-                clusterState.metaData().version(),
+                clusterState.metadata().version(),
                 Arrays.toString(newMappingInfo.indices),
                 newMappingInfo.startedShardCount(),
                 newMappingInfo.indices == null ? 0 : newMappingInfo.indices.length
@@ -2540,8 +2539,8 @@ public class ElasticSecondaryIndex implements Index {
             mappingInfo.indices == null ? Collections.EMPTY_LIST : Arrays.stream(mappingInfo.indices).map(i -> i.name).collect(Collectors.toList()))) {
             updateMapping = true;
         } else {
-            for (ObjectCursor<IndexMetaData> cursor : event.state().metaData().indices().values()) {
-                IndexMetaData indexMetaData = cursor.value;
+            for (ObjectCursor<IndexMetadata> cursor : event.state().metadata().indices().values()) {
+                IndexMetadata indexMetaData = cursor.value;
                 if (!indexMetaData.keyspace().equals(this.baseCfs.metadata.get().keyspace)
                     || resolveMappingMetaData(indexMetaData, this.typeName) == null)
                     continue;
@@ -2555,7 +2554,7 @@ public class ElasticSecondaryIndex implements Index {
 
                 // trigger a mapping update when deleting an index #302
                 if (!event.indicesDeleted().isEmpty()) {
-                    for(org.elasticsearch.index.Index index : event.indicesDeleted()) {
+                    for(org.opensearch.index.Index index : event.indicesDeleted()) {
                         if (mappingInfo.indexToIdx.containsKey(index.getName())) {
                             updateMapping = true;
                             break;
@@ -2714,7 +2713,7 @@ public class ElasticSecondaryIndex implements Index {
                                     logger.debug("Cannot flush index=[{}], state=[{}]", indexInfo.name, indexShard.state());
                             }
                         }
-                    } catch (ElasticsearchException e) {
+                    } catch (OpenSearchException e) {
                         logger.error("Error while flushing index=[{}]", e, indexInfo.name);
                     } catch (org.apache.lucene.store.AlreadyClosedException e2) {
                         logger.warn("index=[{}] was already closed", indexInfo.name);
@@ -2807,7 +2806,7 @@ public class ElasticSecondaryIndex implements Index {
                             DeleteByQuery deleteByQuery = mappingInfoRef.get().buildDeleteByQuery(indexInfo.indexService, Queries.newMatchAllQuery());
                             indexShard.getEngine().delete(deleteByQuery);
                         }
-                    } catch (ElasticsearchException e) {
+                    } catch (OpenSearchException e) {
                         logger.error("Error while truncating index=[{}]", e, indexInfo.name);
                     }
                 }

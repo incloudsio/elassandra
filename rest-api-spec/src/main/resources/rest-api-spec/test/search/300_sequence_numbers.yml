@@ -6,7 +6,6 @@ setup:
   - do:
       index:
           index:  test_1
-          type:   test
           id:     1
           body:   { foo: foo }
 
@@ -14,7 +13,6 @@ setup:
   - do:
       index:
         index:  test_1
-        type:   test
         id:     1
         body:   { foo: bar }
 
@@ -24,10 +22,6 @@ setup:
 
 ---
 "sequence numbers are returned if requested from body":
-  - skip:
-      version: " - 6.6.99"
-      reason: support was added in 6.7
-
   - do:
       search:
         index: _all
@@ -42,10 +36,6 @@ setup:
 
 ---
 "sequence numbers are returned if requested from url":
-  - skip:
-      version: " - 6.6.99"
-      reason: support was added in 6.7
-
   - do:
       search:
         index: _all

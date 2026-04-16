@@ -1,4 +1,12 @@
 /*
+ * SPDX-License-Identifier: Apache-2.0
+ *
+ * The OpenSearch Contributors require contributions made to
+ * this file be licensed under the Apache-2.0 license or a
+ * compatible open source license.
+ */
+
+/*
  * Licensed to Elasticsearch under one or more contributor
  * license agreements. See the NOTICE file distributed with
  * this work for additional information regarding copyright
@@ -16,6 +24,11 @@
  * specific language governing permissions and limitations
  * under the License.
  */
+/*
+ * Modifications Copyright OpenSearch Contributors. See
+ * GitHub history for details.
+ */
+
 package org.apache.lucene.search.grouping;
 
 import org.apache.lucene.search.FieldComparator;
@@ -24,7 +37,9 @@ import org.apache.lucene.search.ScoreDoc;
 import org.apache.lucene.search.Sort;
 import org.apache.lucene.search.SortField;
 import org.apache.lucene.search.TopFieldDocs;
+import org.apache.lucene.search.TotalHits;
 import org.apache.lucene.util.PriorityQueue;
+import org.opensearch.common.util.CollectionUtils;
 
 import java.util.ArrayList;
 import java.util.HashSet;
@@ -40,9 +55,8 @@ public final class CollapseTopFieldDocs extends TopFieldDocs {
     /** The collapse value for each top doc */
     public final Object[] collapseValues;
 
-    public CollapseTopFieldDocs(String field, long totalHits, ScoreDoc[] scoreDocs,
-                                SortField[] sortFields, Object[] values, float maxScore) {
-        super(totalHits, scoreDocs, sortFields, maxScore);
+    public CollapseTopFieldDocs(String field, TotalHits totalHits, ScoreDoc[] scoreDocs, SortField[] sortFields, Object[] values) {
+        super(totalHits, scoreDocs, sortFields);
         this.field = field;
         this.collapseValues = values;
     }
@@ -71,8 +85,9 @@ public final class CollapseTopFieldDocs extends TopFieldDocs {
         int getShardIndex(ScoreDoc scoreDoc) {
             if (useScoreDocIndex) {
                 if (scoreDoc.shardIndex == -1) {
-                    throw new IllegalArgumentException("setShardIndex is false but TopDocs["
-                        + shardIndex + "].scoreDocs[" + hitIndex + "] is not set");
+                    throw new IllegalArgumentException(
+                        "setShardIndex is false but TopDocs[" + shardIndex + "].scoreDocs[" + hitIndex + "] is not set"
+                    );
                 }
                 return scoreDoc.shardIndex;
             } else {
@@ -144,8 +159,7 @@ public final class CollapseTopFieldDocs extends TopFieldDocs {
             for (int compIDX = 0; compIDX < comparators.length; compIDX++) {
                 final FieldComparator comp = comparators[compIDX];
 
-                final int cmp =
-                    reverseMul[compIDX] * comp.compareValues(firstFD.fields[compIDX], secondFD.fields[compIDX]);
+                final int cmp = reverseMul[compIDX] * comp.compareValues(firstFD.fields[compIDX], secondFD.fields[compIDX]);
 
                 if (cmp != 0) {
                     return cmp < 0;
@@ -159,34 +173,34 @@ public final class CollapseTopFieldDocs extends TopFieldDocs {
      * Returns a new CollapseTopDocs, containing topN collapsed results across
      * the provided CollapseTopDocs, sorting by score. Each {@link CollapseTopFieldDocs} instance must be sorted.
      **/
-    public static CollapseTopFieldDocs merge(Sort sort, int start, int size,
-                                             CollapseTopFieldDocs[] shardHits, boolean setShardIndex) {
+    public static CollapseTopFieldDocs merge(Sort sort, int start, int size, CollapseTopFieldDocs[] shardHits, boolean setShardIndex) {
         String collapseField = shardHits[0].field;
         for (int i = 1; i < shardHits.length; i++) {
             if (collapseField.equals(shardHits[i].field) == false) {
-                throw new IllegalArgumentException("collapse field differ across shards [" +
-                    collapseField + "] != [" + shardHits[i].field + "]");
+                throw new IllegalArgumentException(
+                    "collapse field differ across shards [" + collapseField + "] != [" + shardHits[i].field + "]"
+                );
             }
         }
         final PriorityQueue<ShardRef> queue = new MergeSortQueue(sort, shardHits);
 
         long totalHitCount = 0;
         int availHitCount = 0;
-        float maxScore = Float.MIN_VALUE;
-        for(int shardIDX=0;shardIDX<shardHits.length;shardIDX++) {
+        TotalHits.Relation totalHitsRelation = TotalHits.Relation.EQUAL_TO;
+        for (int shardIDX = 0; shardIDX < shardHits.length; shardIDX++) {
             final CollapseTopFieldDocs shard = shardHits[shardIDX];
             // totalHits can be non-zero even if no hits were
             // collected, when searchAfter was used:
-            totalHitCount += shard.totalHits;
-            if (shard.scoreDocs != null && shard.scoreDocs.length > 0) {
+            totalHitCount += shard.totalHits.value;
+            // If any hit count is a lower bound then the merged
+            // total hit count is a lower bound as well
+            if (shard.totalHits.relation == TotalHits.Relation.GREATER_THAN_OR_EQUAL_TO) {
+                totalHitsRelation = TotalHits.Relation.GREATER_THAN_OR_EQUAL_TO;
+            }
+            if (CollectionUtils.isEmpty(shard.scoreDocs) == false) {
                 availHitCount += shard.scoreDocs.length;
                 queue.add(new ShardRef(shardIDX, setShardIndex == false));
-                maxScore = Math.max(maxScore, shard.getMaxScore());
             }
-        }
-
-        if (availHitCount == 0) {
-            maxScore = Float.NaN;
         }
 
         final ScoreDoc[] hits;
@@ -237,6 +251,7 @@ public final class CollapseTopFieldDocs extends TopFieldDocs {
             hits = hitList.toArray(new ScoreDoc[0]);
             values = collapseList.toArray(new Object[0]);
         }
-        return new CollapseTopFieldDocs(collapseField, totalHitCount, hits, sort.getSort(), values, maxScore);
+        TotalHits totalHits = new TotalHits(totalHitCount, totalHitsRelation);
+        return new CollapseTopFieldDocs(collapseField, totalHits, hits, sort.getSort(), values);
     }
 }
