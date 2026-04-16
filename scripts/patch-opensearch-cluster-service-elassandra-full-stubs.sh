@@ -74,8 +74,8 @@ insert = """    public java.util.UUID readMetaDataOwner(long version) {
 
     public static final String ELASTIC_ADMIN_METADATA_TABLE = "metadata_log";
 
-    public boolean isValidExtensionKey(String key) {
-        return key != null && key.startsWith("elasticsearch_mapping");
+    public boolean isValidExtensionKey(String extensionName) {
+        return extensionName != null && extensionName.contains("/");
     }
 
     public org.opensearch.cluster.metadata.IndexMetadata getIndexMetaDataFromExtension(

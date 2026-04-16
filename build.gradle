@@ -280,6 +280,13 @@ allprojects {
     javadoc.options.encoding = 'UTF8'
     javadoc.options.addStringOption('Xdoclint:none', '-quiet')
     javadoc.failOnError = false
+    javadoc.doLast {
+      File elementList = new File(javadoc.destinationDir, 'element-list')
+      if (!elementList.exists()) {
+        javadoc.destinationDir.mkdirs()
+        elementList.text = ''
+      }
+    }
   }
 
   // support for reproducible builds
