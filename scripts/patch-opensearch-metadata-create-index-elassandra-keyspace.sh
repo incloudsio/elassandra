@@ -36,14 +36,14 @@ insert = """            } catch (Exception e) {
             }
 
             final DocumentMapper documentMapper = indexService.mapperService().documentMapper();
-            List<Mutation> mutations = new LinkedList<>();
-            List<Event.SchemaChange> events = new LinkedList<>();
+            java.util.List<org.apache.cassandra.db.Mutation> mutations = new java.util.LinkedList<>();
+            java.util.List<org.apache.cassandra.transport.Event.SchemaChange> events = new java.util.LinkedList<>();
             java.util.Map<String, Integer> replication = new java.util.LinkedHashMap<>();
             for (String entry : IndexMetadata.INDEX_SETTING_REPLICATION_SETTING.get(indexMetadata.getSettings())) {
                 int colon = entry.indexOf(':');
                 replication.put(entry.substring(0, colon), Integer.parseInt(entry.substring(colon + 1)));
             }
-            KeyspaceMetadata ksm = clusterService.getSchemaManager().createOrUpdateKeyspace(
+            org.apache.cassandra.schema.KeyspaceMetadata ksm = clusterService.getSchemaManager().createOrUpdateKeyspace(
                 indexMetadata.keyspace(),
                 indexMetadata.getNumberOfReplicas() + 1,
                 replication,
@@ -54,13 +54,19 @@ insert = """            } catch (Exception e) {
                 clusterService.getSchemaManager().updateTableSchema(
                     ksm,
                     documentMapper.type(),
-                    Collections.singletonMap(indexMetadata.getIndex(), Pair.create(indexMetadata, indexService.mapperService())),
+                    Collections.singletonMap(
+                        indexMetadata.getIndex(),
+                        org.apache.cassandra.utils.Pair.create(indexMetadata, indexService.mapperService())
+                    ),
                     mutations,
                     events
                 );
             }
             if (mutations.isEmpty() == false) {
-                MigrationManager.mergeSchema(mutations, clusterService.getSchemaManager().getInhibitedSchemaListeners());
+                org.apache.cassandra.schema.MigrationManager.mergeSchema(
+                    mutations,
+                    clusterService.getSchemaManager().getInhibitedSchemaListeners()
+                );
             }
 
             logger.log(
@@ -97,14 +103,14 @@ legacy_old = """            final DocumentMapper documentMapper = indexService.m
 """
 
 legacy_new = """            final DocumentMapper documentMapper = indexService.mapperService().documentMapper();
-            List<Mutation> mutations = new LinkedList<>();
-            List<Event.SchemaChange> events = new LinkedList<>();
+            java.util.List<org.apache.cassandra.db.Mutation> mutations = new java.util.LinkedList<>();
+            java.util.List<org.apache.cassandra.transport.Event.SchemaChange> events = new java.util.LinkedList<>();
             java.util.Map<String, Integer> replication = new java.util.LinkedHashMap<>();
             for (String entry : IndexMetadata.INDEX_SETTING_REPLICATION_SETTING.get(indexMetadata.getSettings())) {
                 int colon = entry.indexOf(':');
                 replication.put(entry.substring(0, colon), Integer.parseInt(entry.substring(colon + 1)));
             }
-            KeyspaceMetadata ksm = clusterService.getSchemaManager().createOrUpdateKeyspace(
+            org.apache.cassandra.schema.KeyspaceMetadata ksm = clusterService.getSchemaManager().createOrUpdateKeyspace(
                 indexMetadata.keyspace(),
                 indexMetadata.getNumberOfReplicas() + 1,
                 replication,
@@ -115,13 +121,19 @@ legacy_new = """            final DocumentMapper documentMapper = indexService.m
                 clusterService.getSchemaManager().updateTableSchema(
                     ksm,
                     documentMapper.type(),
-                    Collections.singletonMap(indexMetadata.getIndex(), Pair.create(indexMetadata, indexService.mapperService())),
+                    Collections.singletonMap(
+                        indexMetadata.getIndex(),
+                        org.apache.cassandra.utils.Pair.create(indexMetadata, indexService.mapperService())
+                    ),
                     mutations,
                     events
                 );
             }
             if (mutations.isEmpty() == false) {
-                MigrationManager.mergeSchema(mutations, clusterService.getSchemaManager().getInhibitedSchemaListeners());
+                org.apache.cassandra.schema.MigrationManager.mergeSchema(
+                    mutations,
+                    clusterService.getSchemaManager().getInhibitedSchemaListeners()
+                );
             }
 """
 

@@ -23,7 +23,7 @@ anchor = (
     "        org.apache.cassandra.schema.KeyspaceMetadata ksm = org.apache.cassandra.schema.Schema.instance.getKeyspaceMetadata(getElasticAdminKeyspaceName());\n"
     "        return ksm != null && ksm.getTableOrViewNullable(ELASTIC_ADMIN_METADATA_TABLE) != null;\n"
     "    }\n\n"
-    "    /** Block until local shards are started ({@link CassandraShardStartedBarrier}). */\n"
+    "    /** Block until local shards are started (CassandraShardStartedBarrier). */\n"
     "    public void blockUntilShardsStarted() {"
 )
 if anchor not in text:
@@ -144,7 +144,7 @@ insert = (
     "            }\n"
     "        }\n"
     "    }\n\n"
-    "    /** Block until local shards are started ({@link CassandraShardStartedBarrier}). */\n"
+    "    /** Block until local shards are started (CassandraShardStartedBarrier). */\n"
     "    public void blockUntilShardsStarted() {"
 )
 text = text.replace(anchor, insert, 1)

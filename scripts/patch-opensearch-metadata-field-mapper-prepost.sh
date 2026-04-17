@@ -12,7 +12,7 @@ from pathlib import Path
 import sys
 path = Path(sys.argv[1])
 text = path.read_text(encoding="utf-8")
-if "void preCreate(ParseContext context)" in text and "Elassandra" in text:
+if "void preCreate(ParseContext context)" in text and "void preCreate(Object indexingContext)" in text and "Elassandra" in text:
     print("MetadataFieldMapper pre/post already present:", path)
     raise SystemExit(0)
 # Insert after class javadoc opening - after "public abstract class MetadataFieldMapper"
@@ -29,6 +29,10 @@ new = (
     "    public void preCreate(ParseContext context) throws IOException {}\n\n"
     "    /** Elassandra: invoked after root fields are indexed (ES 6.8 fork). */\n"
     "    public void postCreate(ParseContext context) throws IOException {}\n\n"
+    "    /** Elassandra: invoked before mapped fields are materialized (ES 6.8 fork). */\n"
+    "    public void preCreate(Object indexingContext) throws IOException {}\n\n"
+    "    /** Elassandra: invoked after mapped fields are materialized (ES 6.8 fork). */\n"
+    "    public void postCreate(Object indexingContext) throws IOException {}\n\n"
     "    public interface TypeParser extends Mapper.TypeParser {"
 )
 text = text.replace(old, new, 1)

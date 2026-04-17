@@ -116,11 +116,9 @@ insert = """    public java.util.UUID readMetaDataOwner(long version) {
         return ksm != null && ksm.getTableOrViewNullable(ELASTIC_ADMIN_METADATA_TABLE) != null;
     }
 
-    /** Block until local shards are started ({@link CassandraShardStartedBarrier}). */
+    /** Block until local shards are started (CassandraShardStartedBarrier). */
     public void blockUntilShardsStarted() {
     }
-
-    public static final String SETTING_SYSTEM_TOKEN_RANGES_QUERY_EXPIRE = "es.token_ranges_query_expire_minutes";
 
     public static String buildIndexName(String cfsName) {
         return cfsName;

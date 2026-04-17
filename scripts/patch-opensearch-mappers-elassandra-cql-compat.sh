@@ -655,7 +655,7 @@ if DMP.exists():
     private final RootObjectMapper.TypeParser rootObjectTypeParser = new RootObjectMapper.TypeParser();
 """
         logger_insert = """    private final Supplier<QueryShardContext> queryShardContextSupplier;
-    private static final Logger logger = Loggers.getLogger(DocumentMapperParser.class);
+    private static final Logger logger = LogManager.getLogger(DocumentMapperParser.class);
 
     private final RootObjectMapper.TypeParser rootObjectTypeParser = new RootObjectMapper.TypeParser();
 """
