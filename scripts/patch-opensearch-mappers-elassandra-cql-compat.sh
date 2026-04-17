@@ -282,6 +282,88 @@ if OM.exists():
             print("ObjectMapper.java: Defaults anchor not found (for Elassandra CQL defaults)", file=sys.stderr)
             sys.exit(1)
         t = t.replace(needle, repl, 1)
+    if "String cqlUdtName," not in t:
+        needle = """    ObjectMapper(
+        String name,
+        String fullPath,
+        Explicit<Boolean> enabled,
+        Nested nested,
+        Dynamic dynamic,
+        Map<String, Mapper> mappers,
+        Settings settings
+    ) {
+        super(name);
+        assert settings != null;
+        if (name.isEmpty()) {
+            throw new IllegalArgumentException("name cannot be empty string");
+        }
+        this.fullPath = fullPath;
+        this.enabled = enabled;
+        this.nested = nested;
+        this.dynamic = dynamic;
+        if (mappers == null) {
+            this.mappers = new CopyOnWriteHashMap<>();
+        } else {
+            this.mappers = CopyOnWriteHashMap.copyOf(mappers);
+        }
+        this.nestedTypePathAsString = "__" + fullPath;
+        this.nestedTypePathAsBytes = new BytesRef(nestedTypePathAsString);
+        this.nestedTypeFilter = new TermQuery(new Term(TypeFieldMapper.NAME, nestedTypePathAsBytes));
+    }
+"""
+        repl = """    ObjectMapper(
+        String name,
+        String fullPath,
+        Explicit<Boolean> enabled,
+        Nested nested,
+        Dynamic dynamic,
+        Map<String, Mapper> mappers,
+        Settings settings
+    ) {
+        super(name);
+        assert settings != null;
+        if (name.isEmpty()) {
+            throw new IllegalArgumentException("name cannot be empty string");
+        }
+        this.fullPath = fullPath;
+        this.enabled = enabled;
+        this.nested = nested;
+        this.dynamic = dynamic;
+        if (mappers == null) {
+            this.mappers = new CopyOnWriteHashMap<>();
+        } else {
+            this.mappers = CopyOnWriteHashMap.copyOf(mappers);
+        }
+        this.nestedTypePathAsString = "__" + fullPath;
+        this.nestedTypePathAsBytes = new BytesRef(nestedTypePathAsString);
+        this.nestedTypeFilter = new TermQuery(new Term(TypeFieldMapper.NAME, nestedTypePathAsBytes));
+    }
+
+    /** Elassandra sidecar compatibility overload for fork-specific constructor callers. */
+    ObjectMapper(
+        String name,
+        String fullPath,
+        Explicit<Boolean> enabled,
+        Nested nested,
+        Dynamic dynamic,
+        CqlMapper.CqlCollection cqlCollection,
+        CqlMapper.CqlStruct cqlStruct,
+        String cqlUdtName,
+        boolean cqlPartialUpdate,
+        boolean cqlPartitionKey,
+        boolean cqlStaticColumn,
+        boolean cqlClusteringKeyDesc,
+        int cqlPrimaryKeyOrder,
+        Map<String, Mapper> mappers,
+        Settings settings
+    ) {
+        this(name, fullPath, enabled, nested, dynamic, mappers, settings);
+    }
+"""
+        if needle not in t:
+            print("ObjectMapper.java: stock constructor anchor not found (for Elassandra compatibility overload)", file=sys.stderr)
+            sys.exit(1)
+        t = t.replace(needle, repl, 1)
     if "public boolean hasField()" not in t:
         needle = """    public boolean isEnabled() {
         return this.enabled.value();
