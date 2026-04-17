@@ -78,7 +78,7 @@ dependencies {
   api 'org.apache.commons:commons-lang3:3.7'
   implementation 'com.google.re2j:re2j:1.1'
   api 'javax.servlet:servlet-api:2.5'
-  api "org.slf4j:slf4j-api:${versions.slf4j}"
+  api 'org.slf4j:slf4j-api:1.7.36'
   api "org.apache.logging.log4j:log4j-slf4j-impl:${versions.log4j}"
   api 'net.minidev:json-smart:2.4.11'
   api "io.netty:netty-all:${versions.netty}"
