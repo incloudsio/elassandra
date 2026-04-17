@@ -255,6 +255,33 @@ if OM.exists():
             "public class ObjectMapper extends Mapper implements Cloneable, CqlMapper {",
             1,
         )
+    if "public static final CqlMapper.CqlCollection CQL_COLLECTION" not in t:
+        needle = """    public static class Defaults {
+        public static final boolean ENABLED = true;
+        public static final Nested NESTED = Nested.NO;
+        public static final Dynamic DYNAMIC = null; // not set, inherited from root
+    }
+"""
+        repl = """    public static class Defaults {
+        public static final boolean ENABLED = true;
+        public static final Nested NESTED = Nested.NO;
+        public static final Dynamic DYNAMIC = null; // not set, inherited from root
+
+        /** Elassandra CQL defaults (fork parity). */
+        public static final CqlMapper.CqlCollection CQL_COLLECTION = CqlMapper.CqlCollection.LIST;
+
+        public static final CqlMapper.CqlStruct CQL_STRUCT = CqlMapper.CqlStruct.UDT;
+        public static final boolean CQL_MANDATORY = true;
+        public static final boolean CQL_PARTITION_KEY = false;
+        public static final boolean CQL_STATIC_COLUMN = false;
+        public static final boolean CQL_CLUSTERING_KEY_DESC = false;
+        public static final int CQL_PRIMARY_KEY_ORDER = -1;
+    }
+"""
+        if needle not in t:
+            print("ObjectMapper.java: Defaults anchor not found (for Elassandra CQL defaults)", file=sys.stderr)
+            sys.exit(1)
+        t = t.replace(needle, repl, 1)
     if "public boolean hasField()" not in t:
         needle = """    public boolean isEnabled() {
         return this.enabled.value();
