@@ -296,6 +296,12 @@ text = replace_one(
         return org.opensearch.cluster.metadata.IndexMetadata.builder("__extension__").numberOfShards(1).numberOfReplicas(0).build();
     }
 """,
+     """    public org.opensearch.cluster.metadata.IndexMetadata getIndexMetaDataFromExtension(
+        java.nio.ByteBuffer value
+    ) {
+        return null;
+    }
+""",
      """    public org.opensearch.cluster.metadata.IndexMetadata getIndexMetaDataFromExtension(java.nio.ByteBuffer value) {
         try (
             org.opensearch.common.xcontent.XContentParser parser = org.opensearch.common.xcontent.XContentType.JSON.xContent().createParser(
@@ -340,6 +346,17 @@ text = replace_one(
              org.apache.cassandra.exceptions.InvalidRequestException {
         processWithQueryHandler(cl, serialCl, org.apache.cassandra.service.ClientState.forInternalCalls(), query, values);
         return true;
+    }
+""",
+     """    public boolean processWriteConditional(
+        org.apache.cassandra.db.ConsistencyLevel cl,
+        org.apache.cassandra.db.ConsistencyLevel serialCl,
+        final String query,
+        Object... values
+    ) throws org.apache.cassandra.exceptions.RequestExecutionException,
+             org.apache.cassandra.exceptions.RequestValidationException,
+             org.apache.cassandra.exceptions.InvalidRequestException {
+        return false;
     }
 """],
     """    public boolean processWriteConditional(
