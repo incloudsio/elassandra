@@ -473,6 +473,16 @@ import org.elassandra.index.ElasticSecondaryIndex;
 
     /** Elassandra: legacy per-type mapping names (single-type indices use {@link #SINGLE_MAPPING_NAME}). */
 """
+        alt_anchor = """    public String keyspace() {
+        return getIndexMetadata().keyspace();
+    }
+
+    /** Fork named this getIndexMetaData; OpenSearch uses getIndexMetadata. */
+    public org.opensearch.cluster.metadata.IndexMetadata getIndexMetadata() {
+        return indexSettings.getIndexMetadata();
+    }
+
+    public boolean isMetadataField(String field) {"""
         insert = """    public String keyspace() {
         return getIndexMetadata().keyspace();
     }
@@ -608,10 +618,19 @@ import org.elassandra.index.ElasticSecondaryIndex;
 
     /** Elassandra: legacy per-type mapping names (single-type indices use {@link #SINGLE_MAPPING_NAME}). */
 """
-        if anchor not in t:
+        alt_insert = insert + """    /** Fork named this getIndexMetaData; OpenSearch uses getIndexMetadata. */
+    public org.opensearch.cluster.metadata.IndexMetadata getIndexMetadata() {
+        return indexSettings.getIndexMetadata();
+    }
+
+    public boolean isMetadataField(String field) {"""
+        if anchor in t:
+            t = t.replace(anchor, insert, 1)
+        elif alt_anchor in t:
+            t = t.replace(alt_anchor, alt_insert, 1)
+        else:
             print("MapperService.java: keyspace anchor not found (for discover mapping support)", file=sys.stderr)
             sys.exit(1)
-        t = t.replace(anchor, insert, 1)
     write_if_changed(MSRV, t)
 
 DMP = root / "server/src/main/java/org/opensearch/index/mapper/DocumentMapperParser.java"
