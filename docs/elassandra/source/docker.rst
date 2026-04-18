@@ -1,106 +1,110 @@
 
-.. note::
-   The Docker Hub paths below are **legacy (Strapdata)**. Current development and the Cassandra fork are under `Elassandra.org <https://elassandra.org/>`_ and `incloudsio/cassandra <https://github.com/incloudsio/cassandra>`_; publish updated images under your registry when ready.
+Docker image
+============
 
-We provide an `image on docker hub <https://hub.docker.com/r/strapdata/elassandra/>`_::
+The repository now carries the Elassandra image build sources directly under ``distribution/docker``.
+The Docker build reuses the assembled Linux distribution from this repository and overlays the Cassandra
+startup scripts and configuration needed to start ``org.apache.cassandra.service.ElassandraDaemon``.
 
-  docker pull strapdata/elassandra
+Build the image locally
+.......................
 
-This image is based on the `official Cassandra image <https://hub.docker.com/_/cassandra/>`_ whose the `documentation <https://github.com/docker-library/docs/tree/master/cassandra>`_ is valid as well for Elassandra.
+From the repository root::
 
-The source code is on github at `strapdata/docker-elassandra <https://github.com/strapdata/docker-elassandra>`_.
+  ./gradlew :distribution:docker:buildDockerImage
 
-Start an Elassandra server instance
-...................................
+The local tag produced by the Gradle task is::
 
-Starting an Elassandra instance is pretty simple:
+  elassandra:test
 
-.. parsed-literal::
-  docker run --name node0 -d strapdata/elassandra:|release|
+Start a single node
+...................
 
-Run nodetool, cqlsh and curl::
+Run a local Elassandra container::
+
+  docker run --name node0 \
+    -p 9042:9042 \
+    -p 9200:9200 \
+    -e MAX_HEAP_SIZE=1200m \
+    -e HEAP_NEWSIZE=300m \
+    -e JVM_OPTS=-Dcassandra.custom_query_handler_class=org.elassandra.index.ElasticQueryHandler \
+    elassandra:test
+
+Then inspect the node::
 
   docker exec -it node0 nodetool status
   docker exec -it node0 cqlsh
   docker exec -it node0 curl localhost:9200
 
+Supported environment variables
+...............................
 
-Environment Variables
-.....................
+The image configures ``conf/cassandra.yaml`` and ``conf/cassandra-rackdc.properties`` from environment
+variables at container start. The first-pass runtime contract is intentionally small and matches the
+Helm chart values:
 
-When you start the Elassandra image, you can adjust the configuration of the Elassandra instance by passing one or more environment variables on the docker run command line.
++-------------------------------+-------------------------------------------------------------+
+| Variable                      | Description                                                 |
++===============================+=============================================================+
+| ``CASSANDRA_LISTEN_ADDRESS``  | Cassandra listen address. Defaults to the container IP.     |
++-------------------------------+-------------------------------------------------------------+
+| ``CASSANDRA_BROADCAST_ADDRESS`` | Gossip and broadcast address. Defaults to listen address. |
++-------------------------------+-------------------------------------------------------------+
+| ``CASSANDRA_RPC_ADDRESS``     | CQL bind address. Defaults to ``0.0.0.0``.                  |
++-------------------------------+-------------------------------------------------------------+
+| ``CASSANDRA_BROADCAST_RPC_ADDRESS`` | CQL address advertised to clients.                    |
++-------------------------------+-------------------------------------------------------------+
+| ``CASSANDRA_SEEDS``           | Comma-separated seed hosts for gossip bootstrap.            |
++-------------------------------+-------------------------------------------------------------+
+| ``CASSANDRA_CLUSTER_NAME``    | Cluster name written to ``cassandra.yaml``.                 |
++-------------------------------+-------------------------------------------------------------+
+| ``CASSANDRA_NUM_TOKENS``      | Number of virtual nodes assigned to the container.          |
++-------------------------------+-------------------------------------------------------------+
+| ``CASSANDRA_DC``              | Datacenter for ``cassandra-rackdc.properties``.             |
++-------------------------------+-------------------------------------------------------------+
+| ``CASSANDRA_RACK``            | Rack for ``cassandra-rackdc.properties``.                   |
++-------------------------------+-------------------------------------------------------------+
+| ``CASSANDRA_ENDPOINT_SNITCH`` | Snitch implementation, default ``GossipingPropertyFileSnitch``. |
++-------------------------------+-------------------------------------------------------------+
+| ``MAX_HEAP_SIZE``             | JVM heap upper bound for Cassandra/Elassandra.              |
++-------------------------------+-------------------------------------------------------------+
+| ``HEAP_NEWSIZE``              | Young-generation heap size.                                 |
++-------------------------------+-------------------------------------------------------------+
+| ``JVM_OPTS``                  | Additional JVM options. The image adds the Elassandra query |
+|                               | handler if it is not already present.                       |
++-------------------------------+-------------------------------------------------------------+
+| ``DEBUG``                     | Switch the packaged ``logback.xml`` root logger to DEBUG.   |
++-------------------------------+-------------------------------------------------------------+
 
-+-----------------------------+-----------------------------------------------------------------------------------------------------------------------+
-| Variable Name               | Description                                                                                                           |
-+=============================+=======================================================================================================================+
-| CASSANDRA_LISTEN_ADDRESS    | This variable is used for controlling which IP address to listen to for incoming connections on.                      |
-|                             | The default value is auto, which will set the listen_address option in cassandra.yaml                                 |
-|                             | to the IP address of the container when it starts. This default should work in most use cases.                        |
-+-----------------------------+-----------------------------------------------------------------------------------------------------------------------+
-| CASSANDRA_BROADCAST_ADDRESS | This variable is used for controlling which IP address to advertise on other nodes.                                   |
-|                             | The default value is the value of CASSANDRA_LISTEN_ADDRESS.                                                           |
-|                             | It will set the broadcast_address and broadcast_rpc_address options in cassandra.yaml.                                |
-+-----------------------------+-----------------------------------------------------------------------------------------------------------------------+
-| CASSANDRA_RPC_ADDRESS       | This variable is used for controlling which address to bind the thrift rpc server to.                                 |
-|                             | If you do not specify an address, the wildcard address (0.0.0.0) will be used.                                        |
-|                             | It will set the rpc_address option in cassandra.yaml.                                                                 |
-+-----------------------------+-----------------------------------------------------------------------------------------------------------------------+
-| CASSANDRA_START_RPC         | This variable is used for controlling if the thrift rpc server is started. It will set the start_rpc option in        |
-|                             | cassandra.yaml. As Elastic search used this port in Elassandra, it will be set ON by default.                         |
-+-----------------------------+-----------------------------------------------------------------------------------------------------------------------+
-| CASSANDRA_SEEDS             | This variable is the comma-separated list of IP addresses used by gossip for bootstrapping                            |
-|                             | new nodes joining a cluster. It will set the seeds value of the seed_provider option in                               |
-|                             | cassandra.yaml. The CASSANDRA_BROADCAST_ADDRESS will be added to the seeds passed on so that                          |
-|                             | the sever can also talk to itself.                                                                                    |
-+-----------------------------+-----------------------------------------------------------------------------------------------------------------------+
-| CASSANDRA_CLUSTER_NAME      | This variable sets the name of the cluster. It must be the same for all nodes in the cluster.                         |
-|                             | It will set the cluster_name option of cassandra.yaml.                                                                |
-+-----------------------------+-----------------------------------------------------------------------------------------------------------------------+
-| CASSANDRA_NUM_TOKENS        | This variable sets the number of tokens for this node.                                                                |
-|                             | It will set the num_tokens option of cassandra.yaml.                                                                  |
-+-----------------------------+-----------------------------------------------------------------------------------------------------------------------+
-| CASSANDRA_DC                | This variable sets the datacenter name of this node.                                                                  |
-|                             | It will set the dc option of cassandra-rackdc.properties.                                                             |
-+-----------------------------+-----------------------------------------------------------------------------------------------------------------------+
-| CASSANDRA_RACK              | This variable sets the rack name of this node. It will set the rack option of cassandra-rackdc.properties.            |
-+-----------------------------+-----------------------------------------------------------------------------------------------------------------------+
-| CASSANDRA_ENDPOINT_SNITCH   | This variable sets the snitch implementation that will be used by the node. It will set the endpoint_snitch option of |
-|                             | cassandra.yml.                                                                                                        |
-+-----------------------------+-----------------------------------------------------------------------------------------------------------------------+
-| CASSANDRA_DAEMON            | The Cassandra entry-point class: ``org.apache.cassandra.service.ElassandraDaemon`` to start                           |
-|                             | with ElasticSearch enabled (default), ``org.apache.cassandra.service.ElassandraDaemon`` otherwise.                    |
-+-----------------------------+-----------------------------------------------------------------------------------------------------------------------+
+Filesystem layout
+.................
 
-Files locations
-...............
+The image uses an installation rooted at ``/usr/share/elassandra``:
 
-Docker elassandra image is based on the debian package installation:
-
-- ``/etc/cassandra``: elassandra configuration
-- ``/usr/share/cassandra``: elassandra installation
-- ``/var/lib/cassandra``: data (sstables, lucene segment, commitlogs, ...)
-- ``/var/log/cassandra``: logs files.
-
-``/var/lib/cassandra`` is automatically managed as a docker volume. But it's a good target to bind mount from the host filesystem.
+- ``/usr/share/elassandra/bin``: Cassandra and Elassandra startup scripts
+- ``/usr/share/elassandra/conf``: Cassandra and OpenSearch configuration
+- ``/usr/share/elassandra/data``: data, commitlog, hints, CDC, and saved caches
+- ``/usr/share/elassandra/logs``: log files
 
 Exposed ports
 .............
 
-- 7000: intra-node communication
-- 7001: TLS intra-node communication
-- 7199: JMX
-- 9042: CQL
-- 9160: thrift service
-- 9200: ElasticSearch HTTP
-- 9300: ElasticSearch transport
+- ``7000``: intra-node communication
+- ``7001``: TLS intra-node communication
+- ``7199``: JMX
+- ``9042``: CQL
+- ``9160``: thrift
+- ``9200``: OpenSearch HTTP
+- ``9300``: OpenSearch transport
 
-Create a cluster
-................
+Local cluster example
+.....................
 
-In case there is only one elassandra instance per docker host, the easiest way is to start the container with ``--net=host``.
+For a small local multi-node test environment, use ``ci/docker-compose.yml`` after building the image::
 
-When using the host network is not an option, you could just map the necessary ports with ``-p 9042:9042``,  ``-p 9200:9200`` and so on... but you should be aware
-that docker default network will considerably slow down performances.
+  docker-compose -f ci/docker-compose.yml up -d --scale node=0
+  docker-compose -f ci/docker-compose.yml up -d --scale node=1
 
-.. note:: Creating a cluster from the standalone image is probably fine for testing environments. But if you plan to run long-lived Elassandra clusters on containers, Kubernetes is the way to go.
+For long-lived containerized deployments, prefer the maintained Helm chart in
+``https://github.com/incloudsio/helm-charts/tree/master/charts/elassandra``.
 

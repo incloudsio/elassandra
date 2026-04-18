@@ -673,7 +673,7 @@ Add the following kubernetes labels to your Elassandra PODs:
    cluster: "my-cluster"
    datacenter: "DC1"
 
-If you deploy Elassandra through the `Elassandra HELM chart <https://github.com/strapdata/helm-charts>`_, the **release** label is automatically added to your Elassandra PODs.
+If you deploy Elassandra through the `Elassandra HELM chart <https://github.com/incloudsio/helm-charts/tree/master/charts/elassandra>`_, the **release** label is automatically added to your Elassandra PODs.
 
 In your Prometheus Operator (in HELM values.yaml, prometheusSpec.additionalScrapeConfigs), add the following scrap config to properly map Kubernetes pod's labels to Grafana dashboard variables:
 

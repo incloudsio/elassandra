@@ -19,7 +19,7 @@ Before starting any Elassandra node with Elasticsearch enabled, do a rolling rep
 * Replace the Elassandra configuration files (cassandra.yaml and snitch configuration file) with the ones from your existing cluster.
 * Bind the Elassandra data folder to the existing Cassandra data folder
 * Stop your Cassandra node.
-* Restart Cassandra ``elassandra bin/cassandra`` or Cassandra with Elasticsearch enabled ``elassandra bin/cassandra -e``
+* Restart Cassandra with the Elassandra runtime using ``elassandra bin/cassandra -f``
 
 
 Create a new Elassandra datacenter
@@ -37,11 +37,11 @@ For each node in your new datacenter :
 
    bin/cassandra
 
-* Restart all nodes in your new datacenter with Elasticsearch enabled. You should see started shards but empty indices.
+* Restart all nodes in your new datacenter with the Elassandra runtime enabled. You should see started shards but empty indices.
 
 .. code::
 
-   bin/cassandra -e
+   bin/cassandra -f
 
 * Set the replication factor of indexed keyspaces to one or more in your new datacenter.
 * Pull data from your existing datacenter. 

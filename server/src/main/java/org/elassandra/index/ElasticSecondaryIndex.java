@@ -106,6 +106,7 @@ import org.apache.lucene.search.join.BitSetProducer;
 import org.apache.lucene.util.BytesRef;
 import org.apache.lucene.util.CloseableThreadLocal;
 import org.elassandra.cluster.ElassandraIndexSettings;
+import org.elassandra.cluster.QueryManager;
 import org.elassandra.cluster.SchemaManager;
 import org.elassandra.cluster.Serializer;
 import org.elassandra.index.search.LuceneWeights;
@@ -174,6 +175,7 @@ import java.util.EnumSet;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
+import java.util.LinkedHashMap;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Locale;
@@ -2298,6 +2300,33 @@ public class ElasticSecondaryIndex implements Index {
                     return context;
                 }
 
+                private BytesReference buildStoredSource(IndexingContext context, ImmutableIndexInfo indexInfo, boolean staticColumnsOnly)
+                    throws IOException {
+                    if (context.docMapper.sourceMapper().enabled() == false) {
+                        return null;
+                    }
+
+                    Map<String, Object> sourceAsMap = new LinkedHashMap<>();
+                    for (int i = 0; i < values.length; i++) {
+                        Mapper mapper = indexInfo.mappers[i];
+                        if (mapper == null
+                            || mapper instanceof MetadataFieldMapper
+                            || SourceFieldMapper.NAME.equals(mapper.name())
+                            || (indexInfo.index_static_columns || indexInfo.index_static_document || !indexInfo.isStaticField(i)) == false) {
+                            continue;
+                        }
+
+                        Object value = values[i];
+                        if (value != null) {
+                            sourceAsMap.put(mapper.name(), value);
+                        }
+                    }
+
+                    try (XContentBuilder builder = QueryManager.buildDocument(context.docMapper, sourceAsMap, true, staticColumnsOnly)) {
+                        return context.docMapper.sourceMapper().applyFilters(BytesReference.bytes(builder), XContentType.JSON);
+                    }
+                }
+
                 public void write() {
                     try {
                         if (hasLiveData() || hasRowMarker) {
@@ -2354,6 +2383,13 @@ public class ElasticSecondaryIndex implements Index {
                                         if (doc instanceof IndexingContext.StaticDocument)
                                             ((IndexingContext.StaticDocument) doc).applyFilter(isStatic());
                                     }
+                                }
+
+                                BytesReference source = buildStoredSource(context, indexInfo, isStatic());
+                                if (source != null) {
+                                    context.source(source);
+                                    BytesRef ref = source.toBytesRef();
+                                    context.rootDoc().add(new StoredField(SourceFieldMapper.NAME, ref.bytes, ref.offset, ref.length));
                                 }
                                 context.finishHim();
 

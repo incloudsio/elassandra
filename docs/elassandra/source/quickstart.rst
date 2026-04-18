@@ -4,19 +4,22 @@ Quick Start
 Start your cluster
 ------------------
 
-Start a docker-based Elassandra cluster using docker-compose file **ci/docker-compose.yml**:
+Build the local Docker image and start a docker-based Elassandra cluster using **ci/docker-compose.yml**:
+
+.. code::
+
+    ./gradlew :distribution:docker:buildDockerImage
 
 .. code::
 
     version: '2.4'
     services:
       seed_node:
-        image: "docker.io/strapdata/elassandra:6.8.4.3"  # legacy; check https://elassandra.org/ for current images
+        image: "elassandra:test"
         environment:
           - "JVM_OPTS=-Dcassandra.custom_query_handler_class=org.elassandra.index.ElasticQueryHandler"
           - "MAX_HEAP_SIZE=1200m"
           - "HEAP_NEWSIZE=300m"
-          - "CASSANDRA_CGROUP_MEMORY_LIMIT=true"
           - "DEBUG=true"
         cap_add:
           - IPC_LOCK
@@ -27,12 +30,11 @@ Start a docker-based Elassandra cluster using docker-compose file **ci/docker-co
           - "9042:9042"
           - "9200:9200"
       node:
-        image: "docker.io/strapdata/elassandra:6.8.4.3"  # legacy; check https://elassandra.org/ for current images
+        image: "elassandra:test"
         environment:
           - "JVM_OPTS=-Dcassandra.custom_query_handler_class=org.elassandra.index.ElasticQueryHandler"
           - "MAX_HEAP_SIZE=1200m"
           - "HEAP_NEWSIZE=300m"
-          - "CASSANDRA_CGROUP_MEMORY_LIMIT=true"
           - "CASSANDRA_SEEDS=seed_node"
           - "DEBUG=true"
         links:

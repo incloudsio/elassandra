@@ -2,7 +2,7 @@
 version: '3.7'
 services:
   opensearch-1:
-    image: opensearch:test
+    image: elassandra:test
     environment:
        - node.name=opensearch-1
        - cluster.initial_master_nodes=opensearch-1
@@ -18,7 +18,7 @@ services:
        - node.store.allow_mmap=false
     volumes:
        - ./build/repo:/tmp/opensearch-repo
-       - ./build/logs/1:/usr/share/opensearch/logs
+       - ./build/logs/1:/usr/share/elassandra/logs
     ports:
       - "9200"
       - "9300"
@@ -36,7 +36,7 @@ services:
       timeout: 2s
       retries: 5
   opensearch-2:
-    image: opensearch:test
+    image: elassandra:test
     environment:
        - node.name=opensearch-2
        - cluster.initial_master_nodes=opensearch-2
@@ -52,7 +52,7 @@ services:
        - node.store.allow_mmap=false
     volumes:
        - ./build/repo:/tmp/opensearch-repo
-       - ./build/logs/2:/usr/share/opensearch/logs
+       - ./build/logs/2:/usr/share/elassandra/logs
     ports:
       - "9200"
       - "9300"

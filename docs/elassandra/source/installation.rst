@@ -45,9 +45,9 @@ Go to the extracted directory:
 
 Configure ``conf/cassandra.yaml`` if necessary, and then run::
 
-  bin/cassandra -e
+  bin/cassandra -f
 
-This has started cassandra with elasticsearch enabled (according to the ``-e`` option).
+This starts Elassandra in the foreground so the embedded OpenSearch runtime stays attached to the current terminal session.
 
 Get the node status::
 

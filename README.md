@@ -10,7 +10,7 @@ This repository is a **fork** of [Strapdata Elassandra](https://github.com/strap
 
 The **`modernization/cassandra4-opensearch13`** branch now carries an **OpenSearch 1.3.20**-based `server/` tree on **Apache Cassandra 4.0.x** via the [incloudsio/cassandra](https://github.com/incloudsio/cassandra) fork checked out under `server/cassandra` (branch **`cassandra-4.0.x-elassandra`**). That line includes the JVM port of the Elassandra bridge to Cassandra 4.0 APIs (`InetAddressAndPort`, `org.apache.cassandra.schema.*`, CQL `QueryHandler`, secondary index lifecycle, packaging, and test fixes) plus the merged OpenSearch bootstrap, cluster, mapper, and test-framework updates needed for the embedded search runtime.
 
-**CI** builds with **GitHub Actions** (`.github/workflows/build.yml`), **Java 11** (`JAVA11_HOME`) for Gradle and the Cassandra Ant build, and **Python 3** for installing `cqlsh` libraries into `.deb` / `.rpm` packages. Older maintenance branches may still ship the legacy **Elasticsearch 6.8** / **Cassandra 3.11.x** line; see branch-specific docs and [CONTRIBUTING.md](CONTRIBUTING.md).
+**CI** builds with **GitHub Actions** (`.github/workflows/build.yml`), **Java 11** (`JAVA11_HOME`) for Gradle and the Cassandra Ant build, and **Python 3** for installing `cqlsh` libraries into `.deb` / `.rpm` packages. For older pre-OpenSearch release lines and their branch-specific guidance, refer to the historical [strapdata/elassandra](https://github.com/strapdata/elassandra) repository.
 
 Developer references: [RELEASING.md](RELEASING.md) and `docs/elassandra/source/` (`migration.rst`, `developer/cassandra_fork_inventory.rst`, `developer/cassandra_40_rebase.rst`, `developer/cassandra_40_jvm_port.rst`, `developer/opensearch_porting_guide.rst`). **Scripts:** `scripts/export-cassandra-elassandra-patches.sh`, `scripts/bootstrap-cassandra-40-worktree.sh`, `scripts/check-cassandra-submodule.sh`, `scripts/use-cassandra-40-submodule.sh`, `scripts/clone-opensearch-upstream.sh`, `scripts/opensearch-port-bootstrap.sh`, `scripts/opensearch-sidecar-prepare.sh`, `scripts/opensearch-sidecar-compile-try.sh`, `scripts/opensearch-sidecar-test-try.sh` (optional `:server:test` probe; see `server/OPENSEARCH_PORT.md`).
 
@@ -33,89 +33,80 @@ Documentation: **[elassandra.org](https://elassandra.org/en/latest/)** (project 
 
 ## Benefits of Elassandra
 
-For Cassandra users, elassandra provides Elasticsearch features :
-* Cassandra updates are indexed in Elasticsearch.
+For Cassandra users, elassandra provides OpenSearch features:
+* Cassandra updates are indexed in OpenSearch.
 * Full-text and spatial search on your Cassandra data.
 * Real-time aggregation (does not require Spark or Hadoop to GROUP BY)
 * Provide search on multiple keyspaces and tables in one query.
 * Provide automatic schema creation and support nested documents using [User Defined Types](https://docs.datastax.com/en/cql/3.1/cql/cql_using/cqlUseUDT.html).
 * Provide read/write JSON REST access to Cassandra data.
-* Elasticsearch plugins and dashboards; for the future OpenSearch line use [OpenSearch Dashboards](https://opensearch.org/docs/latest/dashboards/index/).
-* Manage concurrent elasticsearch mappings changes and applies batched atomic CQL schema changes.
-* Support [Elasticsearch ingest processors](https://www.elastic.co/guide/en/elasticsearch/reference/master/ingest.html) allowing to transform input data.
+* Support OpenSearch plugins.
+* Manage concurrent OpenSearch mapping changes and apply batched atomic CQL schema changes.
+* Support [OpenSearch ingest processors](https://docs.opensearch.org/latest/ingest-pipelines/processors/index-processors/) to transform input data.
 
-For Elasticsearch users, elassandra provides useful features :
+For OpenSearch users, elassandra provides useful features:
 * Elassandra is masterless. Cluster state is managed through [cassandra lightweight transactions](http://www.datastax.com/dev/blog/lightweight-transactions-in-cassandra-2-0).
-* Elassandra is a sharded multi-master database, where Elasticsearch is sharded master-slave. Thus, Elassandra has no Single Point Of Write, helping to achieve high availability.
+* Elassandra is a sharded multi-master database, while OpenSearch coordinates sharded search workloads on top of Cassandra replication. Thus, Elassandra has no Single Point Of Write, helping to achieve high availability.
 * Elassandra inherits Cassandra data repair mechanisms (hinted handoff, read repair and nodetool repair) providing support for **cross datacenter replication**.
-* When adding a node to an Elassandra cluster, only data pulled from existing nodes are re-indexed in Elasticsearch.
-* Cassandra could be your unique datastore for indexed and non-indexed data. It's easier to manage and secure. Source documents are now stored in Cassandra, reducing disk space if you need a NoSQL database and Elasticsearch.
+* When adding a node to an Elassandra cluster, only data pulled from existing nodes are re-indexed in OpenSearch.
+* Cassandra could be your unique datastore for indexed and non-indexed data. It's easier to manage and secure. Source documents are stored in Cassandra, reducing disk space if you need a NoSQL database and embedded search.
 * Write operations are not restricted to one primary shard, but distributed across all Cassandra nodes in a virtual datacenter. The number of shards does not limit your write throughput. Adding elassandra nodes increases both read and write throughput.
-* Elasticsearch indices can be replicated among many Cassandra datacenters, allowing write to the closest datacenter and search globally.
+* OpenSearch indices can be replicated among many Cassandra datacenters, allowing write to the closest datacenter and search globally.
 * The [cassandra driver](http://www.planetcassandra.org/client-drivers-tools/) is Datacenter and Token aware, providing automatic load-balancing and failover.
-* Elassandra efficiently stores Elasticsearch documents in binary SSTables without any JSON overhead.
+* Elassandra efficiently stores OpenSearch documents in binary SSTables without any JSON overhead.
 
 ## Quick start
 
-* [Quick Start](https://elassandra.org/en/quickstart.html) for a single-node Docker example (image tags may still reference legacy registries until new releases are published).
-* [Deploy Elassandra by launching a Google Kubernetes Engine](./docs/google-kubernetes-tutorial.md):
+* Build a local Docker image with `./gradlew :distribution:docker:buildDockerImage`, then use [`ci/docker-compose.yml`](ci/docker-compose.yml) for a local multi-node demo with the `elassandra:test` image tag.
+* Install the maintained Helm chart from [`incloudsio/helm-charts`](https://github.com/incloudsio/helm-charts/tree/master/charts/elassandra). For a local single-node deployment on minikube, start with `helm-charts/charts/elassandra/values-minikube.yaml`.
+* The hosted docs remain available at [elassandra.org](https://elassandra.org/en/quickstart.html). Docker packaging remains in this repository, while the Helm chart source now lives in the dedicated chart repository.
 
-  [![Open in Cloud Shell](https://gstatic.com/cloudssh/images/open-btn.png)](https://console.cloud.google.com/cloudshell/open?git_repo=https://github.com/strapdata/elassandra-google-k8s-marketplace&tutorial=docs/google-kubernetes-tutorial.md)
-  
-## Upgrade Instructions
+### Helm On AKS
 
+The Azure preset now references the pushed Elassandra image at `elassandra.azurecr.io/elassandra:1.3.20`.
 
-#### Elassandra 6.8.4.2+
-
-Since version 6.8.4.2, the gossip X1 application state can be compressed using a system property. Enabling this settings allows the creation of a lot of virtual indices.
-Before enabling this setting, upgrade all the 6.8.4.x nodes to the 6.8.4.2 (or higher). Once all the nodes are in 6.8.4.2, they are able to decompress the application state even if the settings isn't yet configured locally.
-
-#### Elassandra 6.2.3.25+
-
-Elassandra use the Cassandra GOSSIP protocol to manage the Elasticsearch routing table and Elassandra 6.8.4.2+ add support for compression of
-the X1 application state to increase the maxmimum number of Elasticsearch indices. For backward compatibility, the compression is disabled by default, 
-but once all your nodes are upgraded into version 6.8.4.2+, you should enable the X1 compression by adding **-Des.compress_x1=true** in your **conf/jvm.options** and rolling restart all nodes.
-Nodes running version 6.8.4.2+ are able to read compressed and not compressed X1.
-
-#### Elassandra 6.2.3.21+
-
-Before version 6.2.3.21, the Cassandra replication factor for the **elasic_admin** keyspace (and elastic_admin_[datacenter.group]) was automatically adjusted to the 
-number of nodes of the datacenter. Since version 6.2.3.21 and because it has a performance impact on large clusters, it's now up to your Elassandra administrator to 
-properly adjust the replication factor for this keyspace. Keep in mind that Elasticsearch mapping updates rely on a PAXOS transaction that requires QUORUM nodes to succeed, 
-so replication factor should be at least 3 on each datacenter.
-
-#### Elassandra 6.2.3.19+
-
-Elassandra 6.2.3.19 metadata version now relies on the Cassandra table **elastic_admin.metadata_log** (that was **elastic_admin.metadata** from 6.2.3.8 to 6.2.3.18) 
-to keep the elasticsearch mapping update history and automatically recover from a possible PAXOS write timeout issue. 
-
-When upgrading the first node of a cluster, Elassandra automatically copy the current **metadata.version** into the new **elastic_admin.metadata_log** table.
-To avoid Elasticsearch mapping inconsistency, you must avoid mapping update while the rolling upgrade is in progress. Once all nodes are upgraded,
-the **elastic_admin.metadata** is not more used and can be removed. Then, you can get the mapping update history from the new **elastic_admin.metadata_log** and know
-which node has updated the mapping, when and for which reason.
-
-#### Elassandra 6.2.3.8+
-
-Elassandra 6.2.3.8+ now fully manages the elasticsearch mapping in the CQL schema through the use of CQL schema extensions (see *system_schema.tables*, column *extensions*). These table extensions and the CQL schema updates resulting of elasticsearch index creation/modification are updated in batched atomic schema updates to ensure consistency when concurrent updates occurs. Moreover, these extensions are stored in binary and support partial updates to be more efficient. As the result, the elasticsearch mapping is not more stored in the *elastic_admin.metadata* table. 
-
-WARNING: During the rolling upgrade, elasticserach mapping changes are not propagated between nodes running the new and the old versions, so don't change your mapping while you're upgrading. Once all your nodes have been upgraded to 6.2.3.8+ and validated, apply the following CQL statements to remove useless elasticsearch metadata:
-```bash
-ALTER TABLE elastic_admin.metadata DROP metadata;
-ALTER TABLE elastic_admin.metadata WITH comment = '';
-```
-
-WARNING: Due to CQL table extensions used by Elassandra, some old versions of **cqlsh** may lead to the following error message **"'module' object has no attribute 'viewkeys'."**. This comes from the old python cassandra driver embedded in Cassandra and has been reported in [CASSANDRA-14942](https://issues.apache.org/jira/browse/CASSANDRA-14942). Possible workarounds:
-* Use the **cqlsh** embedded with Elassandra
-* Install a recent version of the  **cqlsh** utility (*pip install cqlsh*) or run it from a docker image:
+Clone the chart repository first:
 
 ```bash
-docker run -it --rm strapdata/cqlsh:0.1 node.example.com
+git clone https://github.com/incloudsio/helm-charts.git
 ```
 
-#### Elassandra 6.x changes
+If your AKS cluster is attached to the ACR, install the chart with:
 
-* Elasticsearch now supports only one document type per index backed by one Cassandra table. Unless you specify an elasticsearch type name in your mapping, data is stored in a cassandra table named **"_doc"**. If you want to search many cassandra tables, you now need to create and search many indices.
-* Elasticsearch 6.x manages shard consistency through several metadata fields (_primary_term, _seq_no, _version) that are not used in elassandra because replication is fully managed by cassandra.
+```bash
+az aks update \
+  --resource-group <resource-group> \
+  --name <aks-cluster> \
+  --attach-acr elassandra
+
+helm upgrade --install elassandra ./helm-charts/charts/elassandra \
+  --namespace elassandra \
+  --create-namespace \
+  -f ./helm-charts/charts/elassandra/values-azure.yaml
+```
+
+If the cluster is not attached to the ACR, create an image pull secret and pass it to the chart:
+
+```bash
+kubectl create namespace elassandra
+
+kubectl create secret docker-registry elassandra-acr \
+  --namespace elassandra \
+  --docker-server=elassandra.azurecr.io \
+  --docker-username=<acr-username> \
+  --docker-password=<acr-password>
+
+helm upgrade --install elassandra ./helm-charts/charts/elassandra \
+  --namespace elassandra \
+  -f ./helm-charts/charts/elassandra/values-azure.yaml \
+  --set imagePullSecrets[0].name=elassandra-acr
+```
+
+To enable OpenSearch Dashboards with the public upstream image, add `--set dashboards.enabled=true`. If you want Dashboards mirrored into ACR as well, push `opensearchproject/opensearch-dashboards:1.3.20` and override `dashboards.image.repository` at install time.
+
+## Older Releases
+
+Older release lines, upgrade notes, and legacy documentation remain available in the historical [strapdata/elassandra](https://github.com/strapdata/elassandra) repository. This repository tracks the current Cassandra 4.0.x + OpenSearch 1.3.x line.
 
 ## Installation
 
@@ -123,7 +114,7 @@ For **`modernization/cassandra4-opensearch13`**, use **Java 11** for Gradle and 
 
 * [Download](https://github.com/incloudsio/elassandra/releases) and extract the distribution tarball
 * Define the CASSANDRA_HOME environment variable : `export CASSANDRA_HOME=<extracted_directory>`
-* Run `bin/cassandra -e`
+* Run `bin/cassandra -f`
 * Run `bin/nodetool status`
 * Run `curl -XGET localhost:9200/_cluster/state`
 
@@ -174,7 +165,7 @@ CREATE TABLE twitter."_doc" (
 CREATE CUSTOM INDEX elastic__doc_idx ON twitter."_doc" () USING 'org.elassandra.index.ExtendedElasticSecondaryIndex';
 ```
 
-By default, multi valued Elasticsearch fields are mapped to Cassandra list.
+By default, multi valued OpenSearch fields are mapped to Cassandra list.
 Now, insert a row with CQL :
 
 ```CQL
@@ -190,7 +181,7 @@ SELECT * FROM twitter."_doc";
 (2 rows)
 ```
 
-Then search for it with the Elasticsearch API:
+Then search for it with the OpenSearch API:
 
 ```bash
 curl "localhost:9200/twitter/_search?q=user:Jimmy&pretty"
@@ -209,24 +200,35 @@ And here is a sample response :
     "failed" : 0
   },
   "hits" : {
-    "total" : 1,
-    "max_score" : 0.6931472,
+    "total" : {
+      "value" : 1,
+      "relation" : "eq"
+    },
+    "max_score" : 0.6931471,
     "hits" : [
       {
         "_index" : "twitter",
         "_type" : "_doc",
         "_id" : "2",
-        "_score" : 0.6931472,
+        "_score" : 0.6931471,
         "_source" : {
-          "post_date" : "2019-07-04T06:00:21.893Z",
-          "message" : "New data is indexed automatically",
-          "user" : "Jimmy"
+          "post_date" : [
+            "2026-04-17T18:09:37.959Z"
+          ],
+          "message" : [
+            "New data is indexed automatically"
+          ],
+          "user" : [
+            "Jimmy"
+          ]
         }
       }
     ]
   }
 }
 ```
+
+By default, Elassandra returns `_source` for both REST-indexed and CQL-indexed documents. To disable it for a specific index, create the index with `"_source": { "enabled": false }` before inserting data.
 
 ## Support
 
@@ -258,6 +260,5 @@ the License.
 
 ## Acknowledgments
 
-* Elasticsearch, Logstash, Beats and Kibana are trademarks of Elasticsearch BV, registered in the U.S. and in other countries.
 * Apache Cassandra, Apache Lucene, Apache, Lucene and Cassandra are trademarks of the Apache Software Foundation.
 * Elassandra is a trademark of Strapdata SAS. Elassandra.org refers to the community maintenance effort and site for this line.

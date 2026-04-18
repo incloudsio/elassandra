@@ -19,15 +19,13 @@
 
 package org.elassandra.env;
 
-import org.opensearch.cli.Terminal;
 import org.opensearch.common.settings.Settings;
 import org.opensearch.env.Environment;
-import org.opensearch.node.InternalSettingsPreparer;
 
+import java.io.IOException;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
-import java.util.Collections;
-import java.util.Map;
 
 /**
  * Elasticsearch file configuration loader interface.
@@ -35,46 +33,62 @@ import java.util.Map;
 public interface EnvironmentLoader {
 
     default Environment loadEnvironment(boolean foreground, String homeDir, String configDir) {
-        final Settings settings = Settings.builder()
-            .put("node.name", "node0")
-            .put("path.home", homeDir)
-            .build();
         final Path cfg = Paths.get(configDir);
+        final Settings.Builder settings = Settings.builder()
+            .put("node.name", "node0")
+            .put("path.home", homeDir);
+
+        // Docker only relies on a couple of flat OpenSearch settings. Parse those directly so
+        // Elassandra can boot with Cassandra's SnakeYAML runtime instead of OpenSearch's YAML parser.
+        loadFlatSettings(settings, cfg.resolve("opensearch.yml"));
+
+        if (settings.get("cluster.name") == null) {
+            settings.put("cluster.name", "elassandra");
+        }
+
+        if (settings.get("network.host") == null) {
+            settings.put("network.host", "0.0.0.0");
+        }
+
+        String discoveryType = System.getenv("OPENSEARCH_DISCOVERY_TYPE");
+        if (discoveryType != null && discoveryType.isEmpty() == false) {
+            settings.put("discovery.type", discoveryType);
+        }
+
+        return new Environment(settings.build(), cfg);
+    }
+
+    static void loadFlatSettings(Settings.Builder settings, Path opensearchYml) {
+        if (Files.isRegularFile(opensearchYml) == false) {
+            return;
+        }
+
         try {
-            java.lang.reflect.Method m = InternalSettingsPreparer.class.getMethod(
-                "prepareEnvironment",
-                Settings.class,
-                Map.class,
-                Path.class,
-                java.util.function.Supplier.class
-            );
-            return (Environment) m.invoke(
-                null,
-                settings,
-                Collections.<String, String>emptyMap(),
-                cfg,
-                (java.util.function.Supplier<String>) () -> "node0"
-            );
-        } catch (NoSuchMethodException e) {
-            try {
-                java.lang.reflect.Method m2 = InternalSettingsPreparer.class.getMethod(
-                    "prepareEnvironment",
-                    Settings.class,
-                    Terminal.class,
-                    Map.class,
-                    Path.class
-                );
-                return (Environment) m2.invoke(
-                    null,
-                    settings,
-                    foreground ? Terminal.DEFAULT : null,
-                    Collections.<String, String>emptyMap(),
-                    cfg
-                );
-            } catch (ReflectiveOperationException e2) {
-                throw new RuntimeException(e2);
+            for (String rawLine : Files.readAllLines(opensearchYml)) {
+                String line = rawLine.trim();
+                if (line.isEmpty() || line.startsWith("#")) {
+                    continue;
+                }
+
+                int separator = line.indexOf(':');
+                if (separator <= 0) {
+                    continue;
+                }
+
+                String key = line.substring(0, separator).trim();
+                String value = line.substring(separator + 1).trim();
+                int inlineComment = value.indexOf(" #");
+                if (inlineComment >= 0) {
+                    value = value.substring(0, inlineComment).trim();
+                }
+                if ((value.startsWith("\"") && value.endsWith("\"")) || (value.startsWith("'") && value.endsWith("'"))) {
+                    value = value.substring(1, value.length() - 1);
+                }
+                if (value.isEmpty() == false) {
+                    settings.put(key, value);
+                }
             }
-        } catch (ReflectiveOperationException e) {
+        } catch (IOException e) {
             throw new RuntimeException(e);
         }
     }

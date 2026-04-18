@@ -48,7 +48,6 @@ import org.opensearch.common.transport.BoundTransportAddress;
 import org.opensearch.env.Environment;
 import org.opensearch.monitor.jvm.JvmInfo;
 import org.opensearch.monitor.process.ProcessProbe;
-import org.opensearch.node.InternalSettingsPreparer;
 import org.opensearch.node.Node;
 import org.opensearch.node.NodeValidationException;
 import org.opensearch.plugins.ClusterPlugin;
@@ -58,7 +57,6 @@ import java.io.File;
 import java.io.IOException;
 import java.lang.management.ManagementFactory;
 import java.nio.file.Path;
-import java.nio.file.Paths;
 import java.security.AccessController;
 import java.security.PrivilegedAction;
 import java.util.Collection;
@@ -450,7 +448,7 @@ public class ElassandraDaemon extends CassandraDaemon {
     }
 
     public Settings nodeSettings(Settings settings) {
-        return Settings.builder()
+        Settings.Builder builder = Settings.builder()
                  // overloadable settings from elasticsearch.yml
                  // by default, HTTP is bound to C* rpc address, Transport is bound to C* internal listen address.
                 .put("network.bind_host", DatabaseDescriptor.getRpcAddress().getHostAddress())
@@ -460,14 +458,18 @@ public class ElassandraDaemon extends CassandraDaemon {
                 .put("path.data", getElasticsearchDataDir())
                 .put(settings)
                  // not overloadable settings.
-                .put("discovery.type", "cassandra")
                 .put("node.data", true)
                 .put("node.master", true)
                 .put("node.name", FBUtilities.getBroadcastAddressAndPort().address.getHostAddress())
                 .put("node.attr.dc", DatabaseDescriptor.getLocalDataCenter())
                 .put("node.attr.rack", DatabaseDescriptor.getEndpointSnitch().getRack(FBUtilities.getBroadcastAddressAndPort()))
-                .put("cluster.name", ClusterService.getElasticsearchClusterName(env.settings()))
-                .build();
+                .put("cluster.name", ClusterService.getElasticsearchClusterName(env.settings()));
+
+        if (settings.get("discovery.type") == null) {
+            builder.put("discovery.type", "cassandra");
+        }
+
+        return builder.build();
     }
 
     public static Client client() {
@@ -557,19 +559,7 @@ public class ElassandraDaemon extends CassandraDaemon {
 
             String envLoaderClass = System.getProperty("elasticsearch.config.loader");
             EnvironmentLoader envloader = envLoaderClass == null
-                                           ? new EnvironmentLoader() {
-                                                @Override
-                                                public Environment loadEnvironment(boolean foreground, String homeDir, String configDir) {
-                                                    return InternalSettingsPreparer.prepareEnvironment(
-                                                            Settings.builder()
-                                                            .put("node.name","node0")
-                                                            .put("path.home", homeDir)
-                                                            .build(),
-                                                            Collections.emptyMap(),
-                                                            Paths.get(configDir),
-                                                            () -> "node0");
-                                                }
-                                            }
+                                           ? new EnvironmentLoader() { }
                                            : FBUtilities.<EnvironmentLoader>construct(envLoaderClass, "elasticsearch environment loader");
             instance = new ElassandraDaemon(envloader.loadEnvironment(foreground, getHomeDir(), getConfigDir()));
 

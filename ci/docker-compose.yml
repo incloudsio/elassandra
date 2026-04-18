@@ -1,13 +1,11 @@
-# Legacy container images (Strapdata registry). Replace when inClouds/Elassandra.org publishes updated images.
 version: '2.4'
 services:
   seed_node:
-    image: "strapdata.azurecr.io/strapdata/elassandra-dev:latest"
+    image: "elassandra:test"
     environment:
       - "JVM_OPTS=-Dcassandra.custom_query_handler_class=org.elassandra.index.ElasticQueryHandler"
       - "MAX_HEAP_SIZE=1200m"
       - "HEAP_NEWSIZE=300m"
-      - "CASSANDRA_CGROUP_MEMORY_LIMIT=true"
       - "DEBUG=true"
     cap_add:
       - IPC_LOCK
@@ -18,12 +16,11 @@ services:
       - "9042:9042"
       - "9200:9200"
   node:
-    image: "strapdata.azurecr.io/strapdata/elassandra-dev:latest"
+    image: "elassandra:test"
     environment:
       - "JVM_OPTS=-Dcassandra.custom_query_handler_class=org.elassandra.index.ElasticQueryHandler"
       - "MAX_HEAP_SIZE=1200m"
       - "HEAP_NEWSIZE=300m"
-      - "CASSANDRA_CGROUP_MEMORY_LIMIT=true"
       - "CASSANDRA_SEEDS=seed_node"
       - "DEBUG=true"
     links:
