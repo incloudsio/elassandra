@@ -660,14 +660,41 @@ public class ElassandraDaemon extends CassandraDaemon {
         ) throws NodeValidationException {
             try {
                 Class<?> bc = Class.forName("org.opensearch.bootstrap.BootstrapChecks");
-                java.lang.reflect.Method m = bc.getDeclaredMethod(
+                java.lang.reflect.Method builtInChecksMethod = bc.getDeclaredMethod("checks");
+                builtInChecksMethod.setAccessible(true);
+
+                @SuppressWarnings("unchecked")
+                List<BootstrapCheck> builtInChecks = (List<BootstrapCheck>) builtInChecksMethod.invoke(null);
+                List<BootstrapCheck> combinedChecks = Lists.newArrayList(builtInChecks);
+
+                SecurityManager securityManager = System.getSecurityManager();
+                if (securityManager != null
+                    && "org.apache.cassandra.security.ThreadAwareSecurityManager".equals(securityManager.getClass().getName())) {
+                    combinedChecks.removeIf(check -> "AllPermissionCheck".equals(check.getClass().getSimpleName()));
+                }
+
+                combinedChecks.addAll(checks);
+
+                java.lang.reflect.Method enforceLimitsMethod = bc.getDeclaredMethod(
+                    "enforceLimits",
+                    BoundTransportAddress.class,
+                    String.class
+                );
+                enforceLimitsMethod.setAccessible(true);
+                boolean enforceLimits = (boolean) enforceLimitsMethod.invoke(
+                    null,
+                    boundTransportAddress,
+                    context.settings().get("discovery.type")
+                );
+
+                java.lang.reflect.Method checkMethod = bc.getDeclaredMethod(
                     "check",
                     BootstrapContext.class,
-                    BoundTransportAddress.class,
+                    boolean.class,
                     List.class
                 );
-                m.setAccessible(true);
-                m.invoke(null, context, boundTransportAddress, checks);
+                checkMethod.setAccessible(true);
+                checkMethod.invoke(null, context, enforceLimits, Collections.unmodifiableList(combinedChecks));
             } catch (java.lang.reflect.InvocationTargetException e) {
                 Throwable c = e.getCause();
                 if (c instanceof NodeValidationException) {

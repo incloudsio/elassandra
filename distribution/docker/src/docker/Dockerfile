@@ -53,6 +53,7 @@ RUN chmod +x bin/* /tmp/docker-entrypoint.sh /tmp/configure-elassandra.py && \\
     rm -f /usr/share/elassandra/lib/guava-*.jar && \\
     rm -f /usr/share/elassandra/lib/failureaccess-*.jar && \\
     rm -f /usr/share/elassandra/lib/snakeyaml-*.jar && \\
+    mkdir -p /usr/share/elassandra/lib/sigar-bin && \\
     curl --retry 8 -S -L --output /usr/share/elassandra/lib/guava-27.0-jre.jar \\
       https://repo.maven.apache.org/maven2/com/google/guava/guava/27.0-jre/guava-27.0-jre.jar && \\
     curl --retry 8 -S -L --output /usr/share/elassandra/lib/snakeyaml-1.26.jar \\
@@ -66,7 +67,14 @@ RUN chmod +x bin/* /tmp/docker-entrypoint.sh /tmp/configure-elassandra.py && \\
     curl --retry 8 -S -L --output /usr/share/elassandra/lib/logback-core-1.2.9.jar \\
       https://repo.maven.apache.org/maven2/ch/qos/logback/logback-core/1.2.9/logback-core-1.2.9.jar && \\
     curl --retry 8 -S -L --output /usr/share/elassandra/lib/logback-classic-1.2.9.jar \\
-      https://repo.maven.apache.org/maven2/ch/qos/logback/logback-classic/1.2.9/logback-classic-1.2.9.jar
+      https://repo.maven.apache.org/maven2/ch/qos/logback/logback-classic/1.2.9/logback-classic-1.2.9.jar && \\
+    case "\$(arch)" in \\
+      x86_64) \\
+        curl --retry 8 -S -L --output /usr/share/elassandra/lib/sigar-bin/libsigar-amd64-linux.so \\
+          https://repo.maven.apache.org/maven2/org/fusesource/sigar/1.6.4/libsigar-amd64-linux-1.6.4.so ;; \\
+      *) \\
+        true ;; \\
+    esac
 
 ################################################################################
 # Build stage 1 (the actual Elassandra image).

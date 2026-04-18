@@ -24,6 +24,14 @@ append_jvm_opt_if_missing() {
   fi
 }
 
+append_jvm_property_if_missing() {
+  local key="$1"
+  local value="$2"
+  if [[ "${JVM_OPTS:-}" != *"-D${key}="* ]]; then
+    export JVM_OPTS="${JVM_OPTS:-} -D${key}=${value}"
+  fi
+}
+
 if [[ $# -eq 0 ]]; then
   set -- elassandra
 fi
@@ -42,6 +50,7 @@ if [[ -z "${CASSANDRA_SEEDS:-}" && -z "${OPENSEARCH_DISCOVERY_TYPE:-}" ]]; then
 fi
 
 append_jvm_opt_if_missing "-Dcassandra.custom_query_handler_class=org.elassandra.index.ElasticQueryHandler"
+append_jvm_property_if_missing "cassandra.native.epoll.enabled" "${CASSANDRA_NATIVE_EPOLL_ENABLED:-false}"
 
 python3 /usr/local/bin/configure-elassandra.py
 

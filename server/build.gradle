@@ -166,6 +166,7 @@ dependencies {
   api "io.netty:netty-codec:${versions.netty}"
   api "io.netty:netty-handler:${versions.netty}"
   api "io.netty:netty-transport-classes-epoll:${versions.netty}"
+  api "io.netty:netty-transport-native-unix-common:${versions.netty}"
 
   testImplementation(project(":test:framework")) {
     // tests use the locally compiled version of server
