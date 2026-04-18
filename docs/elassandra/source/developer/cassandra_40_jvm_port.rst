@@ -5,7 +5,7 @@ Cassandra 4.0 JVM port (Elassandra integration code)
 
 This repository now ships the **Cassandra 4.0.x + OpenSearch 1.3.x** line. This note remains useful as
 an inventory of the API shifts that were required to move the Elassandra integration from the old
-3.11 / Elasticsearch stack to the merged modern baseline:
+3.11-based line to the merged modern baseline:
 
 #. Run ``scripts/use-cassandra-40-submodule.sh`` — aligns ``buildSrc/version.properties`` ``cassandra=`` with ``server/cassandra/build.xml`` ``base.version`` and checks out ``cassandra-4.0.x-elassandra``.
 #. Port Elassandra-specific classes against **4.0 APIs** (types and method signatures differ from 3.11; mechanical rename is not enough).

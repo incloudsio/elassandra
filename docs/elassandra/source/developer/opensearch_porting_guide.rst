@@ -33,7 +33,7 @@ Then:
    cd ../opensearch-upstream   # or your OPENSEARCH_CLONE_DIR
    git branch --show-current   # expect elassandra-os-1.3
 
-Use **Java 11+** and the Gradle wrapper shipped in that tree. Do not expect the Elassandra **6.8** Gradle wrapper to drive the OpenSearch build.
+Use **Java 11+** and the Gradle wrapper shipped in that tree. Do not expect tooling from the legacy 6.8 line to drive the OpenSearch build.
 
 Sync ``org.elassandra.*`` and rewrite imports (side-car)
 ........................................................
@@ -72,17 +72,12 @@ After main and test sources compile, you can probe **integration tests** in the 
 
 See ``server/OPENSEARCH_PORT.md`` in this repo for Cassandra jar setup, ``GRADLE_OPTS``, ``RUNTIME_JAVA_HOME`` (avoids OpenSearch downloading a separate test JDK), optional CI workflows, and expectations for ``:server:test``. If you hit Lucene mock-filesystem / ``java.io.tmpdir`` / Gradle worker exit **100**, try ``OPENSEARCH_SIDECAR_TESTS_JVMS=1`` (single forked test JVM) and read the header of ``gradle/opensearch-sidecar-elassandra.init.gradle``.
 
-If you drive OpenSearch ``gradlew`` manually, pass the jar path via ``GRADLE_OPTS`` (``-D`` on the CLI is not always forwarded) and ``-I`` the init script under ``gradle/opensearch-sidecar-elassandra.init.gradle``. After Cassandra resolves, remaining errors are usually fork-only types such as ``CqlMapper`` that must be merged from the Elasticsearch tree.
+If you drive OpenSearch ``gradlew`` manually, pass the jar path via ``GRADLE_OPTS`` (``-D`` on the CLI is not always forwarded) and ``-I`` the init script under ``gradle/opensearch-sidecar-elassandra.init.gradle``. After Cassandra resolves, remaining errors are usually fork-only types such as ``CqlMapper`` that must be merged from the legacy mapper fork.
 
 The same ``rewrite-elassandra-imports-for-opensearch.sh`` pass flattens nested metric imports (``metrics.min.*`` → ``metrics.*``), renames ``IndexMetaData`` / ``MetaData`` to ``IndexMetadata`` / ``Metadata``, rewrites ``.metaData()`` → ``.metadata()``, and adjusts ``getTotalHits()`` for Lucene ``TotalHits`` (7.x+). Types such as ``ObjectMapper`` must still implement Elassandra’s ``CqlMapper`` in the merged fork.
 
-List ``org/elasticsearch`` sources that mention Elassandra / Strapdata (likely fork touchpoints for the rebase):
-
-.. code-block:: bash
-
-   ./scripts/list-elasticsearch-fork-touchpoints.sh
-
-A checked-in snapshot of that output lives at ``server/elasticsearch-fork-touchpoints.list`` in this repository (regenerate after large fork edits).
+List the legacy fork touchpoints with the repository helper script and refresh the checked-in
+touchpoint snapshot after large fork edits.
 
 Target version pins for the side-car (from ``buildSrc/version.properties``):
 
@@ -104,31 +99,31 @@ Cluster state, gateway, discovery
 * ``org.elassandra.discovery.CassandraDiscovery`` — map to OpenSearch discovery plugin SPI.
 * ``org.elassandra.gateway.CassandraGatewayService`` / ``CassandraGatewayModule`` — align with
   OpenSearch gateway and persisted cluster state services.
-* Patched upstream types (examples): ``org.elasticsearch.cluster.service.ClusterService``,
+* Patched upstream types (examples): ``org.opensearch.cluster.service.ClusterService``,
   ``MasterService``, ``DiscoveryModule``, ``GatewayModule`` → move patches to
   ``org.opensearch.cluster.*`` equivalents.
 
 Routing and search
 ------------------
 
-* ``org.elasticsearch.cluster.routing.OperationRouting`` — token-aware routing.
+* ``org.opensearch.cluster.routing.OperationRouting`` — token-aware routing.
 * ``org.elassandra.index.search.TokenRangesService``, ``TokenRangesSearcherWrapper``, related
   bitset/cache types — rebase onto OpenSearch search execution paths.
-* ``org.elasticsearch.search.SearchService``, ``FetchPhase``, ``CqlFetchPhase``.
+* ``org.opensearch.search.SearchService``, ``FetchPhase``, ``CqlFetchPhase``.
 
 Metadata and mapping
 --------------------
 
 * ``MetaDataCreateIndexService``, ``IndexMetaData``, ``IndicesModule``, ``IndexModule``,
-  ``MapperService``, ``DocumentMapper`` — heavy ES 6.8 touch points; expect largest diff vs 1.3.
+  ``MapperService``, ``DocumentMapper`` — heavy legacy touch points; expect the largest diff vs 1.3.
 
 Mapper fork (CqlMapper / CQL columns)
 .....................................
 
 Elassandra adds ``CqlMapper``, CQL-related state on ``ObjectMapper`` / ``FieldMapper`` / ``MappedFieldType``,
 and parsing hooks in ``TypeParsers``. Stock OpenSearch does not include these; you must **merge** the
-Elasticsearch 6.8 fork in ``server/src/main/java/org/elasticsearch/index/mapper/`` into the matching
-``org.opensearch.index.mapper`` types (often starting with ``ObjectMapper`` and ``FieldMapper``).
+legacy mapper fork into the matching ``org.opensearch.index.mapper`` types (often starting with
+``ObjectMapper`` and ``FieldMapper``).
 
 Export the full forked mapper directory next to your OpenSearch clone as a **read-only reference**
 for diff and 3-way merge (does not overwrite OpenSearch sources):
@@ -137,7 +132,7 @@ for diff and 3-way merge (does not overwrite OpenSearch sources):
 
    ./scripts/export-elassandra-mapper-fork-for-opensearch-merge.sh
 
-Output path: ``<OpenSearch clone>/elassandra-mapper-fork-reference/org/elasticsearch/index/mapper/``.
+Output path: ``<OpenSearch clone>/elassandra-mapper-fork-reference/``.
 
 To stage the fork inside this repo with ``package org.opensearch.index.mapper`` and the same automated
 rewrites used for the side-car (for diffing against upstream without touching the OpenSearch clone):

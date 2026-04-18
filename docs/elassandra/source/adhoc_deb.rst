@@ -1,23 +1,15 @@
 
-.. important:: Cassandra and Elassandra packages conflict. You should remove Cassandra prior to install Elassandra.
+.. important:: Cassandra and Elassandra packages conflict. Remove any standalone Cassandra package before installing Elassandra.
 
-The Java Runtime 1.8 is required to run Elassandra. On recent distributions it should be resolved automatically as a dependency.
-On Debian Jessie it can be installed from backports::
+Install Java 11 first if your distribution does not already provide it::
 
-  sudo apt-get install -t jessie-backports openjdk-8-jre-headless
+  sudo apt-get update
+  sudo apt-get install openjdk-11-jre-headless
 
-You may need to install ``apt-transport-https`` and other utilities as well::
+Download the Debian package from the current GitHub release and install it locally::
 
-  sudo apt-get install software-properties-common apt-transport-https gnupg2
-
-Add our repository and gpg key::
-
-  sudo add-apt-repository 'deb [arch=all] https://nexus.repo.strapdata.com/repository/apt-releases/ stretch main'
-  sudo apt-key adv --keyserver hkp://keyserver.ubuntu.com:80 --recv-keys B335A4DD
-
-And then install elassandra with::
-
-  sudo apt-get update && sudo apt-get install elassandra
+  curl -LO |deb_url|
+  sudo apt-get install ./elassandra-|release|.deb
 
 Start Elassandra with Systemd::
 
@@ -29,10 +21,10 @@ or SysV::
 
 Files locations:
 
-- ``/usr/bin``: startup script, cqlsh, nodetool, elasticsearch-plugin
+- ``/usr/bin``: startup script, cqlsh, nodetool, opensearch-plugin
 - ``/etc/cassandra`` and ``/etc/default/cassandra``: configurations
 - ``/var/lib/cassandra``: data
 - ``/var/log/cassandra``: logs
 - ``/usr/share/cassandra``: plugins, modules, libs, ...
 - ``/usr/share/cassandra/tools``: cassandra-stress, sstabledump...
-- ``/usr/lib/python2.7/dist-packages/cqlshlib/``: python library for cqlsh
+- ``/usr/lib/python3/dist-packages/cqlshlib/`` or distribution-specific site-packages: python library for cqlsh

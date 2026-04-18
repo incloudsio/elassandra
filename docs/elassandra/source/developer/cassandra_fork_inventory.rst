@@ -1,11 +1,11 @@
 .. _cassandra_fork_inventory:
 
-Cassandra fork inventory (Strapdata → Apache 4.0.x)
-====================================================
+Cassandra fork inventory (legacy 3.11 line to Apache 4.0.x)
+============================================================
 
 This page records the **Elassandra-specific delta** on top of Apache Cassandra for the
 ``server/cassandra`` submodule (``https://github.com/incloudsio/cassandra``, branch
-``cassandra-3.11.9-elassandra``; historically Strapdata).
+``cassandra-3.11.9-elassandra``; historical legacy baseline).
 
 Baseline
 --------
@@ -14,10 +14,10 @@ The Elassandra release in this repository pins submodule commit ``30a4c30bf0`` o
 ``cassandra-3.11.9-elassandra``. Its **merge-base with Apache ``cassandra-3.11.9``** is
 ``5ef75dd96cb693e4041e9ecb61a6852276f0eca4`` (Apache tag ``cassandra-3.11.9``).
 
-Commit count on Strapdata after that merge-base: **36 commits** (full ``git log`` below).
+Commit count on the historical fork after that merge-base: **36 commits** (full ``git log`` below).
 
-Classification of Strapdata commits
------------------------------------
+Classification of legacy-fork commits
+-------------------------------------
 
 **Core Elassandra / indexing (must port to 4.0.x)**
 
@@ -33,7 +33,7 @@ Classification of Strapdata commits
 * ``5854d30276`` CQL3Type prepare from a KeyspaceMetadata
 * ``abb5120714`` Add inhibited MigrationListeners to avoid loops
 * ``383ab736bf`` Add function hook for elassandra decimal support
-* ``9c0a172cee`` Strapdata fork (umbrella; review diff)
+* ``9c0a172cee`` Legacy fork umbrella commit (review diff)
 
 **Operational / deployment**
 
@@ -58,7 +58,7 @@ Classification of Strapdata commits
 * ``794f4fec6a`` fixup dependencies
 * ``751e46987d`` Upgrade hppc library to version 0.7.1
 
-**Upstream backports bundled in Strapdata**
+**Upstream backports bundled in the legacy fork**
 
 * ``8ff5b7b29a`` CASSANDRA-14582 Add system property to set the cassandra hostId if not yet initialized
 * ``ce689d8a13`` CASSANDRA-14581 Allow to subclass QueryProcessor and get the projection clause
@@ -104,7 +104,7 @@ Full ordered list (newest first)
   80980c08a2 Change create/alter type/table/index statement for validation on a keyspace metadata
   b6660d3191 dislay timeout on nodetool describecluster
   794f4fec6a fixup dependencies
-  9c0a172cee Strapdata fork
+  9c0a172cee Legacy fork umbrella commit
   751e46987d Upgrade hppc library to version 0.7.1
   8ff5b7b29a CASSANDRA-14582 Add system property to set the cassandra hostId if not yet initialized
   ce689d8a13 CASSANDRA-14581 Allow to subclass QueryProcessor and get the projection clause
@@ -125,9 +125,9 @@ Branch design for Cassandra 4.0.x
 #. Cherry-pick or replay the **Core Elassandra / indexing** commits first; resolve conflicts against
    Cassandra 4.0’s secondary-index and storage APIs (expect rewrites, not clean picks).
 #. Replay operational and CQL extension commits.
-#. Ignore or replace Strapdata-only build hacks with Gradle/Ant layout from Apache 4.0.
+#. Ignore or replace legacy-fork-only build hacks with Gradle/Ant layout from Apache 4.0.
 
-**Note:** The Strapdata repository also advertises ``4.0-beta-3-strapdata``; it does **not** share a
+**Note:** An older 4.0 beta branch also exists in historical materials; it does **not** share a
 recent merge-base with Apache ``cassandra-4.0.20`` in a way that allows a trivial fast-forward.
 Treat that branch as historical reference only unless you explicitly recover patches from it.
 

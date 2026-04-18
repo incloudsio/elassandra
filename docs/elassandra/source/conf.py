@@ -57,7 +57,7 @@ master_doc = 'index'
 
 # General information about the project.
 project = u'Elassandra'
-copyright = u'2016-2026 Strapdata, inClouds, Elassandra.org contributors'
+copyright = u'2016-2026 inClouds, Elassandra.org contributors'
 author = u'Elassandra.org'
 
 # The version info for the project you're documenting, acts as replacement for
@@ -274,7 +274,7 @@ latex_elements = {
 #  author, documentclass [howto, manual, or own class]).
 latex_documents = [
     (master_doc, 'Elassandra.tex', u'Elassandra Documentation',
-     u'Strapdata', 'manual'),
+     u'Elassandra.org', 'manual'),
 ]
 
 # The name of an image file (relative to this directory) to place at the top of

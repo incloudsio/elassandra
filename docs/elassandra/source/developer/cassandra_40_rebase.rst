@@ -4,7 +4,7 @@ Cassandra 4.0.x porting playbook
 ==================================
 
 This is a **practical sequence** for moving Elassandra-specific Cassandra changes from the
-**3.11.9** Strapdata line toward **Apache Cassandra 4.0.x**. It complements
+**3.11.9** legacy line toward **Apache Cassandra 4.0.x**. It complements
 :ref:`cassandra_fork_inventory`.
 
 Prerequisites
@@ -60,7 +60,7 @@ clone (commit message *Elassandra: port CASSANDRA-12837…*). Reuse or cherry-pi
   ``TableAttributes`` + ``EXTENSIONS`` only; legacy ``ColumnFamilyStoreCQLHelper`` paths dropped), 0025, 0029 (kept 4.0
   logback ``ReconfigureOnChangeTask`` handling), 0030, 0033 (``NAME_LENGTH`` via ``cassandra.max_name_length`` on
   ``org.apache.cassandra.schema.SchemaConstants``), 0035, 0036.
-* **Skipped as redundant / obsolete:** 0004 (concurrent type interning already in 4.0), 0007, 0012, 0013 (Strapdata
+* **Skipped as redundant / obsolete:** 0004 (concurrent type interning already in 4.0), 0007, 0012, 0013 (legacy
   branding / coordinates), 0014, 0020, 0021 (upstream cqlsh doc URL preferred), 0026, 0031, 0032 (``git am`` could not
   build a 3-way ancestor for ``build.xml`` / ``CassandraDaemon``), 0034 (SSL context cache: heavy merge with 4.0
   ``EncryptionOptions``).

@@ -6,8 +6,17 @@
 Elassandra documentation
 ========================
 
-*Elassandra* closely integrates `OpenSearch`_ (search engine lineage from Elasticsearch) with
-`Cassandra`_.
+*Elassandra* embeds `OpenSearch`_ inside `Cassandra`_ so that each node serves both
+distributed storage and distributed search.
+
+The maintained line in this repository targets:
+
+* **Apache Cassandra 4.0.x**
+* **OpenSearch 1.3.x**
+* **Java 11**
+
+The pages in this guide describe the current OpenSearch-based Elassandra implementation,
+its packaging, and its operating model.
 
    
 Contents:
@@ -18,6 +27,8 @@ Contents:
    architecture
    quickstart
    installation
+   docker
+   helm
    configuration
    mapping
    operations

@@ -3,107 +3,71 @@ Breaking changes and limitations
 
 .. note::
 
-   The **current** release line in this repository embeds **OpenSearch 1.3.x** with
-   **Apache Cassandra 4.0.x**. The older Elasticsearch 6.8 / Cassandra 3.11 line is now historical;
-   see :ref:`migration_modern_stack` for operator expectations and breaking API changes when moving to
-   the modern stack.
+   The current repository line embeds **OpenSearch 1.3.x** inside **Apache Cassandra 4.0.x**.
+   Older pre-OpenSearch lines are historical and are not described here.
 
-Deleting an index does not delete cassandra data
+Deleting an index does not delete Cassandra data
 ------------------------------------------------
 
-By default, Cassandra is considered as a primary data storage for Elasticsearch, so deleting an Elasticsearch index does not delete Cassandra content, keyspace and tables remain unchanged.
-If you want to use Elassandra as Elasticsearch, you can configure your cluster or only some indices with the ``drop_on delete_index`` like this.
+By default, Cassandra is the source of truth. Deleting an index removes the search
+metadata and search files, but it does not remove the backing keyspace or table unless
+``drop_on_delete_index`` is enabled.
 
-.. code::
-
-   $curl -XPUT -H "Content-Type: application/json" "$NODE:9200/twitter/" -d'{ 
-      "settings":{ "index":{ "drop_on_delete_index":true } }
-   }'
-
-Or to set ``drop_on delete_index`` at cluster level :
-
-.. code::
-
-   $curl -XPUT -H "Content-Type: application/json" "$NODE:9200/_cluster/settings" -d'{ 
-      "persistent":{ "cluster.drop_on_delete_index":true }
-   }'
-
-Nested or Object types cannot be empty
+Nested or object types cannot be empty
 --------------------------------------
 
-Because Elasticsearch nested and object types are backed by a Cassandra User Defined Type, it requires at least one sub-field in the mapping.
+Nested and object mappings are backed by Cassandra composite types and therefore must
+contain at least one mapped sub-field.
 
-Document _version, _seq_no and _primary_term are meaningless
-------------------------------------------------------------
+Document version metadata is not meaningful for global consistency
+------------------------------------------------------------------
 
-Elasticsearch's versioning system helps to cope with conflicts, but in a multi-master database like Apache Cassandra, versioning cannot ensure global consistency
-of compare-and-set operations.
+Elassandra relies on Cassandra replication rather than primary-shard sequencing.
+As a result, document version metadata such as ``_version``, ``_seq_no``, and
+``_primary_term`` should not be treated as globally authoritative conflict controls.
 
-In Elassandra, Elasticsearch version management is disabled by default, document version is not more indexed in lucene files and **document version is always 1**.
-Elasticsearch version 6.x introduced the _primary_term and _seq_no to uniquely identify updates on a document, but again, in a multi-master system, these counters are not more relevant,
-and your applications should not rely on it.
+Use Cassandra lightweight transactions when your application needs strict conditional
+write behavior.
 
-Finally, if you need to avoid conflicts on write operations, you should use Cassandra `lightweight transactions <http://www.datastax.com/dev/blog/lightweight-transactions-in-cassandra-2-0>`_ (or PAXOS transaction).
-Such lightweight transactions is also used when updating the Elassandra mapping or when indexing a document with *op_type=create*, but of course, it comes with a network cost.
+Index and table naming
+----------------------
 
-Primary term and Sequence Number
---------------------------------
-
-As explained `here <https://www.elastic.co/blog/elasticsearch-sequence-ids-6-0>`_, Elasticsearch introduced **_primary_term** and **_seq_no** in order to manage
-shard replication consistently and store these fields in lucene documents. But in Elassandra, replication is fully managed by cassandra and all shard are considered as primary. Thus, these two
-fields are not more stored in lucene by the default elassandra lucene engine named **VersionLessInternalEngine**. Consequently, all search results comes with *_primary_term = 1* and *_seq_no = 1*.
-
-Index and type names
---------------------
-
-Because Cassandra does not support special characters in keyspace and table names, Elassandra automatically replaces dots (.) and hyphens (-) characters
-by underscore (_) in index names, and hyphen (-) characters by underscore (_) in type names to create underlying Cassandra keyspaces and tables.
-
-When such a modification occurs for document type names, Elassandra keeps type names translation in memory to correctly translate back table names to documents types.
-Obviously, if you have types names like *xxx-xxx* and *xxx_xxx* in the same underlying keyspace, bijective translation is not possible and you can get some trouble.
-
-Moreover, Cassandra table names are limited to 48 characters, so Elasticsearch type names are also limited to 48 characters. If you need 
-longer Elasticsearch index names, you can increase this limit with the Cassandra system property ``cassandra.max_name_length``, but be careful 
-with the maximum filename length on your platform in you data directory.
+OpenSearch index names are mapped onto Cassandra keyspace names. Characters that are not
+valid for Cassandra identifiers are normalized during schema creation.
 
 Column names
 ------------
 
-For Elasticsearch, field mapping is unique in an index. So, two columns having the same name, indexed in an index, should have the same CQL type and share the same Elasticsearch mapping.
+A field name shared across documents in the same index must resolve to a compatible
+mapping and Cassandra storage type.
 
 Null values
 -----------
 
-To be able to search for null values, Elasticsearch can replace null by a default value (see `<https://www.elastic.co/guide/en/elasticsearch/reference/2.4/null-value.html>`_ ).
-In Elasticsearch, an empty array is not a null value,  wheras in Cassandra, an empty array is stored as null and replaced by the default null value at index time.
+Cassandra and OpenSearch treat null and empty collections differently. If your queries
+depend on explicit null semantics, validate the mapping behavior carefully before using
+that field in production search logic.
 
-Refresh on write
+Refresh behavior
 ----------------
 
-Elasticsearch write operations support a ``refresh`` parameter to control when changes made by this request are made visible to search. Possible values are *true*, *false*, or *wait_for* and in this last case, the coordinator node
-waits until a refresh happens. But in elassandra, replication is managed by Cassandra and can be asynchronous. As the result managing a refresh on involved shards or waiting for a refresh to happen in not possible.
+Refresh scheduling is decoupled from Cassandra replication. Immediate visibility after a
+write is therefore a trade-off between write latency and search freshness. Use
+``synchronous_refresh`` only where the extra cost is justified.
 
-If we need to search right after a write operation, you can force a refresh before search or, if you have a reasonably low level of updates, set the index settings ``ìndex.synchronous_refresh`` to true.
-This provides *Real Time Search* by refreshing shards after each update, but of course, its comes with a cost.
+Unsupported or reduced-scope features
+-------------------------------------
 
-If you have legacy applications using ``refresh=true`` or ``refresh=wait_for``, you can set the system property ``es.synchronous_refresh`` to a regexp of index name to automatically set ``synchronous_refresh`` to **true**.
-By default, because Kibana sometimes updates elasticsearch with ``refresh=wait_for``, this system property ``es.synchronous_refresh`` is set by default to (\.kibana.*).
-
-Elasticsearch unsupported features
-----------------------------------
-
-* Tribe node allows to query multiple Elasticsearch clusters. This feature is not currently supported by Elassandra.
-* Elasticsearch snapshot and restore operations are disabled (See Elassandra backup and restore in operations).
-* Elasticsearch percolator, reindex and shrink API are not supported.
-* Elasticsearch range fiels are supported in version 6.2
-* Parent-Child join is currently supported only in Elassandra version 5.5
-* Running Elassandra with a java security manager is not supported.
+The current Elassandra line intentionally focuses on the embedded OpenSearch use case.
+Validate advanced upstream features carefully before depending on them in production,
+especially when they assume standalone search-cluster behavior instead of Cassandra-owned
+replication and storage.
 
 Cassandra limitations
 ---------------------
 
-* Elassandra only supports the murmur3 partitioner.
-* The thrift protocol is supported only for read operations.
-* Elassandra synchronously indexes rows into Elasticsearch. This may increases the write duration, particulary when indexing complex document like `GeoShape <https://www.elastic.co/guide/en/elasticsearch/reference/current/geo-shape.html>`_, so Cassandra ``write_request_timeout_in_ms`` is set to 5 seconds (Cassandra default is 2000ms, see `Cassandra config <https://docs.datastax.com/en/cassandra/2.1/cassandra/configuration/configCassandra_yaml_r.html>`_)
-* In order to avoid concurrent mapping or persistent cluster settings updates, Elassandra plays a PAXOS transaction that require QUORUM available nodes for the keyspace *elastic_admin* to succeed. So it is recommended to have at least 3 nodes in 3 distinct racks (A 2 nodes datacenter won't accept any mapping update when a node is unavailable).
-* CQL3 **TRUNCATE** on a Cassandra table deletes all associated Elasticsearch documents by playing a delete_by_query where *_type = <table_name>*. Of course, such a delete_by_query comes with a performance cost and won't notify IndexingOperationListeners for preDelete and postDelete events if used in an Elasticsearch plugin.
+* Elassandra requires the murmur3 partitioner.
+* Search indexing adds work to Cassandra writes, especially for complex documents.
+* Metadata updates rely on quorum for the Elassandra metadata keyspace.
+* ``TRUNCATE`` on an indexed table has search-side consequences and should be treated as
+  an operationally significant action.

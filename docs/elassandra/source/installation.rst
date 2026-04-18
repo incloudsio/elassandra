@@ -3,87 +3,73 @@ Installation
 
 The canonical project site is `Elassandra.org <https://elassandra.org/>`_.
 
-There are a number of ways to install Elassandra:
+The maintained repository line documented here targets **Apache Cassandra 4.0.x** with an
+embedded **OpenSearch 1.3.x** runtime. Use **Java 11** for both the Gradle build and the
+packaged server runtime.
+
+Elassandra can be installed as:
 
 - tarball_
 - `deb`_
 - `rpm`_
-- `docker image`_.
-- `helm chart`_ (kubernetes)
-- `Google Kubernetes marketplace`_
+- Docker image (see :doc:`docker`)
+- Helm chart (see :doc:`helm`)
 
-Elassandra is based on Cassandra and Elasticsearch (with **OpenSearch 1.3.x** planned as the next search baseline); familiarity with either stack helps.
+.. important::
 
-.. important:: Be aware that Elassandra need more memory than Cassandra when Elasticsearch is used and should be installed on machine with at least 4Gb of RAM.
+   Elassandra runs both Cassandra storage and OpenSearch indexing in the same JVM.
+   Size hosts accordingly. For local development, allocate at least 4 GB of RAM.
+   For production, follow the sizing guidance in :doc:`configuration`.
 
 Tarball
 -------
 
-Elassandra requires at least Java 8. Oracle JDK is the recommended version, but OpenJDK should also work as well.
-You need to check which version is installed on your computer::
+Check your Java runtime first::
 
-    $ java -version
-    java version "1.8.0_121"
-    Java(TM) SE Runtime Environment (build 1.8.0_121-b13)
-    Java HotSpot(TM) 64-Bit Server VM (build 25.121-b13, mixed mode)
+    java -version
 
-Once java is correctly installed, download the Elassandra tarball:
+The current line should report Java 11 or newer.
+
+Download the release tarball:
 
 .. parsed-literal::
 
     wget |tgz_url|
 
-Then extract its content:
+Extract it and enter the installation directory:
 
 .. parsed-literal::
-  tar -xzf elassandra-|release|.tar.gz
 
-Go to the extracted directory:
+    tar -xzf elassandra-|release|.tar.gz
+    cd elassandra-|release|
 
-.. parsed-literal::
-  cd elassandra-|release|
+Start Elassandra in the foreground::
 
-Configure ``conf/cassandra.yaml`` if necessary, and then run::
+    bin/cassandra -f
 
-  bin/cassandra -f
+Verify that both Cassandra and OpenSearch are up::
 
-This starts Elassandra in the foreground so the embedded OpenSearch runtime stays attached to the current terminal session.
+    bin/nodetool status
+    bin/cqlsh -e "DESCRIBE KEYSPACES"
+    curl -s http://localhost:9200/
 
-Get the node status::
-
-  bin/nodetool status
-
-Now connect to the node with cqlsh::
-
-  bin/cqlsh
-
-You're now able to type CQL commands. See the `CQL reference <https://docs.datastax.com/en/cql/3.3/cql/cql_reference/cqlReferenceTOC.html>`_.
-
-Check the elasticsearch API::
-
-  curl -X GET http://localhost:9200/
-
-You should get something like this:
+The HTTP response should advertise the current Elassandra release and the embedded
+OpenSearch version. For example:
 
 .. parsed-literal::
-  {
-    "name" : "127.0.0.1",
-    "cluster_name" : "Test Cluster",
-    "cluster_uuid" : "7cb65cea-09c1-4d6a-a17a-24efb9eb7d2b",
-    "version" : {
-      "number" : "|version|",
-      "build_hash" : "b0b4cb025cb8aa74538124a30a00b137419983a3",
-      "build_timestamp" : "2017-04-19T13:11:11Z",
-      "build_snapshot" : true,
-      "lucene_version" : "5.5.2"
-    },
-    "tagline" : "You Know, for Search"
-  }
 
-You're done !
+    {
+      "name" : "127.0.0.1",
+      "cluster_name" : "Test Cluster",
+      "cluster_uuid" : "...",
+      "version" : {
+        "number" : "|version|"
+      },
+      "tagline" : "The OpenSearch Project: https://opensearch.org/"
+    }
 
-On a production environment, we recommand to to modify some system settings such as disabling swap. This `guide <http://docs.datastax.com/en/landing_page/doc/landing_page/recommendedSettings.html>`_ shows you how to do it.
-On linux, you should install `jemalloc <http://jemalloc.net/>`_.
+For production installs, disable swap and use a supported allocator such as
+`jemalloc <https://jemalloc.net/>`_ where appropriate for your platform.
 
 Deb
 ---
@@ -98,24 +84,19 @@ Rpm
 Docker image
 ------------
 
-.. include:: docker.rst
+See :doc:`docker` for container image build, environment variables, and the local
+compose-based cluster example.
 
 Helm chart
 ----------
 
-.. include:: helm.rst
-
-
-Google Kubernetes Marketplace
------------------------------
-
-You can deploy an Elassandra cluster on `GKE <https://cloud.google.com/kubernetes-engine/>`_ with a few clicks using our 
-`Elassandra Kubernetes App <https://console.cloud.google.com/marketplace/details/strapdata/elassandra>`_ 
-(require an existing GCP project and a running Google Kubernetes Cluster).
-
+See :doc:`helm` for the maintained Kubernetes chart, provider presets, and example
+installation commands.
 
 Running Cassandra only
 ----------------------
 
-In a cluster, you may need to run Cassandra datacenter without Elasticsearch indexing. In such case, change the CASSANDRA_DAEMON variable 
-to **org.apache.cassandra.service.CassandraDaemon** in your ``/etc/default/cassandra`` on all nodes of your Cassandra only datacenter.
+If a datacenter should run Cassandra storage without the embedded search runtime,
+set ``CASSANDRA_DAEMON`` to ``org.apache.cassandra.service.CassandraDaemon`` in the
+service environment for those nodes. All nodes in a datacenter should use the same
+runtime mode.

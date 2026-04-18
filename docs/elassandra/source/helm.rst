@@ -3,12 +3,13 @@ Helm chart
 ==========
 
 The maintained Elassandra Helm chart now lives in the dedicated
-``incloudsio/helm-charts`` repository under ``charts/elassandra``.
+`incloudsio/helm-charts <https://github.com/incloudsio/helm-charts>`_ repository under
+``charts/elassandra``.
 The chart models one Elassandra JVM per StatefulSet pod, exposes separate CQL and
 search services, and optionally deploys OpenSearch Dashboards.
 
 Install with default values
-...........................
+---------------------------
 
 Clone the chart repository and install from the chart directory::
 
@@ -23,7 +24,7 @@ This default path is intentionally conservative:
 - OpenSearch Dashboards disabled by default
 
 Install on minikube
-...................
+-------------------
 
 Build the local image first from the Elassandra source repository::
 
@@ -39,7 +40,7 @@ The ``values-minikube.yaml`` preset keeps the deployment to a single Elassandra 
 switches the CQL and search services to ``NodePort`` for easier local access.
 
 Enable OpenSearch Dashboards
-............................
+----------------------------
 
 Dashboards stays optional so that local and test installs can remain lightweight.
 Enable it at install time with either inline values or your own overlay file::
@@ -49,9 +50,9 @@ Enable it at install time with either inline values or your own overlay file::
     --set dashboards.enabled=true
 
 Provider presets
-................
+----------------
 
-The chart includes shallow provider-specific values files:
+The chart includes provider-specific values files:
 
 - ``helm-charts/charts/elassandra/values-aws.yaml``
 - ``helm-charts/charts/elassandra/values-gcp.yaml``
@@ -68,7 +69,7 @@ Example::
     -f ./helm-charts/charts/elassandra/values-aws.yaml
 
 AKS / ACR example
-.................
+-----------------
 
 The Azure preset references ``elassandra.azurecr.io/elassandra:1.3.20``.
 
@@ -100,7 +101,7 @@ If the cluster is not attached to the ACR, create an image pull secret and pass 
     --set imagePullSecrets[0].name=elassandra-acr
 
 Rendered resources
-..................
+------------------
 
 The chart creates:
 
@@ -111,7 +112,7 @@ The chart creates:
 - optional OpenSearch Dashboards deployment and service
 
 Validate before installing
-..........................
+--------------------------
 
 Typical validation commands::
 

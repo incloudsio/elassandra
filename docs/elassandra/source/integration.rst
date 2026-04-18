@@ -4,138 +4,73 @@ Integration
 Integration with an existing Cassandra cluster
 ----------------------------------------------
 
-Elassandra includes a modified version of Cassandra (maintained at `incloudsio/cassandra <https://github.com/incloudsio/cassandra>`_;
-see :ref:`cassandra_fork_inventory` for the porting plan toward **Apache Cassandra 4.0.x** under `Elassandra.org <https://elassandra.org/>`_),
-so **all nodes of a cluster should run Elassandra binaries**. However, you can start a node with or without 
-the Elasticsearch support.  Obviously, all nodes of a datacenter should run Cassandra only or Cassandra with 
-Elasticsearch.
+Elassandra ships a Cassandra fork maintained at
+`incloudsio/cassandra <https://github.com/incloudsio/cassandra>`_ and expects
+cluster nodes to run the same Elassandra build. You can start a node either with
+the embedded OpenSearch runtime enabled or in Cassandra-only mode, but every node in
+the same datacenter should use the same runtime mode.
 
-Rolling upgrade from Cassandra to Elassandra
+Rolling replace from Cassandra to Elassandra
 ............................................
 
-Before starting any Elassandra node with Elasticsearch enabled, do a rolling replace of the Cassandra binaries with the Elassandra ones. For each node :
+Before enabling search in an existing cluster, replace the Cassandra binaries on each node:
 
-* Install Elassandra.
-* Replace the Elassandra configuration files (cassandra.yaml and snitch configuration file) with the ones from your existing cluster.
-* Bind the Elassandra data folder to the existing Cassandra data folder
-* Stop your Cassandra node.
-* Restart Cassandra with the Elassandra runtime using ``elassandra bin/cassandra -f``
+* Install the target Elassandra build.
+* Reuse your cluster configuration files such as ``cassandra.yaml`` and snitch settings.
+* Point Elassandra at the existing Cassandra data directories.
+* Stop the standalone Cassandra process.
+* Restart the node with the Elassandra runtime using ``bin/cassandra -f``.
 
+After the full rolling replace, create mappings for existing tables or create new
+OpenSearch indices as needed.
 
 Create a new Elassandra datacenter
 ..................................
 
-The overall procedure is similar to the Cassandra one described in `Adding a datacenter to a cluster <https://docs.datastax.com/en/cassandra/3.0/cassandra/operations/opsAddDCToCluster.html#opsAddDCToCluster>`_.
+The procedure matches Cassandra's standard datacenter expansion flow:
 
-For each node in your new datacenter :
+* Install Elassandra on the new nodes.
+* Set ``auto_bootstrap: false`` in ``conf/cassandra.yaml`` for the initial bring-up.
+* Start the new nodes and verify ring membership with ``nodetool status``.
+* Restart the nodes with the Elassandra runtime enabled.
+* Increase replication for the indexed keyspaces into the new datacenter.
+* Pull data with::
 
-* Install Elassandra.
-* Set ``auto_bootstrap: false`` in your **conf/cassandra.yaml**.
-* Start Cassandra-only nodes in your new datacenter and check that all nodes join the cluster.
+     nodetool rebuild <source-datacenter-name>
 
-.. code::
-
-   bin/cassandra
-
-* Restart all nodes in your new datacenter with the Elassandra runtime enabled. You should see started shards but empty indices.
-
-.. code::
-
-   bin/cassandra -f
-
-* Set the replication factor of indexed keyspaces to one or more in your new datacenter.
-* Pull data from your existing datacenter. 
-
-.. code::
-   
-   nodetool rebuild <source-datacenter-name>
-
-After rebuilding all of your new nodes, you should see the same number of documents for each index in your new and existing datacenters.
-
-* Set ``auto_bootstrap: true`` (default value) in your **conf/cassandra.yaml**
-* Create new Elasticsearch index or map some existing Cassandra tables.
+Once the data is present, Elassandra will build the local search view from the
+replicated Cassandra tables. Restore ``auto_bootstrap: true`` afterwards.
 
 .. TIP::
-   If you need to replay this procedure for a node :
-   
-   * stop your node
-   * nodetool removenode <id-of-node-to-remove>
-   * clear data, commitlogs and saved_cache directories.
 
+   If you need to replay the procedure for a node, remove it from the ring first,
+   then clear its data, commitlog, and saved cache directories before starting again.
 
-Installing Elasticsearch plugins
------------------------------------
+Installing OpenSearch plugins
+-----------------------------
 
-Elasticsearch plugin installation remains unchanged, see Elasticsearch `plugin installation <https://www.elastic.co/guide/en/elasticsearch/plugins/5.5/installation.html>`_.
+The packaged distribution includes the OpenSearch plugin CLI::
 
-* bin/plugin install <url>
+   bin/opensearch-plugin install <plugin-url-or-file>
 
+Install the same plugin set on every node in the datacenter before restarting.
 
-Running Kibana with Elassandra
-------------------------------
+Running OpenSearch Dashboards with Elassandra
+---------------------------------------------
 
-`Kibana <https://www.elastic.co/guide/en/kibana/5.5/introduction.html>`_ can run with Elassandra, providing a visualization tool for Cassandra and Elasticsearch data.
-
-* If you want to load sample data from the `Kibana Getting started <https://www.elastic.co/guide/en/kibana/current/getting-started.html>`_, apply the following changes to logstash.jsonl with a sed command.
-
-.. code::
-
-   s/logstash-2015.05.18/logstash_20150518/g
-   s/logstash-2015.05.19/logstash_20150519/g
-   s/logstash-2015.05.20/logstash_20150520/g
-   
-   s/article:modified_time/articleModified_time/g
-   s/article:published_time/articlePublished_time/g
-   s/article:section/articleSection/g
-   s/article:tag/articleTag/g
-   
-   s/og:type/ogType/g
-   s/og:title/ogTitle/g
-   s/og:description/ogDescription/g
-   s/og:site_name/ogSite_name/g
-   s/og:url/ogUrl/g
-   s/og:image:width/ogImageWidth/g
-   s/og:image:height/ogImageHeight/g
-   s/og:image/ogImage/g
-   
-   s/twitter:title/twitterTitle/g
-   s/twitter:description/twitterDescription/g
-   s/twitter:card/twitterCard/g
-   s/twitter:image/twitterImage/g
-   s/twitter:site/twitterSite/g
-
-JDBC Driver sql4es + Elassandra
--------------------------------
-
-The `Elasticsearch JDBC driver <https://github.com/Anchormen/sql4es>`_. can be used with Elassandra. Here is a code example :
-
-.. code:: java
-
-   Class.forName("nl.anchormen.sql4es.jdbc.ESDriver");
-   Connection con = DriverManager.getConnection("jdbc:sql4es://localhost:9300/twitter?cluster.name=Test%20Cluster");
-   Statement st = con.createStatement();
-   ResultSet rs = st.executeQuery("SELECT user,avg(size),count(*) FROM tweet GROUP BY user");
-   ResultSetMetaData rsmd = rs.getMetaData();
-   int nrCols = rsmd.getColumnCount();
-   while(rs.next()){
-       for(int i=1; i<=nrCols; i++){
-            System.out.println(rs.getObject(i));
-        }
-   }
-   rs.close();
-   con.close();
+OpenSearch Dashboards can be used as the visualization layer for Elassandra.
+For local development, the repository compose file already starts a compatible
+Dashboards instance. For Kubernetes deployments, enable Dashboards from the maintained
+Helm chart in `incloudsio/helm-charts <https://github.com/incloudsio/helm-charts>`_.
 
 Running Spark with Elassandra
 -----------------------------
 
-For Elassandra 5.5, a modified version of the `elasticsearch-hadoop <https://github.com/elastic/elasticsearch-hadoop>`_ connector is available for Elassandra on the `strapdata repository <https://github.com/strapdata/elasticsearch-hadoop>`_. 
-This connector works with spark as described in the Elasticsearch documentation available at `elasticsearch/hadoop <https://www.elastic.co/guide/en/elasticsearch/hadoop/current/index.html>`_.
+Spark integrations should target the current OpenSearch-compatible APIs exposed by
+Elassandra. In practice, teams usually choose one of two approaches:
 
-For example, in order to submit a spark job in client mode:
+* read and write data through Cassandra connectors, then query indexed data through Elassandra
+* use OpenSearch-compatible REST clients for search-specific workloads alongside Cassandra access
 
-.. code:: java
-
-   bin/spark-submit --driver-class-path <yourpath>/elasticsearch-spark_2.10-2.2.0.jar  --master spark://<sparkmaster>:7077 --deploy-mode client <application.jar> 
-
-
-
+Validate connector compatibility against the OpenSearch 1.3 API surface used by this
+repository before deploying to production.

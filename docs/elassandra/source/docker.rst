@@ -7,7 +7,7 @@ The Docker build reuses the assembled Linux distribution from this repository an
 startup scripts and configuration needed to start ``org.apache.cassandra.service.ElassandraDaemon``.
 
 Build the image locally
-.......................
+-----------------------
 
 From the repository root::
 
@@ -18,7 +18,7 @@ The local tag produced by the Gradle task is::
   elassandra:test
 
 Start a single node
-...................
+-------------------
 
 Run a local Elassandra container::
 
@@ -37,47 +37,49 @@ Then inspect the node::
   docker exec -it node0 curl localhost:9200
 
 Supported environment variables
-...............................
+-------------------------------
 
 The image configures ``conf/cassandra.yaml`` and ``conf/cassandra-rackdc.properties`` from environment
 variables at container start. The first-pass runtime contract is intentionally small and matches the
 Helm chart values:
 
-+-------------------------------+-------------------------------------------------------------+
-| Variable                      | Description                                                 |
-+===============================+=============================================================+
-| ``CASSANDRA_LISTEN_ADDRESS``  | Cassandra listen address. Defaults to the container IP.     |
-+-------------------------------+-------------------------------------------------------------+
-| ``CASSANDRA_BROADCAST_ADDRESS`` | Gossip and broadcast address. Defaults to listen address. |
-+-------------------------------+-------------------------------------------------------------+
-| ``CASSANDRA_RPC_ADDRESS``     | CQL bind address. Defaults to ``0.0.0.0``.                  |
-+-------------------------------+-------------------------------------------------------------+
-| ``CASSANDRA_BROADCAST_RPC_ADDRESS`` | CQL address advertised to clients.                    |
-+-------------------------------+-------------------------------------------------------------+
-| ``CASSANDRA_SEEDS``           | Comma-separated seed hosts for gossip bootstrap.            |
-+-------------------------------+-------------------------------------------------------------+
-| ``CASSANDRA_CLUSTER_NAME``    | Cluster name written to ``cassandra.yaml``.                 |
-+-------------------------------+-------------------------------------------------------------+
-| ``CASSANDRA_NUM_TOKENS``      | Number of virtual nodes assigned to the container.          |
-+-------------------------------+-------------------------------------------------------------+
-| ``CASSANDRA_DC``              | Datacenter for ``cassandra-rackdc.properties``.             |
-+-------------------------------+-------------------------------------------------------------+
-| ``CASSANDRA_RACK``            | Rack for ``cassandra-rackdc.properties``.                   |
-+-------------------------------+-------------------------------------------------------------+
-| ``CASSANDRA_ENDPOINT_SNITCH`` | Snitch implementation, default ``GossipingPropertyFileSnitch``. |
-+-------------------------------+-------------------------------------------------------------+
-| ``MAX_HEAP_SIZE``             | JVM heap upper bound for Cassandra/Elassandra.              |
-+-------------------------------+-------------------------------------------------------------+
-| ``HEAP_NEWSIZE``              | Young-generation heap size.                                 |
-+-------------------------------+-------------------------------------------------------------+
-| ``JVM_OPTS``                  | Additional JVM options. The image adds the Elassandra query |
-|                               | handler if it is not already present.                       |
-+-------------------------------+-------------------------------------------------------------+
-| ``DEBUG``                     | Switch the packaged ``logback.xml`` root logger to DEBUG.   |
-+-------------------------------+-------------------------------------------------------------+
+.. list-table::
+   :widths: 30 70
+   :header-rows: 1
+
+   * - Variable
+     - Description
+   * - ``CASSANDRA_LISTEN_ADDRESS``
+     - Cassandra listen address. Defaults to the container IP.
+   * - ``CASSANDRA_BROADCAST_ADDRESS``
+     - Gossip and broadcast address. Defaults to the listen address.
+   * - ``CASSANDRA_RPC_ADDRESS``
+     - CQL bind address. Defaults to ``0.0.0.0``.
+   * - ``CASSANDRA_BROADCAST_RPC_ADDRESS``
+     - CQL address advertised to clients.
+   * - ``CASSANDRA_SEEDS``
+     - Comma-separated seed hosts for gossip bootstrap.
+   * - ``CASSANDRA_CLUSTER_NAME``
+     - Cluster name written to ``cassandra.yaml``.
+   * - ``CASSANDRA_NUM_TOKENS``
+     - Number of virtual nodes assigned to the container.
+   * - ``CASSANDRA_DC``
+     - Datacenter for ``cassandra-rackdc.properties``.
+   * - ``CASSANDRA_RACK``
+     - Rack for ``cassandra-rackdc.properties``.
+   * - ``CASSANDRA_ENDPOINT_SNITCH``
+     - Snitch implementation, usually ``GossipingPropertyFileSnitch``.
+   * - ``MAX_HEAP_SIZE``
+     - JVM heap upper bound for Cassandra and Elassandra.
+   * - ``HEAP_NEWSIZE``
+     - Young-generation heap size.
+   * - ``JVM_OPTS``
+     - Additional JVM options. The image adds the Elassandra query handler if it is not already present.
+   * - ``DEBUG``
+     - Switch the packaged ``logback.xml`` root logger to ``DEBUG``.
 
 Filesystem layout
-.................
+-----------------
 
 The image uses an installation rooted at ``/usr/share/elassandra``:
 
@@ -87,7 +89,7 @@ The image uses an installation rooted at ``/usr/share/elassandra``:
 - ``/usr/share/elassandra/logs``: log files
 
 Exposed ports
-.............
+-------------
 
 - ``7000``: intra-node communication
 - ``7001``: TLS intra-node communication
@@ -98,7 +100,7 @@ Exposed ports
 - ``9300``: OpenSearch transport
 
 Local cluster example
-.....................
+---------------------
 
 For a small local multi-node test environment, use ``ci/docker-compose.yml`` after building the image::
 
@@ -106,5 +108,6 @@ For a small local multi-node test environment, use ``ci/docker-compose.yml`` aft
   docker-compose -f ci/docker-compose.yml up -d --scale node=1
 
 For long-lived containerized deployments, prefer the maintained Helm chart in
-``https://github.com/incloudsio/helm-charts/tree/master/charts/elassandra``.
+`incloudsio/helm-charts <https://github.com/incloudsio/helm-charts>`_ under
+``charts/elassandra``.
 
