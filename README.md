@@ -61,6 +61,10 @@ For OpenSearch users, elassandra provides useful features:
 * Install the maintained Helm chart from [`incloudsio/helm-charts`](https://github.com/incloudsio/helm-charts/tree/master/charts/elassandra). For a local single-node deployment on minikube, start with `helm-charts/charts/elassandra/values-minikube.yaml`.
 * The hosted docs remain available at [elassandra.org](https://elassandra.org/en/quickstart.html). Docker packaging remains in this repository, while the Helm chart source now lives in the dedicated chart repository.
 
+### Node.js ORM package
+
+Use the maintained Node.js integration package from [incloudsio/express-cassandra](https://github.com/incloudsio/express-cassandra) for application-side schema management and OpenSearch-backed indexing/query flows.
+
 ### Helm On AKS
 
 The Azure preset now references the pushed Elassandra image at `elassandra.azurecr.io/elassandra:1.3.20`.

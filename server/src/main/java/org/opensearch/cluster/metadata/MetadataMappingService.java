@@ -430,7 +430,11 @@ public class MetadataMappingService {
                         org.elassandra.index.ElasticSecondaryIndex.elasticSecondayIndices.get(
                             updatedIndexMetadata.keyspace()
                                 + "."
-                                + org.elassandra.cluster.SchemaManager.typeToCfName(updatedIndexMetadata.keyspace(), mergedMapper.type())
+                                + org.elassandra.cluster.SchemaManager.cfNameFromIndex(
+                                    updatedIndexMetadata.keyspace(),
+                                    mergedMapper.type(),
+                                    updatedIndexMetadata
+                                )
                         );
                     if (elasticSecondaryIndex != null) {
                         Metadata mappingMetadata = Metadata.builder(currentState.metadata()).put(updatedIndexMetadata, false).build();

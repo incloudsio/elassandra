@@ -234,6 +234,28 @@ public class SchemaManager {
         return typeName;
     }
 
+    /**
+     * Resolve the CQL table name an ES index should be bound to.
+     * <p>
+     * Historically the mapping <em>type</em> doubled as the CQL table name, but modern
+     * OpenSearch clients submit typeless mappings (type defaults to {@code _doc}), which
+     * would force every index in a keyspace to share a single {@code _doc} table. This
+     * helper lets callers pin an index to a specific CQL table via the {@code index.table}
+     * setting; when that is set to anything other than the default {@code _doc} fallback
+     * it wins. Otherwise we fall back to the legacy type-based derivation.
+     */
+    public static String cfNameFromIndex(String keyspaceName, String typeName, IndexMetadata indexMetaData) {
+        if (indexMetaData != null) {
+            String tableSetting = indexMetaData.getSettings().get(IndexMetadata.SETTING_TABLE);
+            if (tableSetting != null
+                    && !tableSetting.isEmpty()
+                    && !MapperService.SINGLE_MAPPING_NAME.equals(tableSetting)) {
+                return tableSetting;
+            }
+        }
+        return typeToCfName(keyspaceName, typeName);
+    }
+
     public String typeToCfName(TableMetadata cfm, String typeName, boolean remove) {
         return SchemaManager.typeToCfName(cfm.keyspace, typeName, remove);
     }
@@ -619,11 +641,16 @@ public class SchemaManager {
     }
 
     /**
-     * Populate the columnsMap of a table for the provided indeMetaData/mapperService
+     * Populate the columnsMap of a table for the provided indeMetaData/mapperService.
+     * <p>
+     * {@code cfName} is the already-resolved CQL table name (see
+     * {@link #cfNameFromIndex(String, String, IndexMetadata)}); {@code type} is still the
+     * mapping type used to look the mapper up in {@code mapperService}.
      */
     private KeyspaceMetadata buildColumns(final KeyspaceMetadata ksm2,
             final TableMetadata cfm,
             final String type,
+            final String cfName,
             final IndexMetadata indexMetaData,
             final MapperService mapperService,
             Map<String, ColumnDescriptor> columnsMap,
@@ -631,7 +658,6 @@ public class SchemaManager {
             final Collection<Event.SchemaChange> events) {
 
         KeyspaceMetadata ksm = ksm2;
-        String cfName = typeToCfName(ksm.name, type);
         boolean newTable = (cfm == null);
 
         DocumentMapper docMapper = mapperService.documentMapper(type);
@@ -800,7 +826,18 @@ public class SchemaManager {
         try {
             KeyspaceMetadata ksm = ksm2;
             ksName = ksm2.name;
-            cfName = typeToCfName(ksName, type);
+            // Resolve cfName from the first non-virtual IndexMetadata in the sibling set.
+            // All siblings share the same physical CQL table so any of their
+            // `index.table` settings is authoritative. Fall back to the legacy
+            // type-based derivation when no sibling sets the setting.
+            IndexMetadata cfNameSource = null;
+            for (Pair<IndexMetadata, MapperService> pair : indiceMap.values()) {
+                if (!hasVirtualIndex(pair.left)) {
+                    cfNameSource = pair.left;
+                    break;
+                }
+            }
+            cfName = cfNameFromIndex(ksName, type, cfNameSource);
 
             final TableMetadata cfm = ksm.getTableOrViewNullable(cfName);
             boolean newTable = (cfm == null);
@@ -813,7 +850,7 @@ public class SchemaManager {
                 if (hasVirtualIndex(indexMetaData))
                     continue;
                 mapperService = pair.right;
-                ksm = buildColumns(ksm, cfm, type, indexMetaData, mapperService, columnsMap, mutations, events);
+                ksm = buildColumns(ksm, cfm, type, cfName, indexMetaData, mapperService, columnsMap, mutations, events);
             }
 
             if (newTable) {

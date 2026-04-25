@@ -26,7 +26,7 @@ Document the mapping in release notes and in [docs/elassandra/source/migration.r
 
 ## Version scheme (legacy 6.8 line)
 
-Historical Elasticsearch-based releases used the Elasticsearch-compatible quad **plus** a Cassandra patch segment, for example **6.8.4.16**. Keep that scheme only for older maintenance branches that still ship the legacy Elasticsearch 6.8 / Cassandra 3.11 line.
+Historical 6.8-based releases used a search-compatible quad **plus** a Cassandra patch segment, for example **6.8.4.16**. Keep that scheme only for older maintenance branches that still ship the legacy 6.8 / Cassandra 3.11 line.
 
 ## Build release artifacts
 
@@ -45,7 +45,7 @@ For each release, publish a short matrix:
 | Elassandra version | Cassandra base | Search engine | Minimum Java | REST compatibility |
 |--------------------|----------------|---------------|--------------|---------------------|
 | 4.0.x-1.3.20.n (current line) | Apache 4.0.x + fork | OpenSearch 1.3.x | 11 | OpenSearch 1.x / ES 7.10-style |
-| 6.8.4.x (legacy line) | Strapdata 3.11.9.x | Elasticsearch 6.8.4 | 8 (C*), 12 (ES) | ES 6.8 |
+| 6.8.4.x (legacy line) | Strapdata 3.11.9.x | 6.8 legacy search line | 8 (C*), 12 (search) | ES 6.8 |
 
 ## Docker / deb / rpm
 

@@ -144,6 +144,16 @@ public class Serializer {
         return o;
     }
 
+    private static Object toFieldJsonValue(FieldMapper fieldMapper, Object value) {
+        if (value == null) {
+            return null;
+        }
+        if (fieldMapper instanceof DateFieldMapper) {
+            return fieldMapper.fieldType().valueForDisplay(value);
+        }
+        return toJsonValue(value);
+    }
+
     public static Collection flattenCollection(Collection c) {
         List l = new ArrayList(c.size());
         for(Object o : c) {
@@ -392,15 +402,15 @@ public class Serializer {
                        } else {
                            // No mapper known
                            // TODO: support geohashing
-                           builder.field(subField, subValue);
+                           builder.field(subField, toJsonValue(subValue));
                        }
                    }
                    */
                    else {
-                       builder.field(subField, subValue);
+                       builder.field(subField, toJsonValue(subValue));
                    }
                } else {
-                   builder.field(subField, subValue);
+                   builder.field(subField, toJsonValue(subValue));
                }
            }
            builder.endObject();
@@ -409,15 +419,15 @@ public class Serializer {
                FieldMapper fieldMapper = (FieldMapper)mapper;
                if (!(fieldMapper instanceof MetadataFieldMapper)) {
                    if (field != null) {
-                       builder.field(field, fieldMapper.fieldType().valueForDisplay(value));
+                       builder.field(field, toFieldJsonValue(fieldMapper, value));
                    } else {
-                       builder.value(value);
+                       builder.value(toFieldJsonValue(fieldMapper, value));
                    }
                }
            } else if (mapper instanceof ObjectMapper) {
                ObjectMapper objectMapper = (ObjectMapper)mapper;
                if (!objectMapper.isEnabled()) {
-                   builder.field(field, value);
+                   builder.field(field, toJsonValue(value));
                } else {
                    throw new IOException("Unexpected object value ["+value+"]");
                }

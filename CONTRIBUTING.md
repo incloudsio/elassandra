@@ -32,7 +32,7 @@ When submitting an issue, please make sure that :
 
 * You are testing against the latest version of Elassandra.
 * You're not in the case of a known Elassandra limitation, see http://doc.elassandra.io/en/latest/limitations.html.
-* Elassandra behavior is abnormally different from the standard Cassandra or Elasticsearch. For example, like Elasticsearch, Elassandra does not display default mappings unless requested, but this is the expected behavior.
+* Elassandra behavior is abnormally different from the standard Cassandra or OpenSearch. For example, like OpenSearch, Elassandra does not display default mappings unless requested, but this is the expected behavior.
 
 It is very helpful if you can provide a test case to reproduce the bug and the associated error logs or stacktrace. See your **conf/logback.xml** to increase logging level in the **logs/system.log** file, and run **nodetool setlogginglevel** to dynamically update your logging level.
 

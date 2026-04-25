@@ -216,6 +216,10 @@ public class MetadataDeleteIndexService {
             boolean removedExtension = false;
             for (String table : tableExtensionToRemove.keySet()) {
                 TableMetadata cfm = ksm.getTableOrViewNullable(table);
+                if (cfm == null) {
+                    logger.warn("Skipping index metadata extension cleanup for missing Cassandra table {}.{}", keyspace, table);
+                    continue;
+                }
                 clusterService.getSchemaManager().removeTableExtensionToMutationBuilder(cfm, tableExtensionToRemove.get(table), builder);
                 removedExtension = true;
             }

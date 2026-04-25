@@ -26,7 +26,7 @@ Download benchmark data from http://benchmarks.opensearch.org.s3.amazonaws.com/c
 Example invocation:
 
 ```
-wget http://benchmarks.elasticsearch.org.s3.amazonaws.com/corpora/geonames/documents-2.json.bz2
+wget http://benchmarks.opensearch.org.s3.amazonaws.com/corpora/geonames/documents-2.json.bz2
 bzip2 -d documents-2.json.bz2
 mv documents-2.json client/benchmark/build
 gradlew -p client/benchmark run --args ' rest bulk localhost build/documents-2.json geonames type 8647880 5000'
