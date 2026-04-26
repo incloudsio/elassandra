@@ -238,7 +238,11 @@ public class RestController implements HttpServerTransport.Dispatcher {
                 channel.sendResponse(new BytesRestResponse(channel, e));
             } catch (Exception inner) {
                 inner.addSuppressed(e);
-                logger.error(() -> new ParameterizedMessage("failed to send failure response for uri [{}]", request.uri()), inner);
+                if (isChannelAlreadyClosed(inner)) {
+                    logger.debug(() -> new ParameterizedMessage("channel already closed while sending failure response for uri [{}]", request.uri()));
+                } else {
+                    logger.error(() -> new ParameterizedMessage("failed to send failure response for uri [{}]", request.uri()), inner);
+                }
             }
         }
     }
@@ -555,16 +559,18 @@ public class RestController implements HttpServerTransport.Dispatcher {
 
         @Override
         public void sendResponse(RestResponse response) {
-            close();
-            delegate.sendResponse(response);
+            if (close()) {
+                delegate.sendResponse(response);
+            }
         }
 
-        private void close() {
+        private boolean close() {
             // attempt to close once atomically
             if (closed.compareAndSet(false, true) == false) {
-                throw new IllegalStateException("Channel is already closed");
+                return false;
             }
             inFlightRequestsBreaker(circuitBreakerService).addWithoutBreaking(-contentLength);
+            return true;
         }
 
     }
@@ -572,5 +578,19 @@ public class RestController implements HttpServerTransport.Dispatcher {
     private static CircuitBreaker inFlightRequestsBreaker(CircuitBreakerService circuitBreakerService) {
         // We always obtain a fresh breaker to reflect changes to the breaker configuration.
         return circuitBreakerService.getBreaker(CircuitBreaker.IN_FLIGHT_REQUESTS);
+    }
+
+    private static boolean isChannelAlreadyClosed(Throwable t) {
+        Throwable cur = t;
+        while (cur != null) {
+            if (cur instanceof IllegalStateException) {
+                final String message = cur.getMessage();
+                if (message != null && message.contains("Channel is already closed")) {
+                    return true;
+                }
+            }
+            cur = cur.getCause();
+        }
+        return false;
     }
 }

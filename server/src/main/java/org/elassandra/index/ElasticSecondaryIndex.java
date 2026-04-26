@@ -348,6 +348,17 @@ public class ElasticSecondaryIndex implements Index {
         return mappingMetaData;
     }
 
+    /**
+     * Guard index fan-out: a table mutation must only target indices bound to the
+     * same physical CQL table.
+     */
+    private boolean isIndexBoundToBaseTable(IndexMetadata indexMetaData) {
+        final String keyspace = this.baseCfs.metadata.get().keyspace;
+        final String baseTable = this.baseCfs.metadata.get().name;
+        final String boundTable = SchemaManager.cfNameFromIndex(keyspace, this.typeName, indexMetaData);
+        return baseTable.equals(boundTable);
+    }
+
     private static ByteBuffer asByteBuffer(Object value) {
         if (value instanceof ByteBuffer) {
             return (ByteBuffer) value;
@@ -1286,6 +1297,22 @@ public class ElasticSecondaryIndex implements Index {
 
                 if (indexMetaData.isVirtual()) {
                     logger.debug("Ignoring virtual index={}", indexMetaData.getIndex().getName());
+                    continue;
+                }
+
+                if (!ElasticSecondaryIndex.this.isIndexBoundToBaseTable(indexMetaData)) {
+                    if (logger.isDebugEnabled()) {
+                        logger.debug(
+                            "ignore, index=[{}] table binding [{}] does not match cfs [{}]",
+                            indexMetaData.getIndex().getName(),
+                            SchemaManager.cfNameFromIndex(
+                                ElasticSecondaryIndex.this.baseCfs.metadata.get().keyspace,
+                                ElasticSecondaryIndex.this.typeName,
+                                indexMetaData
+                            ),
+                            ElasticSecondaryIndex.this.baseCfs.metadata.get().name
+                        );
+                    }
                     continue;
                 }
 
@@ -2578,6 +2605,7 @@ public class ElasticSecondaryIndex implements Index {
             for (ObjectCursor<IndexMetadata> cursor : event.state().metadata().indices().values()) {
                 IndexMetadata indexMetaData = cursor.value;
                 if (!indexMetaData.keyspace().equals(this.baseCfs.metadata.get().keyspace)
+                    || !this.isIndexBoundToBaseTable(indexMetaData)
                     || resolveMappingMetaData(indexMetaData, this.typeName) == null)
                     continue;
 

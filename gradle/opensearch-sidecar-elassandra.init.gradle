@@ -162,6 +162,7 @@ gradle.projectsEvaluated {
         api "io.netty:netty-transport:${netty}"
         api "io.netty:netty-codec:${netty}"
         api "io.netty:netty-handler:${netty}"
+        api "io.netty:netty-resolver:${netty}"
         // Cassandra / Netty may reference io.netty.channel.epoll.Epoll; classes jar is required on macOS (native .so is Linux-only).
         api "io.netty:netty-transport-classes-epoll:${netty}"
     }

@@ -71,7 +71,25 @@ public abstract class RestActionListener<Response> implements ActionListener<Res
             channel.sendResponse(new BytesRestResponse(channel, e));
         } catch (Exception inner) {
             inner.addSuppressed(e);
-            logger.error("failed to send failure response", inner);
+            if (isChannelAlreadyClosed(inner)) {
+                logger.debug("channel already closed while sending failure response");
+            } else {
+                logger.error("failed to send failure response", inner);
+            }
         }
+    }
+
+    private static boolean isChannelAlreadyClosed(Throwable t) {
+        Throwable cur = t;
+        while (cur != null) {
+            if (cur instanceof IllegalStateException) {
+                final String message = cur.getMessage();
+                if (message != null && message.contains("Channel is already closed")) {
+                    return true;
+                }
+            }
+            cur = cur.getCause();
+        }
+        return false;
     }
 }
