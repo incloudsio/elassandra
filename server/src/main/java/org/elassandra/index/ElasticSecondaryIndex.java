@@ -123,6 +123,7 @@ import org.opensearch.cluster.metadata.IndexMetadata;
 import org.opensearch.cluster.metadata.MappingMetadata;
 import org.opensearch.cluster.metadata.Metadata;
 import org.opensearch.cluster.service.ClusterService;
+import org.opensearch.client.Client;
 import org.opensearch.common.SuppressForbidden;
 import org.opensearch.common.bytes.BytesArray;
 import org.opensearch.common.bytes.BytesReference;
@@ -148,6 +149,10 @@ import org.opensearch.index.engine.EngineException;
 import org.opensearch.index.mapper.*;
 import org.opensearch.index.mapper.CqlMapper.CqlStruct;
 import org.opensearch.index.mapper.ParseContext.Document;
+import org.opensearch.index.query.QueryBuilders;
+import org.opensearch.index.reindex.BulkByScrollResponse;
+import org.opensearch.index.reindex.DeleteByQueryAction;
+import org.opensearch.index.reindex.DeleteByQueryRequest;
 import org.opensearch.index.mapper.SeqNoFieldMapper.SequenceIDFields;
 import org.opensearch.index.seqno.SequenceNumbers;
 import org.opensearch.index.shard.IndexShard;
@@ -2869,9 +2874,38 @@ public class ElasticSecondaryIndex implements Index {
                                 indexInfo.updated = true;
                             DeleteByQuery deleteByQuery = mappingInfoRef.get().buildDeleteByQuery(indexInfo.indexService, Queries.newMatchAllQuery());
                             indexShard.getEngine().delete(deleteByQuery);
+
+                            // The engine-level delete-by-query can miss docs in some truncate races.
+                            // Run the transport delete-by-query action as a deterministic fallback.
+                            Client client = ElassandraDaemon.instance.node().client();
+                            DeleteByQueryRequest request = new DeleteByQueryRequest(indexInfo.name)
+                                .setQuery(QueryBuilders.matchAllQuery())
+                                .setRefresh(true);
+                            request.setConflicts("proceed");
+                            if (indexInfo.type != null && !indexInfo.type.isEmpty()) {
+                                request.setDocTypes(indexInfo.type);
+                            }
+                            BulkByScrollResponse response = client.execute(DeleteByQueryAction.INSTANCE, request).actionGet();
+                            if (!response.getBulkFailures().isEmpty() || !response.getSearchFailures().isEmpty()) {
+                                logger.warn(
+                                    "truncate fallback delete-by-query failures index=[{}] bulkFailures={} searchFailures={}",
+                                    indexInfo.name,
+                                    response.getBulkFailures().size(),
+                                    response.getSearchFailures().size()
+                                );
+                            } else if (logger.isDebugEnabled()) {
+                                logger.debug(
+                                    "truncate fallback delete-by-query deleted={} index=[{}] type=[{}]",
+                                    response.getDeleted(),
+                                    indexInfo.name,
+                                    indexInfo.type
+                                );
+                            }
                         }
                     } catch (OpenSearchException e) {
                         logger.error("Error while truncating index=[{}]", e, indexInfo.name);
+                    } catch (Exception e) {
+                        logger.error("Unexpected truncate fallback failure index=[{}]", e, indexInfo.name);
                     }
                 }
             }
