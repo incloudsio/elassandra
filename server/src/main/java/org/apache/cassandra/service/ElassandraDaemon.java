@@ -46,12 +46,14 @@ import org.opensearch.common.inject.spi.Message;
 import org.opensearch.common.settings.Settings;
 import org.opensearch.common.transport.BoundTransportAddress;
 import org.opensearch.env.Environment;
+import org.opensearch.http.HttpServerTransport;
 import org.opensearch.monitor.jvm.JvmInfo;
 import org.opensearch.monitor.process.ProcessProbe;
 import org.opensearch.node.Node;
 import org.opensearch.node.NodeValidationException;
 import org.opensearch.plugins.ClusterPlugin;
 import org.opensearch.plugins.Plugin;
+import org.opensearch.transport.TransportService;
 
 import java.io.File;
 import java.io.IOException;
@@ -88,6 +90,10 @@ import static com.google.common.collect.Sets.newHashSet;
  */
 public class ElassandraDaemon extends CassandraDaemon {
     private static final Logger logger = LogManager.getLogger(ElassandraDaemon.class);
+    private static final String HTTP_BIND_TIMEOUT_PROPERTY = "elassandra.http.bind_timeout_ms";
+    private static final String HTTP_BIND_FAILFAST_PROPERTY = "elassandra.http.bind_failfast";
+    private static final long DEFAULT_HTTP_BIND_TIMEOUT_MILLIS = TimeUnit.MINUTES.toMillis(2);
+    private static final long HTTP_BIND_POLL_INTERVAL_MILLIS = 1000L;
 
     private static volatile Thread keepAliveThread;
     private static volatile CountDownLatch keepAliveLatch;
@@ -221,6 +227,7 @@ public class ElassandraDaemon extends CassandraDaemon {
                 // If start() runs first, ringReady()'s second activate() is a lifecycle no-op and the barrier never clears.
                 this.node.activate();
                 this.node.start();
+                ensureHttpBound("initial startup");
             } catch (NodeValidationException e) {
                 throw new RuntimeException(e);
             }
@@ -355,8 +362,51 @@ public class ElassandraDaemon extends CassandraDaemon {
                 throw new RuntimeException(e);
             }
             node.injector().getInstance(ClusterService.class).blockUntilShardsStarted();
+            ensureHttpBound("shard activation");
             logger.info("Elasticsearch shards started, ready to go on.");
         }
+    }
+
+    private void ensureHttpBound(String phase)
+    {
+        if (node == null)
+            return;
+
+        if (Boolean.parseBoolean(node.settings().get("http.enabled", "true")) == false)
+            return;
+
+        final long timeoutMillis = Long.getLong(HTTP_BIND_TIMEOUT_PROPERTY, DEFAULT_HTTP_BIND_TIMEOUT_MILLIS);
+        final long deadlineNanos = System.nanoTime() + TimeUnit.MILLISECONDS.toNanos(timeoutMillis);
+        final HttpServerTransport httpTransport = node.injector().getInstance(HttpServerTransport.class);
+        BoundTransportAddress httpBoundAddress = null;
+
+        while (System.nanoTime() < deadlineNanos)
+        {
+            httpBoundAddress = httpTransport.boundAddress();
+            if (httpBoundAddress != null && httpBoundAddress.boundAddresses() != null && httpBoundAddress.boundAddresses().length > 0)
+            {
+                logger.info("Elasticsearch HTTP transport bound {} during {}", httpBoundAddress, phase);
+                return;
+            }
+            Uninterruptibles.sleepUninterruptibly(HTTP_BIND_POLL_INTERVAL_MILLIS, TimeUnit.MILLISECONDS);
+        }
+
+        final String message = String.format(
+            Locale.ROOT,
+            "Elasticsearch HTTP transport did not bind within %dms during %s; transport=%s, http=%s. "
+                + "Set -D%s=false to disable fail-fast or -D%s=<ms> to tune timeout.",
+            timeoutMillis,
+            phase,
+            node.injector().getInstance(TransportService.class).boundAddress(),
+            httpBoundAddress,
+            HTTP_BIND_FAILFAST_PROPERTY,
+            HTTP_BIND_TIMEOUT_PROPERTY
+        );
+
+        if (Boolean.parseBoolean(System.getProperty(HTTP_BIND_FAILFAST_PROPERTY, "true")))
+            throw new IllegalStateException(message);
+
+        logger.error(message);
     }
 
     /**
