@@ -837,11 +837,17 @@ public class MapperService extends AbstractIndexComponent implements Closeable {
     }
 
     public void buildNativeOrUdtMapping(Map<String, Object> mapping, final AbstractType<?> type) throws IOException {
+        buildNativeOrUdtMapping(mapping, type, true);
+    }
+
+    private void buildNativeOrUdtMapping(Map<String, Object> mapping, final AbstractType<?> type, boolean overwriteType) throws IOException {
         CQL3Type cql3type = type.asCQL3Type();
         if (cql3type instanceof CQL3Type.Native) {
             String esType = SchemaManager.cqlMapping.get(cql3type.toString());
             if (esType != null) {
-                mapping.put("type", esType);
+                if (overwriteType || mapping.containsKey("type") == false) {
+                    mapping.put("type", esType);
+                }
             } else {
                 logger.error("CQL type " + cql3type.toString() + " not supported");
                 throw new IOException("CQL type " + cql3type.toString() + " not supported");
@@ -854,7 +860,7 @@ public class MapperService extends AbstractIndexComponent implements Closeable {
             Map<String, Object> properties = Maps.newHashMap();
             for (int i = 0; i < userType.size(); i++) {
                 Map<String, Object> fieldProps = Maps.newHashMap();
-                buildCollectionMapping(fieldProps, userType.type(i));
+                buildCollectionMapping(fieldProps, userType.type(i), overwriteType);
                 properties.put(userType.fieldNameAsString(i), fieldProps);
             }
             mapping.put("properties", properties);
@@ -862,13 +868,17 @@ public class MapperService extends AbstractIndexComponent implements Closeable {
     }
 
     private void buildCollectionMapping(Map<String, Object> mapping, final AbstractType<?> type) throws IOException {
+        buildCollectionMapping(mapping, type, true);
+    }
+
+    private void buildCollectionMapping(Map<String, Object> mapping, final AbstractType<?> type, boolean overwriteType) throws IOException {
         if (type.isCollection()) {
             if (type instanceof ListType) {
                 mapping.put(TypeParsers.CQL_COLLECTION, "list");
-                buildNativeOrUdtMapping(mapping, ((ListType<?>) type).getElementsType());
+                buildNativeOrUdtMapping(mapping, ((ListType<?>) type).getElementsType(), overwriteType);
             } else if (type instanceof SetType) {
                 mapping.put(TypeParsers.CQL_COLLECTION, "set");
-                buildNativeOrUdtMapping(mapping, ((SetType<?>) type).getElementsType());
+                buildNativeOrUdtMapping(mapping, ((SetType<?>) type).getElementsType(), overwriteType);
             } else if (type instanceof MapType) {
                 MapType<?, ?> mtype = (MapType<?, ?>) type;
                 if (mtype.getKeysType().asCQL3Type() == CQL3Type.Native.TEXT && (mtype.getValuesType().isUDT() || !mtype.getValuesType().isCollection())) {
@@ -879,7 +889,7 @@ public class MapperService extends AbstractIndexComponent implements Closeable {
 
                     Map<String, Object> properties = Maps.newHashMap();
                     Map<String, Object> fieldProps = Maps.newHashMap();
-                    buildCollectionMapping(fieldProps, mtype.getValuesType());
+                    buildCollectionMapping(fieldProps, mtype.getValuesType(), overwriteType);
                     properties.put("_key", fieldProps);
                     mapping.put("properties", properties);
                 } else {
@@ -888,7 +898,7 @@ public class MapperService extends AbstractIndexComponent implements Closeable {
             }
         } else {
             mapping.put(TypeParsers.CQL_COLLECTION, "singleton");
-            buildNativeOrUdtMapping(mapping, type);
+            buildNativeOrUdtMapping(mapping, type, overwriteType);
         }
     }
 
@@ -950,7 +960,8 @@ public class MapperService extends AbstractIndexComponent implements Closeable {
                         }
                         CQL3Type.Raw rawType = CQLFragmentParser.parseAny(CqlParser::comparatorType, row.getString("type"), "CQL type");
                         AbstractType<?> atype = rawType.prepare(ksm.name, ksm.types).getType();
-                        buildCollectionMapping(props, atype);
+                        // Preserve explicit field mapping overrides when discover is enabled.
+                        buildCollectionMapping(props, atype, false);
                     }
                 }
                 if (logger.isDebugEnabled()) {
