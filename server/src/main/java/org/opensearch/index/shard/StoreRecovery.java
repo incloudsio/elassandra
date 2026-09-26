@@ -496,7 +496,23 @@ final class StoreRecovery {
                 writeEmptyRetentionLeasesFile(indexShard);
                 indexShard.recoveryState().getIndex().setFileDetailsComplete();
             }
-            indexShard.openEngineAndRecoverFromTranslog();
+            try {
+                indexShard.openEngineAndRecoverFromTranslog();
+            } catch (EngineException e) {
+                if (ExceptionsHelper.unwrap(e, org.opensearch.index.translog.TranslogCorruptedException.class) == null) {
+                    throw e;
+                }
+                logger.warn(
+                    () -> new org.apache.logging.log4j.message.ParameterizedMessage(
+                        "{} translog corrupted, recreating empty translog and retrying recovery",
+                        shardId
+                    ),
+                    e
+                );
+                bootstrap(indexShard, store);
+                writeEmptyRetentionLeasesFile(indexShard);
+                indexShard.openEngineAndRecoverFromTranslog();
+            }
             indexShard.getEngine().fillSeqNoGaps(indexShard.getPendingPrimaryTerm());
             indexShard.finalizeRecovery();
             indexShard.postRecovery("post recovery from shard_store");

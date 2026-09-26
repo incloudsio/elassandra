@@ -116,6 +116,9 @@ public static final String SETTING_CLUSTER_SEARCH_STRATEGY_CLASS = "cluster.sear
 
     private volatile CassandraDiscovery cassandraDiscovery;
 
+    private final java.util.concurrent.ConcurrentHashMap<String, org.elassandra.cluster.routing.PrimaryFirstSearchStrategy.PrimaryFirstRouter> routers =
+        new java.util.concurrent.ConcurrentHashMap<>();
+
     private final SchemaManager schemaManager;
     private final QueryManager queryManager;
 
@@ -740,10 +743,50 @@ public static final String SETTING_CLUSTER_SEARCH_STRATEGY_CLASS = "cluster.sear
         return metaDataBuilder.put(indexBuilder);
     }
 
-    /** Apply CQL table extensions to metadata (fork parity; side-car no-op merge). */
+    /** Apply CQL table extensions to metadata so indices survive a restart without schema ALTER events. */
     public org.opensearch.cluster.metadata.Metadata.Builder mergeWithTableExtensions(
         org.opensearch.cluster.metadata.Metadata.Builder metaDataBuilder
     ) {
+        for (String ksName : Schema.instance.getKeyspaces()) {
+            KeyspaceMetadata ksm = Schema.instance.getKeyspaceMetadata(ksName);
+            if (ksm == null) {
+                continue;
+            }
+            for (org.apache.cassandra.schema.TableMetadata cfm : ksm.tablesAndViews()) {
+                if (cfm.params == null || cfm.params.extensions == null || cfm.params.extensions.isEmpty()) {
+                    continue;
+                }
+                if (!cfm.indexes.has(org.elassandra.cluster.SchemaManager.buildIndexName(cfm.name))) {
+                    continue;
+                }
+                for (java.util.Map.Entry<String, java.nio.ByteBuffer> e : cfm.params.extensions.entrySet()) {
+                    if (!isValidExtensionKey(e.getKey())) {
+                        continue;
+                    }
+                    try {
+                        org.opensearch.cluster.metadata.IndexMetadata imd = getIndexMetaDataFromExtension(e.getValue());
+                        // Elassandra token routing only emits the primary; OpenSearch replica slots
+                        // make AllocationService.applyStartedShards fail validation (expected 1, got 0).
+                        if (imd.getNumberOfReplicas() != 0) {
+                            imd = org.opensearch.cluster.metadata.IndexMetadata.builder(imd).numberOfReplicas(0).build();
+                        }
+                        mergeIndexMetaData(
+                            metaDataBuilder,
+                            imd.getIndex().getName(),
+                            java.util.Collections.singletonList(imd)
+                        );
+                    } catch (Exception ex) {
+                        org.apache.logging.log4j.LogManager.getLogger(ClusterService.class).warn(
+                            "failed to deserialize index metadata extension [{}] on {}.{}",
+                            e.getKey(),
+                            ksName,
+                            cfm.name,
+                            ex
+                        );
+                    }
+                }
+            }
+        }
         return metaDataBuilder;
     }
 
@@ -824,20 +867,64 @@ public static final String SETTING_CLUSTER_SEARCH_STRATEGY_CLASS = "cluster.sear
     public void publishX1() {
     }
 
-    /** Elassandra: search routing refresh (side-car stub). */
+    /** Rebuild per-index token routing after ring or mapping changes. */
     public org.elassandra.cluster.routing.PrimaryFirstSearchStrategy.PrimaryFirstRouter updateRouter(
         org.opensearch.cluster.metadata.IndexMetadata indexMetadata,
         org.opensearch.cluster.ClusterState state
     ) {
-        return null;
+        org.elassandra.cluster.routing.PrimaryFirstSearchStrategy.PrimaryFirstRouter router =
+            (org.elassandra.cluster.routing.PrimaryFirstSearchStrategy.PrimaryFirstRouter) new org.elassandra.cluster.routing.PrimaryFirstSearchStrategy()
+                .newRouter(
+                    indexMetadata.getIndex(),
+                    indexMetadata.keyspace(),
+                    (index, nodeUuid) -> localShardState(state, index, nodeUuid),
+                    state
+                );
+        routers.put(indexMetadata.getIndex().getName(), router);
+        return router;
     }
 
-    /** Elassandra: current search strategy router (side-car stub). */
+    /** Current search strategy router (creates one if missing). */
     public org.elassandra.cluster.routing.AbstractSearchStrategy.Router getRouter(
         org.opensearch.cluster.metadata.IndexMetadata indexMetadata,
         org.opensearch.cluster.ClusterState state
     ) {
-        return null;
+        org.elassandra.cluster.routing.PrimaryFirstSearchStrategy.PrimaryFirstRouter cached = routers.get(indexMetadata.getIndex().getName());
+        if (cached != null) {
+            return cached;
+        }
+        return updateRouter(indexMetadata, state);
+    }
+
+    private org.opensearch.cluster.routing.ShardRoutingState localShardState(
+        org.opensearch.cluster.ClusterState state,
+        org.opensearch.index.Index index,
+        java.util.UUID nodeUuid
+    ) {
+        DiscoveryNode local = state.nodes().getLocalNode();
+        boolean localOrSingle =
+            (local != null && (local.uuid().equals(nodeUuid) || nodeUuid.toString().equals(local.getId())))
+                || state.nodes().getSize() <= 1;
+        if (localOrSingle == false) {
+            return org.opensearch.cluster.routing.ShardRoutingState.UNASSIGNED;
+        }
+        // STARTED in cluster routing without a local IndexShard makes IndicesClusterStateService skip
+        // createShard() and then fail the allocation. Until the shard exists, stay INITIALIZING.
+        if (indicesService != null) {
+            org.opensearch.index.IndexService indexService = indicesService.indexService(index);
+            if (indexService != null) {
+                org.opensearch.index.shard.IndexShard shard = indexService.getShardOrNull(0);
+                if (shard != null) {
+                    if (shard.state() == org.opensearch.index.shard.IndexShardState.STARTED) {
+                        return org.opensearch.cluster.routing.ShardRoutingState.STARTED;
+                    }
+                    if (shard.routingEntry() != null) {
+                        return shard.routingEntry().state();
+                    }
+                }
+            }
+        }
+        return org.opensearch.cluster.routing.ShardRoutingState.INITIALIZING;
     }
 
     private org.apache.cassandra.cql3.UntypedResultSet processWithQueryHandler(

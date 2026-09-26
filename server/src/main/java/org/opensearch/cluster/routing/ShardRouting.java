@@ -927,7 +927,7 @@ public final class ShardRouting implements Writeable, ToXContentObject {
             (!primary)
                 ? PeerRecoverySource.INSTANCE
                 : ((state == ShardRoutingState.UNASSIGNED || state == ShardRoutingState.INITIALIZING)
-                    ? RecoverySource.LocalShardsRecoverySource.INSTANCE
+                    ? RecoverySource.ExistingStoreRecoverySource.INSTANCE
                     : null);
         UnassignedInfo ui =
             (state == ShardRoutingState.UNASSIGNED || state == ShardRoutingState.INITIALIZING) ? unassignedInfo : null;

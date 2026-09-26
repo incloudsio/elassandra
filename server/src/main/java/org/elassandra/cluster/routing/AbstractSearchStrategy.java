@@ -157,7 +157,10 @@ public abstract class AbstractSearchStrategy {
                     InetAddressAndPort endpoint = replica.endpoint();
                     UUID uuid = StorageService.instance.getHostIdForEndpoint(endpoint);
                     assert uuid != null : "host_id not found for endpoint "+endpoint;
-                    DiscoveryNode node =  (localNode.uuid().equals(uuid)) ? localNode : clusterState.nodes().get(uuid.toString());
+                    DiscoveryNode node =  (localNode.uuid().equals(uuid) || uuid.toString().equals(localNode.getId())) ? localNode : clusterState.nodes().get(uuid.toString());
+                    if (node == null && clusterState.nodes().getSize() <= 1) {
+                        node = localNode;
+                    }
                     if (node != null && clusterState.nodes().nodeExists(node)) {
                         ShardRoutingState state = shardsFunc.apply(this.index, node.uuid());
                         if (ShardRoutingState.STARTED.equals(state) || ShardRoutingState.INITIALIZING.equals(state)) {

@@ -39,6 +39,12 @@ import org.opensearch.bootstrap.BootstrapCheck;
 
 import org.opensearch.bootstrap.BootstrapContext;
 import org.opensearch.client.Client;
+import org.opensearch.cluster.ClusterState;
+import org.opensearch.cluster.ClusterStateUpdateTask;
+import org.opensearch.cluster.block.ClusterBlocks;
+import org.opensearch.cluster.metadata.IndexMetadata;
+import org.opensearch.cluster.metadata.Metadata;
+import org.opensearch.cluster.routing.RoutingTable;
 import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.inject.CreationException;
 import org.opensearch.common.inject.Injector;
@@ -228,6 +234,7 @@ public class ElassandraDaemon extends CassandraDaemon {
                 this.node.activate();
                 this.node.start();
                 ensureHttpBound("initial startup");
+                loadCqlIndexExtensions();
             } catch (NodeValidationException e) {
                 throw new RuntimeException(e);
             }
@@ -365,6 +372,36 @@ public class ElassandraDaemon extends CassandraDaemon {
             ensureHttpBound("shard activation");
             logger.info("Elasticsearch shards started, ready to go on.");
         }
+    }
+
+    /**
+     * Restore OpenSearch index metadata from CQL table extensions after HTTP is bound.
+     * Doing this during ringReady/gateway recovery deadlocks shard-start behind native transport.
+     */
+    private void loadCqlIndexExtensions() {
+        if (node == null) {
+            return;
+        }
+        final ClusterService clusterService = node.injector().getInstance(ClusterService.class);
+        clusterService.submitStateUpdateTask("load-cql-index-extensions", new ClusterStateUpdateTask() {
+            @Override
+            public ClusterState execute(ClusterState currentState) {
+                Metadata.Builder builder = Metadata.builder(currentState.metadata());
+                clusterService.mergeWithTableExtensions(builder);
+                Metadata merged = builder.build();
+                ClusterBlocks.Builder blocks = ClusterBlocks.builder().blocks(currentState.blocks());
+                for (IndexMetadata indexMetadata : merged) {
+                    blocks.addBlocks(indexMetadata);
+                }
+                ClusterState updated = ClusterState.builder(currentState).metadata(merged).blocks(blocks).build();
+                return ClusterState.builder(updated).routingTable(RoutingTable.build(clusterService, updated)).build();
+            }
+
+            @Override
+            public void onFailure(String source, Exception e) {
+                logger.error("Failed to load OpenSearch mappings from CQL table extensions", e);
+            }
+        });
     }
 
     private void ensureHttpBound(String phase)
