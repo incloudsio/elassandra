@@ -228,8 +228,10 @@ public class ElasticSecondaryIndex implements Index {
     public final static ByteBuffer ES_QUERY_BYTE_BUFFER = ByteBufferUtil.bytes(ES_QUERY);
     public final static String ES_OPTIONS = "es_options";
     public final static ByteBuffer ES_OPTIONS_BYTE_BUFFER = ByteBufferUtil.bytes(ES_OPTIONS);
-    public static final String ESI_TTL_FIELD = "esi_ttl";
-    public static final String ESI_GEN_FIELD = "esi_gen";
+    // Underscore prefix: nested Lucene docs only accept meta fields or the nested path prefix
+    // (`files._key.`). Plain `esi_gen` trips ParseContext.Document.add under -ea and drops the write.
+    public static final String ESI_TTL_FIELD = "_esi_ttl";
+    public static final String ESI_GEN_FIELD = "_esi_gen";
     static final String TRUNCATE_PENDING_MARKER = "truncate.pending";
     static volatile Runnable indexParsedDocumentFailureHook;
     static volatile Runnable truncateTaskFailureHook;
