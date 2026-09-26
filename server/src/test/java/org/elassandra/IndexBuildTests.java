@@ -100,11 +100,11 @@ public class IndexBuildTests extends OpenSearchSingleNodeTestCase {
         UntypedResultSet rs = process(ConsistencyLevel.ONE,"select count(*) from " + index + ".t1");
         StorageService.instance.forceKeyspaceFlush(index,"t1");
 
-        // open index
+        // open index — recovery replay indexes partitions written while closed
         openIndex(index);
         ensureGreen(index);
 
-        assertSearchHitCount(index, N);
+        assertSearchHitCount(index, 2 * N);
 
         // rebuild_index
         StorageService.instance.rebuildSecondaryIndex(numThread, index, "t1", "elastic_t1_idx");

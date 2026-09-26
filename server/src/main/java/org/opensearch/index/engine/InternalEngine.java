@@ -54,6 +54,7 @@ import org.apache.lucene.search.BooleanQuery;
 import org.apache.lucene.search.DocIdSetIterator;
 import org.apache.lucene.search.DocValuesFieldExistsQuery;
 import org.apache.lucene.search.IndexSearcher;
+import org.apache.lucene.search.MatchAllDocsQuery;
 import org.apache.lucene.search.Query;
 import org.apache.lucene.search.ReferenceManager;
 import org.apache.lucene.search.ScoreMode;
@@ -531,25 +532,34 @@ public class InternalEngine extends Engine {
     }
 
     private void recoverFromTranslogInternal(TranslogRecoveryRunner translogRecoveryRunner, long recoverUpToSeqNo) throws IOException {
-        final int opsRecovered;
+        int opsRecovered = 0;
         final long localCheckpoint = getProcessedLocalCheckpoint();
         if (localCheckpoint < recoverUpToSeqNo) {
             try (Translog.Snapshot snapshot = translog.newSnapshot(localCheckpoint + 1, recoverUpToSeqNo)) {
                 opsRecovered = translogRecoveryRunner.run(this, snapshot);
             } catch (Exception e) {
-                throw new EngineException(shardId, "failed to recover from translog", e);
+                if (ExceptionsHelper.unwrap(e, TranslogCorruptedException.class) == null) {
+                    throw new EngineException(shardId, "failed to recover from translog", e);
+                }
+                // Cassandra is source of truth; a torn translog after SIGKILL must not fail Lucene recovery.
+                logger.warn(
+                    () -> new ParameterizedMessage(
+                        "translog replay failed for {}; skipping remaining translog and using last Lucene commit",
+                        shardId
+                    ),
+                    e
+                );
             }
-        } else {
-            opsRecovered = 0;
         }
         // flush if we recovered something or if we have references to older translogs
         // note: if opsRecovered == 0 and we have older translogs it means they are corrupted or 0 length.
         assert pendingTranslogRecovery.get() : "translogRecovery is not pending but should be";
         pendingTranslogRecovery.set(false); // we are good - now we can commit
+        final int recoveredOps = opsRecovered;
         logger.trace(
             () -> new ParameterizedMessage(
                 "flushing post recovery from translog: ops recovered [{}], current translog generation [{}]",
-                opsRecovered,
+                recoveredOps,
                 translog.currentFileGeneration()
             )
         );
@@ -1528,6 +1538,24 @@ public class InternalEngine extends Engine {
         }
         maybePruneDeletes();
         return deleteResult;
+    }
+
+    @Override
+    public void delete(DeleteByQuery delete) throws EngineException {
+        try (ReleasableLock ignored = writeLock.acquire()) {
+            ensureOpen();
+            lastWriteNanos = System.nanoTime();
+            Query query = delete.query();
+            if (query == null) {
+                query = new MatchAllDocsQuery();
+            }
+            indexWriter.deleteDocuments(query);
+        } catch (EngineException e) {
+            throw e;
+        } catch (Exception e) {
+            maybeFailEngine("delete_by_query", e);
+            throw new EngineException(shardId, "delete by query failed", e);
+        }
     }
 
     private Exception tryAcquireInFlightDocs(Operation operation, int addingDocs) {

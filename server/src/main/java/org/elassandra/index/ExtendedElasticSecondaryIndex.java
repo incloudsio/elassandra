@@ -93,6 +93,16 @@ public class ExtendedElasticSecondaryIndex implements Index {
     }
 
     @Override
+    public Index.IndexBuildingSupport getBuildTaskSupport() {
+        return elasticSecondaryIndex.getBuildTaskSupport();
+    }
+
+    @Override
+    public Index.IndexBuildingSupport getRecoveryTaskSupport() {
+        return elasticSecondaryIndex.getRecoveryTaskSupport();
+    }
+
+    @Override
     public org.apache.cassandra.schema.IndexMetadata getIndexMetadata() {
         return this.indexDef;
     }

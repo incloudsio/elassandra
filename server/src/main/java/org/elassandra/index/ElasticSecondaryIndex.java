@@ -31,6 +31,7 @@ import org.apache.cassandra.cql3.Operator;
 import org.apache.cassandra.cql3.statements.schema.IndexTarget;
 import org.apache.cassandra.db.Clustering;
 import org.apache.cassandra.db.ClusteringBound;
+import org.apache.cassandra.concurrent.ScheduledExecutors;
 import org.apache.cassandra.db.ColumnFamilyStore;
 import org.apache.cassandra.db.DecoratedKey;
 import org.apache.cassandra.db.DeletionTime;
@@ -67,13 +68,16 @@ import org.apache.cassandra.db.rows.UnfilteredRowIterators;
 import org.apache.cassandra.exceptions.InvalidRequestException;
 import org.apache.cassandra.index.Index;
 import org.apache.cassandra.index.IndexRegistry;
+import org.apache.cassandra.index.internal.CollatedViewIndexBuilder;
 import org.apache.cassandra.index.transactions.IndexTransaction;
 import org.apache.cassandra.index.transactions.IndexTransaction.Type;
+import org.apache.cassandra.io.sstable.ReducingKeyIterator;
 import org.apache.cassandra.io.util.FileUtils;
 import org.apache.cassandra.serializers.SimpleDateSerializer;
 import org.apache.cassandra.service.ElassandraDaemon;
 import org.apache.cassandra.service.StorageService;
 import org.apache.cassandra.utils.ByteBufferUtil;
+import org.apache.cassandra.utils.FBUtilities;
 import org.apache.cassandra.utils.Pair;
 import org.apache.cassandra.utils.UUIDGen;
 import org.apache.cassandra.db.WriteContext;
@@ -83,6 +87,7 @@ import org.apache.logging.log4j.Logger;
 import org.apache.logging.log4j.message.ParameterizedMessage;
 import org.apache.logging.log4j.util.Supplier;
 import org.apache.lucene.document.Field;
+import org.apache.lucene.document.IntPoint;
 import org.apache.lucene.document.LongPoint;
 import org.apache.lucene.document.NumericDocValuesField;
 import org.apache.lucene.document.SortedNumericDocValuesField;
@@ -94,6 +99,7 @@ import org.apache.lucene.index.ReaderUtil;
 import org.apache.lucene.index.Term;
 import org.apache.lucene.search.BooleanClause.Occur;
 import org.apache.lucene.search.BooleanQuery;
+import org.apache.lucene.search.DocValuesFieldExistsQuery;
 import org.apache.lucene.search.IndexOrDocValuesQuery;
 import org.apache.lucene.search.IndexSearcher;
 import org.apache.lucene.search.MatchAllDocsQuery;
@@ -149,6 +155,7 @@ import org.opensearch.index.engine.EngineException;
 import org.opensearch.index.mapper.*;
 import org.opensearch.index.mapper.CqlMapper.CqlStruct;
 import org.opensearch.index.mapper.ParseContext.Document;
+import org.opensearch.index.query.QueryBuilder;
 import org.opensearch.index.query.QueryBuilders;
 import org.opensearch.index.reindex.BulkByScrollResponse;
 import org.opensearch.index.reindex.DeleteByQueryAction;
@@ -163,10 +170,12 @@ import java.io.File;
 import java.io.IOException;
 import java.net.InetAddress;
 import java.nio.ByteBuffer;
+import java.nio.channels.FileChannel;
 import java.nio.file.DirectoryIteratorException;
 import java.nio.file.DirectoryStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.StandardOpenOption;
 import java.nio.file.attribute.FileAttribute;
 import java.nio.file.attribute.PosixFilePermission;
 import java.nio.file.attribute.PosixFilePermissions;
@@ -192,7 +201,9 @@ import java.util.Set;
 import java.util.TreeMap;
 import java.util.UUID;
 import java.util.concurrent.Callable;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.concurrent.locks.ReadWriteLock;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
@@ -217,6 +228,12 @@ public class ElasticSecondaryIndex implements Index {
     public final static ByteBuffer ES_QUERY_BYTE_BUFFER = ByteBufferUtil.bytes(ES_QUERY);
     public final static String ES_OPTIONS = "es_options";
     public final static ByteBuffer ES_OPTIONS_BYTE_BUFFER = ByteBufferUtil.bytes(ES_OPTIONS);
+    public static final String ESI_TTL_FIELD = "esi_ttl";
+    public static final String ESI_GEN_FIELD = "esi_gen";
+    static final String TRUNCATE_PENDING_MARKER = "truncate.pending";
+    static volatile Runnable indexParsedDocumentFailureHook;
+    static volatile Runnable truncateTaskFailureHook;
+    private static final AtomicBoolean recoverySchedulerStarted = new AtomicBoolean();
 
     private final static Field DEFAULT_INTERNAL_VERSION = new NumericDocValuesField(VersionFieldMapper.NAME, -1L);
     private final static Field DEFAULT_EXTERNAL_VERSION = new NumericDocValuesField(VersionFieldMapper.NAME, 1L);
@@ -241,6 +258,28 @@ public class ElasticSecondaryIndex implements Index {
     protected Object[] readBeforeWriteLocks;
     protected AtomicBoolean needBuild;
     private volatile Index registeredIndex;
+    final IndexingRecoveryLog recoveryLog;
+    private final AtomicLong rebuildGeneration = new AtomicLong(1);
+    private final ReentrantReadWriteLock rebuildGenLock = new ReentrantReadWriteLock();
+    private final Index.IndexBuildingSupport buildTaskSupport = (threads, cfs, indexes, sstables) -> {
+        long gen = beginFullRebuild();
+        return new CollatedViewIndexBuilder(threads, cfs, indexes, new ReducingKeyIterator(sstables), sstables) {
+            @Override
+            public void build() {
+                try {
+                    StorageService.instance.forceKeyspaceFlush(baseCfs.keyspace.getName(), baseCfs.metadata.get().name);
+                } catch (Exception e) {
+                    logger.warn("flush before full rebuild failed for {}", index_name, e);
+                }
+                try (ColumnFamilyStore.RefViewFragment viewFragment = baseCfs.selectAndReference(View.selectFunction(SSTableSet.CANONICAL));
+                     CollatedViewIndexBuilder inner = new CollatedViewIndexBuilder(
+                         threads, cfs, indexes, new ReducingKeyIterator(viewFragment.sstables), viewFragment.sstables)) {
+                    inner.build();
+                }
+                sweepStaleDocuments(gen);
+            }
+        };
+    };
 
     ElasticSecondaryIndex(ColumnFamilyStore baseCfs, org.apache.cassandra.schema.IndexMetadata indexDef) {
         this.baseCfs = baseCfs;
@@ -258,10 +297,309 @@ public class ElasticSecondaryIndex implements Index {
         this.mappingInfoRef = new AtomicReference<>( state != null ? new ImmutableMappingInfo(state) : null);
         this.needBuild = new AtomicBoolean(!isBuilt());
         this.registeredIndex = this;
+        this.recoveryLog = new IndexingRecoveryLog(baseCfs);
+        startRecoveryScheduler();
     }
 
     void setRegisteredIndex(Index registeredIndex) {
         this.registeredIndex = registeredIndex;
+    }
+
+    @Override
+    public Index.IndexBuildingSupport getBuildTaskSupport() {
+        return buildTaskSupport;
+    }
+
+    @Override
+    public Index.IndexBuildingSupport getRecoveryTaskSupport() {
+        return INDEX_BUILDER_SUPPORT;
+    }
+
+    static void startRecoveryScheduler() {
+        if (recoverySchedulerStarted.compareAndSet(false, true)) {
+            ScheduledExecutors.optionalTasks.scheduleWithFixedDelay(
+                ElasticSecondaryIndex::replayAllPending,
+                30,
+                30,
+                TimeUnit.SECONDS
+            );
+        }
+    }
+
+    static void replayAllPending() {
+        for (ElasticSecondaryIndex esi : elasticSecondayIndices.values()) {
+            try {
+                esi.replayPending();
+            } catch (Exception e) {
+                esi.logger.error("periodic indexing recovery replay failed", e);
+            }
+        }
+    }
+
+    long beginFullRebuild() {
+        rebuildGenLock.writeLock().lock();
+        try {
+            return rebuildGeneration.incrementAndGet();
+        } finally {
+            rebuildGenLock.writeLock().unlock();
+        }
+    }
+
+    boolean hasRecoveryRecord(ByteBuffer key) {
+        return recoveryLog.contains(key);
+    }
+
+    int recoveryRecordCount() {
+        return recoveryLog.size();
+    }
+
+    void replayPending() {
+        if (!isIndexing()) {
+            return;
+        }
+        List<DecoratedKey> keys = recoveryLog.keys();
+        for (DecoratedKey key : keys) {
+            try {
+                replayPartition(key);
+            } catch (Exception e) {
+                logger.error("failed to replay indexing recovery for {}", key, e);
+            }
+        }
+        if (!keys.isEmpty()) {
+            flushSearchShardsAndAck(true);
+        }
+    }
+
+    private boolean flushSearchShardsAndAck(boolean forceLuceneFlush) {
+        java.util.Map<String, Long> snapshot = recoveryLog.snapshot();
+        ImmutableMappingInfo mappingInfo = mappingInfoRef.get();
+        if (mappingInfo == null || mappingInfo.indices == null) {
+            return false;
+        }
+        boolean flushed = false;
+        boolean flushFailed = false;
+        boolean hasPending = !snapshot.isEmpty();
+        for (ImmutableMappingInfo.ImmutableIndexInfo indexInfo : mappingInfo.indices) {
+            try {
+                IndexShard indexShard = indexInfo.indexService.getShardOrNull(0);
+                if (indexShard != null && (indexInfo.updated || hasPending || forceLuceneFlush)) {
+                    if (indexShard.state() == IndexShardState.STARTED) {
+                        long start = System.currentTimeMillis();
+                        indexInfo.updated = false;
+                        indexShard.flush(new FlushRequest().force(forceLuceneFlush || hasPending).waitIfOngoing(true));
+                        flushed = true;
+                        if (logger.isInfoEnabled()) {
+                            logger.info("Elasticsearch index=[{}] type=[{}] flushed, duration={}ms", indexInfo.name, indexInfo.type, System.currentTimeMillis() - start);
+                        }
+                    } else if (logger.isDebugEnabled()) {
+                        logger.debug("Cannot flush index=[{}], state=[{}]", indexInfo.name, indexShard.state());
+                    }
+                }
+            } catch (OpenSearchException e) {
+                logger.error("Error while flushing index=[{}]", e, indexInfo.name);
+                flushFailed = true;
+            } catch (org.apache.lucene.store.AlreadyClosedException e2) {
+                logger.warn("index=[{}] was already closed", indexInfo.name);
+                flushFailed = true;
+            }
+        }
+        if (flushed && !flushFailed && hasPending) {
+            recoveryLog.ack(snapshot);
+            return true;
+        }
+        return flushed && !flushFailed;
+    }
+
+    private void replayPartition(DecoratedKey key) {
+        int pageSize = Math.max(1, baseCfs.indexManager.calculateIndexingPageSize());
+        baseCfs.indexManager.indexPartition(key, Collections.singleton(registeredIndex), pageSize);
+        recoveryLog.indexed(key);
+        if (!hasLivePartitionData(key)) {
+            deleteSearchDocsForPartition(key);
+        }
+    }
+
+    private boolean hasLivePartitionData(DecoratedKey key) {
+        int nowInSec = FBUtilities.nowInSeconds();
+        SinglePartitionReadCommand command = SinglePartitionReadCommand.fullPartitionRead(baseCfs.metadata.get(), nowInSec, key);
+        try (ReadExecutionController control = command.executionController()) {
+            UnfilteredRowIterator unfilteredRows = command.queryMemtableAndDisk(baseCfs, control);
+            RowIterator rows = UnfilteredRowIterators.filter(unfilteredRows, nowInSec);
+            if (!rows.staticRow().isEmpty() && rows.staticRow().hasLiveData(nowInSec, baseCfs.metadata.get().enforceStrictLiveness())) {
+                return true;
+            }
+            while (rows.hasNext()) {
+                if (rows.next().hasLiveData(nowInSec, baseCfs.metadata.get().enforceStrictLiveness())) {
+                    return true;
+                }
+            }
+            return false;
+        }
+    }
+
+    private void deleteSearchDocsForPartition(DecoratedKey key) {
+        try (WriteContext ctx = baseCfs.keyspace.getWriteHandler().createContextForIndexing()) {
+            Indexer indexer = indexerFor(key, RegularAndStaticColumns.NONE, FBUtilities.nowInSeconds(), ctx, Type.UPDATE);
+            if (indexer instanceof ImmutableMappingInfo.RowcumentIndexer) {
+                ((ImmutableMappingInfo.RowcumentIndexer) indexer).deletePartition();
+            }
+        } catch (Exception e) {
+            logger.error("failed to delete search documents for recovered empty partition {}", key, e);
+        }
+    }
+
+    void recoverPendingTruncate() {
+        ImmutableMappingInfo mappingInfo = mappingInfoRef.get();
+        if (mappingInfo == null || mappingInfo.indices == null) {
+            return;
+        }
+        for (ImmutableMappingInfo.ImmutableIndexInfo indexInfo : mappingInfo.indices) {
+            IndexShard indexShard = indexInfo.indexService.getShardOrNull(0);
+            if (indexShard != null && Files.exists(truncatePendingPath(indexShard))) {
+                wipeSearchIndex(indexInfo, indexShard, false);
+            }
+        }
+    }
+
+    private Path truncatePendingPath(IndexShard indexShard) {
+        return indexShard.shardPath().getDataPath().resolve(TRUNCATE_PENDING_MARKER);
+    }
+
+    private void markTruncatePending(IndexShard indexShard) throws IOException {
+        Path marker = truncatePendingPath(indexShard);
+        Files.createDirectories(marker.getParent());
+        try (FileChannel channel = FileChannel.open(marker, StandardOpenOption.CREATE, StandardOpenOption.WRITE, StandardOpenOption.TRUNCATE_EXISTING)) {
+            channel.force(true);
+        }
+    }
+
+    private void clearTruncatePending(IndexShard indexShard) {
+        try {
+            Files.deleteIfExists(truncatePendingPath(indexShard));
+        } catch (IOException e) {
+            logger.warn("failed to clear truncate pending marker index=[{}]", indexShard.shardId().getIndexName(), e);
+        }
+    }
+
+    private void executeTransportDeleteByQuery(String indexName, String type, QueryBuilder query) {
+        Client client = ElassandraDaemon.instance.node().client();
+        DeleteByQueryRequest request = new DeleteByQueryRequest(indexName)
+            .setQuery(query)
+            .setRefresh(true);
+        request.setConflicts("proceed");
+        if (type != null && !type.isEmpty()) {
+            request.setDocTypes(type);
+        }
+        BulkByScrollResponse response = client.execute(DeleteByQueryAction.INSTANCE, request).actionGet();
+        if (!response.getBulkFailures().isEmpty() || !response.getSearchFailures().isEmpty()) {
+            logger.warn(
+                "transport delete-by-query failures index=[{}] bulkFailures={} searchFailures={}",
+                indexName,
+                response.getBulkFailures().size(),
+                response.getSearchFailures().size()
+            );
+        }
+    }
+
+    private void engineWipeMatchAll(ImmutableMappingInfo.ImmutableIndexInfo indexInfo, IndexShard indexShard) throws IOException {
+        try {
+            indexShard.refresh("truncate");
+        } catch (Exception e) {
+            logger.warn("refresh before search wipe failed index=[{}]", indexInfo.name, e);
+        }
+        DeleteByQuery deleteByQuery = mappingInfoRef.get().buildDeleteByQuery(indexInfo.indexService, Queries.newMatchAllQuery());
+        indexShard.getEngine().delete(deleteByQuery);
+        try {
+            indexShard.refresh("truncate");
+        } catch (Exception e) {
+            logger.warn("refresh after search wipe failed index=[{}]", indexInfo.name, e);
+        }
+    }
+
+    private boolean wipeSearchIndex(ImmutableMappingInfo.ImmutableIndexInfo indexInfo, IndexShard indexShard, boolean allowFailureHook) {
+        return wipeSearchIndex(indexInfo, indexShard, allowFailureHook, false);
+    }
+
+    /**
+     * Transport delete-by-query cannot run on the Cassandra truncate thread: {@code ColumnFamilyStore}
+     * holds {@code synchronized (this)} while index truncate runs, and the transport action writes
+     * Cassandra mutations that wait for that lock. Engine-level wipe happens inline; the transport
+     * fallback is scheduled so truncate can finish, then the marker is cleared.
+     */
+    private boolean wipeSearchIndex(
+        ImmutableMappingInfo.ImmutableIndexInfo indexInfo,
+        IndexShard indexShard,
+        boolean allowFailureHook,
+        boolean transportAsync
+    ) {
+        try {
+            if (!indexInfo.updated) {
+                indexInfo.updated = true;
+            }
+            if (allowFailureHook) {
+                Runnable hook = truncateTaskFailureHook;
+                if (hook != null) {
+                    hook.run();
+                }
+            }
+            engineWipeMatchAll(indexInfo, indexShard);
+            engineWipeMatchAll(indexInfo, indexShard);
+            Runnable transportWipe = () -> {
+                try {
+                    executeTransportDeleteByQuery(indexInfo.name, indexInfo.type, QueryBuilders.matchAllQuery());
+                } catch (Exception e) {
+                    logger.error("truncate transport wipe failed index=[{}]", e, indexInfo.name);
+                }
+                clearTruncatePending(indexShard);
+            };
+            if (transportAsync) {
+                clearTruncatePending(indexShard);
+                ScheduledExecutors.optionalTasks.execute(transportWipe);
+            } else {
+                transportWipe.run();
+            }
+            return true;
+        } catch (OpenSearchException e) {
+            logger.error("Error while truncating index=[{}]", e, indexInfo.name);
+            return false;
+        } catch (Exception e) {
+            logger.error("Unexpected truncate failure index=[{}]", e, indexInfo.name);
+            return false;
+        }
+    }
+
+    void sweepStaleDocuments(long gen) {
+        if (gen <= 1) {
+            return;
+        }
+        ImmutableMappingInfo mappingInfo = mappingInfoRef.get();
+        if (mappingInfo == null || mappingInfo.indices == null) {
+            return;
+        }
+        Query older = LongPoint.newRangeQuery(ESI_GEN_FIELD, Long.MIN_VALUE, gen - 1);
+        Query missingGen = new BooleanQuery.Builder()
+            .add(new MatchAllDocsQuery(), Occur.FILTER)
+            .add(new DocValuesFieldExistsQuery(ESI_GEN_FIELD), Occur.MUST_NOT)
+            .build();
+        Query stale = new BooleanQuery.Builder()
+            .add(older, Occur.SHOULD)
+            .add(missingGen, Occur.SHOULD)
+            .setMinimumNumberShouldMatch(1)
+            .build();
+        for (ImmutableMappingInfo.ImmutableIndexInfo indexInfo : mappingInfo.indices) {
+            IndexShard indexShard = indexInfo.shard();
+            if (indexShard == null) {
+                continue;
+            }
+            try {
+                indexShard.refresh("rebuild_generation_sweep");
+                DeleteByQuery deleteByQuery = mappingInfo.buildDeleteByQuery(indexInfo.indexService, stale);
+                indexShard.getEngine().delete(deleteByQuery);
+                indexShard.refresh("rebuild_generation_sweep");
+            } catch (Exception e) {
+                logger.error("generation sweep failed index=[{}]", e, indexInfo.name);
+            }
+        }
     }
 
     public static ElasticSecondaryIndex newElasticSecondaryIndex(ColumnFamilyStore baseCfs, org.apache.cassandra.schema.IndexMetadata indexDef) {
@@ -1061,7 +1399,58 @@ public class ElasticSecondaryIndex implements Index {
                         updated = true;
                     DeleteByQuery deleteByQuery = buildDeleteByQuery(ElassandraSecondaryIndexCompat.indexShardIndexService(shard), query);
                     ElassandraSecondaryIndexCompat.indexShardEngine(shard).delete(deleteByQuery);
+                    QueryBuilder queryBuilder = buildRangeTombstoneQueryBuilder(pkCols, tombstone);
+                    if (queryBuilder != null) {
+                        try {
+                            executeTransportDeleteByQuery(name, typeName, queryBuilder);
+                        } catch (Exception e) {
+                            logger.error("range tombstone transport delete-by-query failed index=[{}]", e, name);
+                        }
+                    }
                 }
+            }
+
+            private QueryBuilder buildRangeTombstoneQueryBuilder(final Object pkCols[], RangeTombstone tombstone) {
+                Slice slice = tombstone.deletedSlice();
+                ClusteringBound start = slice.start();
+                ClusteringBound end = slice.end();
+                int partitionKeyLen = baseCfs.metadata.get().partitionKeyColumns().size();
+                org.opensearch.index.query.BoolQueryBuilder builder = QueryBuilders.boolQuery();
+                boolean hasClause = false;
+                int i = 0;
+                for (ColumnMetadata cd : baseCfs.metadata.get().primaryKeyColumns()) {
+                    if (i >= (partitionKeyLen + Math.max(start.size(), end.size()))) {
+                        break;
+                    }
+                    if (indexedPkColumns[i]) {
+                        QueryBuilder clause;
+                        if (i < partitionKeyLen) {
+                            clause = QueryBuilders.termQuery(cd.name.toString(), pkCols[i]);
+                        } else {
+                            Object startValue = null;
+                            Object endValue = null;
+                            boolean startIsInclusive = true;
+                            boolean endIsInclusive = true;
+                            if (i - partitionKeyLen < start.size()) {
+                                startValue = cd.type.compose(asByteBuffer(start.get(i - partitionKeyLen)));
+                                startIsInclusive = start.isInclusive();
+                            }
+                            if (i - partitionKeyLen < end.size()) {
+                                endValue = cd.type.compose(asByteBuffer(end.get(i - partitionKeyLen)));
+                                endIsInclusive = end.isInclusive();
+                            }
+                            if (startValue != null && endValue != null && startValue.equals(endValue) && startIsInclusive && endIsInclusive) {
+                                clause = QueryBuilders.termQuery(cd.name.toString(), startValue);
+                            } else {
+                                clause = QueryBuilders.rangeQuery(cd.name.toString()).from(startValue, startIsInclusive).to(endValue, endIsInclusive);
+                            }
+                        }
+                        builder.filter(clause);
+                        hasClause = true;
+                    }
+                    i++;
+                }
+                return hasClause ? builder : null;
             }
 
             /**
@@ -1088,11 +1477,18 @@ public class ElasticSecondaryIndex implements Index {
                                     new TermQuery(new Term(mapper.name(), BytesRefs.toBytesRef(start))) :
                                     new TermRangeQuery(mapper.name(), BytesRefs.toBytesRef(start), BytesRefs.toBytesRef(end), includeLower, includeUpper);
                                 break;
-                            case INT:
-                                query = start != null && end != null && ((Comparable) start).compareTo(end) == 0 ?
-                                    NumberFieldMapper.NumberType.INTEGER.termQuery(mapper.name(), start) :
-                                    ElassandraSecondaryIndexCompat.numberTypeRangeQuery(NumberFieldMapper.NumberType.INTEGER, mapper.name(), start, end, includeLower, includeUpper, mapper.fieldType().hasDocValues());
+                            case INT: {
+                                int l = start == null ? Integer.MIN_VALUE : ((Number) start).intValue();
+                                int u = end == null ? Integer.MAX_VALUE : ((Number) end).intValue();
+                                if (start != null && includeLower == false && l < Integer.MAX_VALUE) {
+                                    l++;
+                                }
+                                if (end != null && includeUpper == false && u > Integer.MIN_VALUE) {
+                                    u--;
+                                }
+                                query = IntPoint.newRangeQuery(mapper.name(), l, u);
                                 break;
+                            }
                             case SMALLINT:
                                 query = start != null && end != null && ((Comparable) start).compareTo(end) == 0 ?
                                     NumberFieldMapper.NumberType.SHORT.termQuery(mapper.name(), start) :
@@ -1799,6 +2195,7 @@ public class ElasticSecondaryIndex implements Index {
                 }
                 DeleteByQuery deleteByQuery = buildDeleteByQuery(indexShard.indexService(), termQuery);
                 indexShard.getEngine().delete(deleteByQuery);
+                ElasticSecondaryIndex.this.recoveryLog.indexed(this.key);
             }
         }
 
@@ -1886,6 +2283,7 @@ public class ElasticSecondaryIndex implements Index {
                         this.hashCode(), indexShard.shardId().getIndexName(), typeName, this.partitionKey, termUid.text());
                 Engine.Delete delete = new Engine.Delete(typeName, this.partitionKey, termUid, UNASSIGNED_PRIMARY_TERM);
                 indexShard.delete(indexShard.getEngine(), delete);
+                ElasticSecondaryIndex.this.recoveryLog.indexed(this.key);
             }
         }
 
@@ -2041,6 +2439,7 @@ public class ElasticSecondaryIndex implements Index {
             @Override
             public void finish() {
                 try {
+                    ElasticSecondaryIndex.this.recoveryLog.note(key);
                     if (ImmutableMappingInfo.this.indexInsertOnly) {
                         update();
                     } else {
@@ -2456,40 +2855,59 @@ public class ElasticSecondaryIndex implements Index {
                     if (indexShard != null) {
                         if (!indexInfo.updated)
                             indexInfo.updated = true;
-                        final long operationPrimaryTerm = indexShard.getOperationPrimaryTerm();
-
-                        final Engine.Index operation = new Engine.Index(
-                            termUid(indexInfo.indexService, id),
-                            parsedDoc,
-                            SequenceNumbers.UNASSIGNED_SEQ_NO,
-                            operationPrimaryTerm,
-                            Versions.MATCH_ANY,
-                            VersionType.INTERNAL,
-                            Engine.Operation.Origin.PRIMARY,
-                            startTime,
-                            IndexRequest.UNSET_AUTO_GENERATED_TIMESTAMP, false,
-                            SequenceNumbers.UNASSIGNED_SEQ_NO,
-                            UNASSIGNED_PRIMARY_TERM) {
-                            @Override
-                            public int estimatedSizeInBytes() {
-                                return (id.length() + docMapper.type().length()) * 2 + inRowDataSize + 12;
+                        rebuildGenLock.readLock().lock();
+                        try {
+                            long gen = rebuildGeneration.get();
+                            for (Document doc : parsedDoc.docs()) {
+                                doc.add(new LongPoint(ESI_GEN_FIELD, gen));
+                                doc.add(new NumericDocValuesField(ESI_GEN_FIELD, gen));
+                                if (ttl > 0 && ttl < Integer.MAX_VALUE) {
+                                    doc.add(new LongPoint(ESI_TTL_FIELD, ttl));
+                                    doc.add(new NumericDocValuesField(ESI_TTL_FIELD, ttl));
+                                }
                             }
-                        };
+                            Runnable hook = indexParsedDocumentFailureHook;
+                            if (hook != null) {
+                                hook.run();
+                            }
+                            final long operationPrimaryTerm = indexShard.getOperationPrimaryTerm();
 
-                        IndexResult result = indexShard.index(indexShard.getEngine(), operation);
+                            final Engine.Index operation = new Engine.Index(
+                                termUid(indexInfo.indexService, id),
+                                parsedDoc,
+                                SequenceNumbers.UNASSIGNED_SEQ_NO,
+                                operationPrimaryTerm,
+                                Versions.MATCH_ANY,
+                                VersionType.INTERNAL,
+                                Engine.Operation.Origin.PRIMARY,
+                                startTime,
+                                IndexRequest.UNSET_AUTO_GENERATED_TIMESTAMP, false,
+                                SequenceNumbers.UNASSIGNED_SEQ_NO,
+                                UNASSIGNED_PRIMARY_TERM) {
+                                @Override
+                                public int estimatedSizeInBytes() {
+                                    return (id.length() + docMapper.type().length()) * 2 + inRowDataSize + 12;
+                                }
+                            };
 
-                        if (result.getFailure() != null && logger.isErrorEnabled()) {
-                            logger.error((Supplier<?>) () ->
-                                    new ParameterizedMessage("document CF={}.{} index/type={}/{} id={} version={} created={} static={} ttl={} refresh={}",
-                                        baseCfs.metadata.get().keyspace, baseCfs.metadata.get().name,
-                                        indexInfo.name, typeName,
-                                        parsedDoc.id(), operation.version(), result.isCreated(), isStatic(), ttl, indexInfo.refresh),
-                                result.getFailure());
-                        } else {
-                            logger.warn("document CF={}.{} index/type={}/{} id={} version={} created={} static={} ttl={} refresh={}",
-                                baseCfs.metadata.get().keyspace, baseCfs.metadata.get().name,
-                                indexInfo.name, typeName,
-                                parsedDoc.id(), operation.version(), result.isCreated(), isStatic(), ttl, indexInfo.refresh);
+                            IndexResult result = indexShard.index(indexShard.getEngine(), operation);
+
+                            if (result.getFailure() != null && logger.isErrorEnabled()) {
+                                logger.error((Supplier<?>) () ->
+                                        new ParameterizedMessage("document CF={}.{} index/type={}/{} id={} version={} created={} static={} ttl={} refresh={}",
+                                            baseCfs.metadata.get().keyspace, baseCfs.metadata.get().name,
+                                            indexInfo.name, typeName,
+                                            parsedDoc.id(), operation.version(), result.isCreated(), isStatic(), ttl, indexInfo.refresh),
+                                    result.getFailure());
+                            } else if (result.getFailure() == null) {
+                                ElasticSecondaryIndex.this.recoveryLog.indexed(RowcumentIndexer.this.key);
+                                logger.warn("document CF={}.{} index/type={}/{} id={} version={} created={} static={} ttl={} refresh={}",
+                                    baseCfs.metadata.get().keyspace, baseCfs.metadata.get().name,
+                                    indexInfo.name, typeName,
+                                    parsedDoc.id(), operation.version(), result.isCreated(), isStatic(), ttl, indexInfo.refresh);
+                            }
+                        } finally {
+                            rebuildGenLock.readLock().unlock();
                         }
                     }
                 }
@@ -2524,6 +2942,7 @@ public class ElasticSecondaryIndex implements Index {
                                 logger.debug("deleting document from index.type={}.{} id={} termUid={}", indexInfo.name, typeName, id, termUid.text());
                             Engine.Delete delete = new Engine.Delete(typeName, id, termUid, UNASSIGNED_PRIMARY_TERM);
                             indexShard.delete(indexShard.getEngine(), delete);
+                            ElasticSecondaryIndex.this.recoveryLog.indexed(RowcumentIndexer.this.key);
                         } catch (IOException e) {
                             logger.error("Document deletion error", e);
                         }
@@ -2597,6 +3016,8 @@ public class ElasticSecondaryIndex implements Index {
          } finally {
             mappingInfoLock.writeLock().unlock();
          }
+        recoverPendingTruncate();
+        replayPending();
     }
 
     // TODO: notify 2i only for udated indices (not all)
@@ -2695,6 +3116,8 @@ public class ElasticSecondaryIndex implements Index {
     public void onShardStarted(IndexShard indexShard)
     {
         startRebuildIfNeeded();
+        recoverPendingTruncate();
+        replayPending();
     }
 
     /**
@@ -2767,27 +3190,7 @@ public class ElasticSecondaryIndex implements Index {
     public Callable<?> getBlockingFlushTask() {
         return () -> {
             if (isIndexing()) {
-                for (ImmutableMappingInfo.ImmutableIndexInfo indexInfo : mappingInfoRef.get().indices) {
-                    try {
-                        IndexShard indexShard = indexInfo.indexService.getShardOrNull(0);
-                        if (indexShard != null && indexInfo.updated) {
-                            if (indexShard.state() == IndexShardState.STARTED) {
-                                long start = System.currentTimeMillis();
-                                indexInfo.updated = false; // reset updated state
-                                indexShard.flush(new FlushRequest().force(false).waitIfOngoing(true));
-                                if (logger.isInfoEnabled())
-                                    logger.info("Elasticsearch index=[{}] type=[{}] flushed, duration={}ms", indexInfo.name, indexInfo.type, System.currentTimeMillis() - start);
-                            } else {
-                                if (logger.isDebugEnabled())
-                                    logger.debug("Cannot flush index=[{}], state=[{}]", indexInfo.name, indexShard.state());
-                            }
-                        }
-                    } catch (OpenSearchException e) {
-                        logger.error("Error while flushing index=[{}]", e, indexInfo.name);
-                    } catch (org.apache.lucene.store.AlreadyClosedException e2) {
-                        logger.warn("index=[{}] was already closed", indexInfo.name);
-                    }
-                }
+                flushSearchShardsAndAck(false);
             }
             return null;
         };
@@ -2863,49 +3266,23 @@ public class ElasticSecondaryIndex implements Index {
         return () -> {
             if (isIndexing()) {
                 for (ImmutableMappingInfo.ImmutableIndexInfo indexInfo : mappingInfoRef.get().indices) {
-                    try {
-                        IndexShard indexShard = indexInfo.indexService.getShardOrNull(0);
-                        if (indexShard != null) {
-                            DocumentMapper docMapper = resolveDocumentMapper(indexInfo.indexService.mapperService(), typeName);
-                            if (logger.isDebugEnabled()) {
-                                logger.debug("truncating from ks.cf={}.{} in elasticsearch index=[{}]", baseCfs.metadata.get().keyspace, baseCfs.name, indexInfo.name);
-                            }
-                            if (!indexInfo.updated)
-                                indexInfo.updated = true;
-                            DeleteByQuery deleteByQuery = mappingInfoRef.get().buildDeleteByQuery(indexInfo.indexService, Queries.newMatchAllQuery());
-                            indexShard.getEngine().delete(deleteByQuery);
-
-                            // The engine-level delete-by-query can miss docs in some truncate races.
-                            // Run the transport delete-by-query action as a deterministic fallback.
-                            Client client = ElassandraDaemon.instance.node().client();
-                            DeleteByQueryRequest request = new DeleteByQueryRequest(indexInfo.name)
-                                .setQuery(QueryBuilders.matchAllQuery())
-                                .setRefresh(true);
-                            request.setConflicts("proceed");
-                            if (indexInfo.type != null && !indexInfo.type.isEmpty()) {
-                                request.setDocTypes(indexInfo.type);
-                            }
-                            BulkByScrollResponse response = client.execute(DeleteByQueryAction.INSTANCE, request).actionGet();
-                            if (!response.getBulkFailures().isEmpty() || !response.getSearchFailures().isEmpty()) {
-                                logger.warn(
-                                    "truncate fallback delete-by-query failures index=[{}] bulkFailures={} searchFailures={}",
-                                    indexInfo.name,
-                                    response.getBulkFailures().size(),
-                                    response.getSearchFailures().size()
-                                );
-                            } else if (logger.isDebugEnabled()) {
-                                logger.debug(
-                                    "truncate fallback delete-by-query deleted={} index=[{}] type=[{}]",
-                                    response.getDeleted(),
-                                    indexInfo.name,
-                                    indexInfo.type
-                                );
-                            }
+                    IndexShard indexShard = indexInfo.indexService.getShardOrNull(0);
+                    if (indexShard != null) {
+                        if (logger.isDebugEnabled()) {
+                            logger.debug("truncating from ks.cf={}.{} in elasticsearch index=[{}]", baseCfs.metadata.get().keyspace, baseCfs.name, indexInfo.name);
                         }
-                    } catch (OpenSearchException e) {
-                        logger.error("Error while truncating index=[{}]", e, indexInfo.name);
-                    } catch (Exception e) {
-                        logger.error("Unexpected truncate fallback failure index=[{}]", e, indexInfo.name);
+                        markTruncatePending(indexShard);
+                        try {
+                            Runnable hook = truncateTaskFailureHook;
+                            if (hook != null) {
+                                hook.run();
+                            }
+                            // Engine wipe is Lucene-only. Transport delete-by-query is async so it does
+                            // not wait on ColumnFamilyStore's truncate lock.
+                            wipeSearchIndex(indexInfo, indexShard, false, true);
+                        } catch (Exception e) {
+                            logger.error("search wipe aborted after truncate, leaving pending marker index=[{}]", e, indexInfo.name);
+                        }
                     }
                 }
             }
@@ -2986,9 +3363,15 @@ public class ElasticSecondaryIndex implements Index {
     public Indexer indexerFor(DecoratedKey key, RegularAndStaticColumns columns, int nowInSec, WriteContext writeContext, Type transactionType)
     {
         ImmutableMappingInfo mappingInfo = this.mappingInfoRef.get();
-        if (isIndexing()) {
-            if (transactionType == Type.COMPACTION && !mappingInfo.indexOnCompaction)
-                return null;
+        if (!runsElassandra) {
+            return null;
+        }
+        if (!isIndexing()) {
+            recoveryLog.note(key);
+            return null;
+        }
+        if (transactionType == Type.COMPACTION && !mappingInfo.indexOnCompaction)
+            return null;
 
             boolean found = (columns.size() == 0);
             if (!found && mappingInfo.indexedPkColumns != null) {
@@ -3035,7 +3418,6 @@ public class ElasticSecondaryIndex implements Index {
                 columns,
                 mappingInfo.fieldsToIdx
             );
-        }
         return null;
     }
 

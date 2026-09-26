@@ -27,6 +27,8 @@ nbactions.xml
 # gradle stuff
 .gradle/
 build/
+# buildSrc compiled as its own project (buildDir is build-bootstrap, not build/)
+buildSrc/build-bootstrap/
 
 # vscode stuff
 .vscode/

@@ -34,7 +34,11 @@ package org.opensearch.search;
 
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
+import org.apache.lucene.document.LongPoint;
+import org.apache.lucene.search.BooleanClause;
+import org.apache.lucene.search.BooleanQuery;
 import org.apache.lucene.search.FieldDoc;
+import org.apache.lucene.search.Query;
 import org.apache.lucene.search.TopDocs;
 import org.opensearch.LegacyESVersion;
 import org.opensearch.OpenSearchException;
@@ -74,6 +78,7 @@ import org.opensearch.index.engine.Engine;
 import org.opensearch.index.query.InnerHitContextBuilder;
 import org.opensearch.index.query.MatchAllQueryBuilder;
 import org.opensearch.index.query.MatchNoneQueryBuilder;
+import org.opensearch.index.query.ParsedQuery;
 import org.opensearch.index.query.QueryBuilder;
 import org.opensearch.index.query.QueryRewriteContext;
 import org.opensearch.index.query.QueryShardContext;
@@ -834,12 +839,28 @@ public class SearchService extends AbstractLifecycleComponent implements IndexEv
 
             // pre process
             queryPhase.preProcess(context);
+            applyCassandraTtlFilter(context);
         } catch (Exception e) {
             context.close();
             throw e;
         }
 
         return context;
+    }
+
+    private void applyCassandraTtlFilter(SearchContext context) {
+        Query current = context.query();
+        if (current == null) {
+            return;
+        }
+        long nowInSec = org.apache.cassandra.utils.FBUtilities.nowInSeconds();
+        Query expired = LongPoint.newRangeQuery(org.elassandra.index.ElasticSecondaryIndex.ESI_TTL_FIELD, Long.MIN_VALUE, nowInSec);
+        Query filtered = new BooleanQuery.Builder()
+            .add(current, BooleanClause.Occur.MUST)
+            .add(expired, BooleanClause.Occur.MUST_NOT)
+            .build();
+        ParsedQuery original = context.parsedQuery();
+        context.parsedQuery(original == null ? new ParsedQuery(filtered) : new ParsedQuery(filtered, original));
     }
 
     public DefaultSearchContext createSearchContext(ShardSearchRequest request, TimeValue timeout) throws IOException {

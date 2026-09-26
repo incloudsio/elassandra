@@ -402,7 +402,25 @@ tasks.named("licenseHeaders").configure {
 tasks.test {
     if (BuildParams.runtimeJavaVersion > JavaVersion.VERSION_1_8) {
         jvmArgs += ["--add-opens", "java.base/java.nio.file=ALL-UNNAMED"]
+        // Cassandra FileUtils DirectBuffer/Cleaner access on JDK 11+ (see conf/jvm11-server.options).
+        jvmArgs += [
+            "--add-exports", "java.base/jdk.internal.misc=ALL-UNNAMED",
+            "--add-exports", "java.base/jdk.internal.ref=ALL-UNNAMED",
+            "--add-exports", "java.base/sun.nio.ch=ALL-UNNAMED",
+            "--add-opens", "java.base/java.lang.module=ALL-UNNAMED",
+            "--add-opens", "java.base/jdk.internal.loader=ALL-UNNAMED",
+            "--add-opens", "java.base/jdk.internal.ref=ALL-UNNAMED",
+            "--add-opens", "java.base/jdk.internal.reflect=ALL-UNNAMED",
+            "--add-opens", "java.base/jdk.internal.math=ALL-UNNAMED",
+            "--add-opens", "java.base/jdk.internal.module=ALL-UNNAMED",
+            "--add-opens", "java.base/sun.nio.ch=ALL-UNNAMED",
+            "-Dio.netty.tryReflectionSetAccessible=true",
+            "-Djdk.attach.allowAttachSelf=true",
+        ]
     }
+    // Embedded Cassandra writes under cassandra.home (testrun/); Lucene mock FS + JNA system lib abort the fork.
+    systemProperty 'elassandra.disable.lucene.mock.filesystem', 'true'
+    jvmArgs '-Djna.nosys=true'
 }
 
 tasks.named('compileJava').configure {

@@ -1,0 +1,29 @@
+# Minimal Cassandra 4.0–compatible config for :server:test (embedded Elassandra).
+# SimpleSeedProvider reloads this file even when OpenSearchSingleNodeTestCase supplies an in-memory Config.
+# disk_access_mode standard avoids mmap edge cases on macOS test runs.
+cluster_name: TestCluster
+data_file_directories:
+    - data
+commitlog_directory: commitlog
+saved_caches_directory: saved_caches
+hints_directory: hints
+disk_access_mode: standard
+memtable_allocation_type: heap_buffers
+commitlog_sync: periodic
+commitlog_sync_period_in_ms: 10000
+commitlog_segment_size_in_mb: 5
+partitioner: org.apache.cassandra.dht.Murmur3Partitioner
+listen_address: 127.0.0.1
+# 17100 avoids clashing with a local Cassandra default (7000); embedded Config override uses elassandra.test.storage_port.
+storage_port: 17100
+start_native_transport: true
+native_transport_port: 9042
+seed_provider:
+    - class_name: org.apache.cassandra.locator.SimpleSeedProvider
+      parameters:
+          - seeds: "127.0.0.1:17100"
+endpoint_snitch: GossipingPropertyFileSnitch
+incremental_backups: false
+auto_snapshot: false
+write_request_timeout_in_ms: 30000
+enable_user_defined_functions: false

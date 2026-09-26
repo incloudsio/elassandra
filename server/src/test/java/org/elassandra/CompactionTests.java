@@ -264,8 +264,8 @@ public class CompactionTests extends OpenSearchSingleNodeTestCase {
         
         Thread.sleep(15*1000);  // wait TTL expiration
         Thread.sleep(20*1000);  // wait gc_grace_seconds expiration
-        assertThat(client().prepareSearch().setIndices(index).setTypes("t1").setQuery(QueryBuilders.matchAllQuery()).get().getHits().getTotalHits().value, equalTo(3*N));
-        assertThat(client().prepareSearch().setIndices(index).setTypes("t1").setQuery(QueryBuilders.queryStringQuery("b:y")).get().getHits().getTotalHits().value, equalTo(N));
+        assertThat(client().prepareSearch().setIndices(index).setTypes("t1").setQuery(QueryBuilders.matchAllQuery()).get().getHits().getTotalHits().value, equalTo(2*N));
+        assertThat(client().prepareSearch().setIndices(index).setTypes("t1").setQuery(QueryBuilders.queryStringQuery("b:y")).get().getHits().getTotalHits().value, equalTo(0L));
 
         StorageService.instance.forceKeyspaceFlush(index);
         StorageService.instance.forceKeyspaceCompaction(true, index);
@@ -330,9 +330,9 @@ public class CompactionTests extends OpenSearchSingleNodeTestCase {
        
         Thread.sleep(15*1000);  // wait TTL expiration
         Thread.sleep(20*1000);  // wait gc_grace_seconds expiration
-        assertThat(client().prepareSearch().setIndices(index).setTypes("t1").setQuery(QueryBuilders.matchAllQuery()).get().getHits().getTotalHits().value, equalTo(2*N));
+        assertThat(client().prepareSearch().setIndices(index).setTypes("t1").setQuery(QueryBuilders.matchAllQuery()).get().getHits().getTotalHits().value, equalTo(N));
         assertThat(client().prepareSearch().setIndices(index).setTypes("t1").setQuery(QueryBuilders.wildcardQuery("c","*")).get().getHits().getTotalHits().value, equalTo(N));
-        assertThat(client().prepareSearch().setIndices(index).setTypes("t1").setQuery(QueryBuilders.wildcardQuery("b","*")).get().getHits().getTotalHits().value, equalTo(2*N));
+        assertThat(client().prepareSearch().setIndices(index).setTypes("t1").setQuery(QueryBuilders.wildcardQuery("b","*")).get().getHits().getTotalHits().value, equalTo(N));
 
         StorageService.instance.forceKeyspaceFlush(index);
         StorageService.instance.forceKeyspaceCompaction(true, index);

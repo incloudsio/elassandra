@@ -55,6 +55,14 @@ Refresh scheduling is decoupled from Cassandra replication. Immediate visibility
 write is therefore a trade-off between write latency and search freshness. Use
 ``synchronous_refresh`` only where the extra cost is justified.
 
+TTL expiration
+--------------
+
+Cassandra cell expiry is stored on the Lucene document as ``esi_ttl``. Search excludes
+documents whose expiry is at or before Cassandra ``nowInSeconds``, so a row that CQL no
+longer returns is also absent from search without waiting for compaction. Compaction
+still physically removes expired documents from the index when it runs.
+
 Unsupported or reduced-scope features
 -------------------------------------
 
