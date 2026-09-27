@@ -50,6 +50,8 @@ import org.opensearch.cluster.routing.RecoverySource.Type;
 import org.opensearch.cluster.routing.RoutingNode;
 import org.opensearch.cluster.routing.RoutingTable;
 import org.opensearch.cluster.routing.ShardRouting;
+import org.opensearch.cluster.routing.ShardRoutingState;
+import org.opensearch.cluster.routing.UnassignedInfo;
 import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.Nullable;
 import org.opensearch.common.component.AbstractLifecycleComponent;
@@ -425,12 +427,12 @@ public class IndicesClusterStateService extends AbstractLifecycleComponent imple
             if (shardRouting.initializing() == false
                 && failedShardsCache.containsKey(shardId) == false
                 && indicesService.getShardOrNull(shardId) == null) {
-                // the master thinks we are active, but we don't have this shard at all, mark it as failed
-                sendFailShard(
-                    shardRouting,
-                    "master marked shard as active, but shard has not been created, mark shard as failed",
-                    null,
-                    state
+                // Elassandra publishes STARTED locally. There is no master to reassign a
+                // "failed" shard, so leave it for createOrUpdateShards to recover.
+                logger.warn(
+                    "{} local IndexShard missing while routing is {}; will recreate instead of failing",
+                    shardId,
+                    shardRouting.state()
                 );
             }
         }
@@ -595,11 +597,29 @@ public class IndicesClusterStateService extends AbstractLifecycleComponent imple
             ShardId shardId = shardRouting.shardId();
             if (failedShardsCache.containsKey(shardId) == false) {
                 AllocatedIndex<? extends Shard> indexService = indicesService.indexService(shardId.getIndex());
-                assert indexService != null : "index " + shardId.getIndex() + " should have been created by createIndices";
+                if (indexService == null) {
+                    logger.error("{} index missing after createIndices; skipping shard", shardId);
+                    continue;
+                }
                 Shard shard = indexService.getShardOrNull(shardId.id());
                 if (shard == null) {
-                    assert shardRouting.initializing() : shardRouting + " should have been removed by failMissingShards";
-                    createShard(nodes, routingTable, shardRouting, state);
+                    ShardRouting toCreate = shardRouting;
+                    if (shardRouting.initializing() == false) {
+                        logger.warn(
+                            "{} recreating missing shard from existing store (routing was {})",
+                            shardId,
+                            shardRouting.state()
+                        );
+                        toCreate = ShardRouting.newElassandra(
+                            shardId,
+                            shardRouting.currentNodeId(),
+                            shardRouting.primary(),
+                            ShardRoutingState.INITIALIZING,
+                            new UnassignedInfo(UnassignedInfo.Reason.REINITIALIZED, "missing local IndexShard"),
+                            shardRouting.tokenRanges()
+                        );
+                    }
+                    createShard(nodes, routingTable, toCreate, state);
                 } else {
                     updateShard(nodes, shardRouting, shard, routingTable, state);
                 }

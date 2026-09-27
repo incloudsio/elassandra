@@ -931,10 +931,13 @@ public final class ShardRouting implements Writeable, ToXContentObject {
                     : null);
         UnassignedInfo ui =
             (state == ShardRoutingState.UNASSIGNED || state == ShardRoutingState.INITIALIZING) ? unassignedInfo : null;
-        AllocationId aid =
-            (state == ShardRoutingState.STARTED || state == ShardRoutingState.INITIALIZING)
-                ? AllocationId.newInitializing()
-                : null;
+        // Stable id: a new random AllocationId on every router rebuild makes removeShards
+        // treat the live IndexShard as stale, then createOrUpdateShards asserts under -ea.
+        AllocationId aid = null;
+        if (state == ShardRoutingState.STARTED || state == ShardRoutingState.INITIALIZING) {
+            String nodeKey = currentNodeId == null ? "_" : currentNodeId;
+            aid = AllocationId.newInitializing(shardId.getIndex().getUUID() + "/" + shardId.id() + "/" + nodeKey);
+        }
         return new ShardRouting(
             shardId,
             currentNodeId,

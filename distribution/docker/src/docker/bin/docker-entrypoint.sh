@@ -51,6 +51,9 @@ fi
 
 append_jvm_opt_if_missing "-Dcassandra.custom_query_handler_class=org.elassandra.index.ElasticQueryHandler"
 append_jvm_property_if_missing "cassandra.native.epoll.enabled" "${CASSANDRA_NATIVE_EPOLL_ENABLED:-false}"
+# jvm-server.options still ships -ea; an assertion in the cluster applier kills search
+# while Cassandra stays up and the pod stays Ready. Disable asserts after that file loads.
+export JVM_EXTRA_OPTS="${JVM_EXTRA_OPTS:-} -da"
 
 python3 /usr/local/bin/configure-elassandra.py
 
